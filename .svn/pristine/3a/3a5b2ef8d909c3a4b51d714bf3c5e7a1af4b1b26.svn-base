@@ -1,0 +1,16 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using ServerAPI.ViewModels;
+
+namespace ServerAPI.Services    
+{
+    public interface IMoneyInmateService
+    {
+        MoneyAccountTransactionDetailVm GetMoneyInmateLedger(int iBankId, int iInmateId);
+        MoneyAccountTransactionDetailVm GetMoneyInmateDeposit(int iBankId, int iInmateId);
+        List<MoneyAccountTransactionVm> GetMoneyInmateFeeDetails(int bankId, int inmateId);
+        MoneyInmateReference GetMoneyInmateReference(int? bankId,int? inmateId);
+    }
+}

@@ -1,0 +1,223 @@
+﻿using GenerateTables.Models;
+using JwtDb.Models;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Configuration;
+using Moq;
+using ServerAPI.JMS.Tests.Helper;
+using ServerAPI.Services;
+using ServerAPI.Tests;
+using ServerAPI.ViewModels;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Xunit;
+
+// ReSharper disable once CheckNamespace
+namespace ServerAPI.JMS.Tests
+{
+    [Collection("Database collection")]
+    public class PersonIdentityServiceTest
+    {
+        private readonly PersonIdentityService _personIdentity;
+        private readonly DbInitialize _fixture;
+        private readonly IConfigurationRoot _configuration = MockHelpers.GetIConfigurationRoot();
+        private readonly Mock<IMemoryCache> _memory = new Mock<IMemoryCache>();
+        public PersonIdentityServiceTest(DbInitialize fixture)
+        {
+            _fixture = fixture;
+            PersonService personService = new PersonService(_fixture.Db);
+            AppletsSavedService appletsSavedService = new AppletsSavedService(_fixture.Db, _configuration);
+            Mock<UserManager<AppUser>> userMgr = MockHelpers.MockUserManager<AppUser>();
+            PhotosService photosService = new PhotosService(fixture.Db, _configuration);
+            HttpContextAccessor httpContext = new HttpContextAccessor { HttpContext = fixture.Context.HttpContext };
+            AtimsHubService atimsHubService = new AtimsHubService(_fixture.HubContext.Object);
+            InterfaceEngineService interfaceEngineService = new InterfaceEngineService(_fixture.Db,
+                _configuration, _memory.Object);
+            CommonService commonService = new CommonService(_fixture.Db, _configuration, httpContext, personService,appletsSavedService,interfaceEngineService);
+            PrebookActiveService prebookactive = new PrebookActiveService(_fixture.Db, httpContext, atimsHubService);
+            PersonAkaService personAkaService = new PersonAkaService(_fixture.Db, commonService, httpContext,
+                personService);
+            _personIdentity = new PersonIdentityService(fixture.Db, httpContext, prebookactive,
+                personAkaService, personService);
+        }
+
+        [Fact]
+        public void PersonIdentityService_GetPersonDetails()
+        {
+            //Act
+            PersonIdentity result = _personIdentity.GetPersonDetails(55);
+            //Assert
+            Assert.Equal("PC2016", result.PersonCii);
+            Assert.Equal("KRISHNA", result.PersonLastName);
+        }
+
+        [Fact]
+        public void PersonIdentityService_GetCitizenshipList()
+        {
+            //Act
+            PersonCitizenshipDetail personCitizenship = _personIdentity.GetCitizenshipList(95);
+            //Assert
+            CitizenshipCountryDetails country =
+                personCitizenship.lstCitizenshipCountryDetails.Single(c => c.ConsulateName == "ALEGESH");
+            Assert.Equal("TITLE PARK", country.ConsulateAddress);
+            Assert.Equal("2345854254", country.ConsulatePhone);
+            PersonCitizenshipVm citizenship =
+                personCitizenship.lstPersonCitizenship.Single(p => p.PersonCitizenshipId == 16);
+            Assert.Equal("AMERICA", citizenship.CitizenshipCountry);
+        }
+
+        [Fact]
+        public void PersonIdentityService_GetPersonSavedHistory()
+        {
+            //Act
+            List<PersonHistoryVm> lstpersonhistory = _personIdentity.GetPersonSavedHistory(90);
+            //Assert
+            PersonHistoryVm history = lstpersonhistory.Single(p => p.PersonId == 50);
+            Assert.Equal("1728", history.OfficerBadgeNumber);
+            Assert.Equal("LANDON", history.Header[7].Detail);
+            Assert.Equal("Citizenship", history.Header[7].Header);
+        }
+
+        [Fact]
+        public void PersonIdentityService_GetPersonnelCitizenshipHistory()
+        {
+            //act
+            List<PersonHistoryVm> lstpersonhistory = _personIdentity.GetPersonnelCitizenshipHistory(50, 15);
+            //Assert
+            PersonHistoryVm history = lstpersonhistory.Single(p => p.PersonCitizenshipHistoryId == 5);
+            Assert.Equal("KRISHNA", history.UpdateByPersonLastName);
+            Assert.Equal("1728", history.DeleteByOfficerBadgeNumber);
+        }
+
+        [Fact]
+        public async Task PersonIdentityService_InsertNamePopupDetails()
+        {
+            //Arrange
+            PersonIncarceration incarceration = new PersonIncarceration
+            {
+                PersonFirstName = "NARESH",
+                PersonLastName = "RAJ",
+                PersonSuffix = "NR",
+                PersonMiddleName = "ABI",
+                IncarcerationId = 17,
+                IncarcerationHistoryList = @"{'FROMPAGE':'IDENTITY','Last name':'RAJ','First name':'NARESH','Middle':'ABI','Suffix':'NR'}"
+            };
+            PersonDetail persondetails = new PersonDetail
+            {
+                FacilityId = 2,
+                InmateActive = true,
+                InmateId = 135,
+                InmateNumber = "INIS1010",
+                PersonCellPhone = "7874874547",
+                PersonFirstName = "ANU",
+                PersonLastName = "RAGAV",
+                PersonMiddleName = "PRIYA",
+                PersonSuffix = "A",
+                PersonId = 122,
+                PersonAkaHistoryList = "First Names : MARI, Last Names :LAKSHMI,Middle Names :NULL",
+                IncarcerationDetail = incarceration,
+                PersonIncarceration = new List<PersonIncarceration> { incarceration },
+                AkaCurrentNameHistoryList = @"{'Business fax':'748457457','Email':'RAJ','First name':'ANU','Middle':'ABI','Suffix':'NR'}",
+                AkaFknHistoryList = @"{'Cell phone':'8457844545','Last name':'RAJ','First name':'NARESH','Middle':'ABI','Suffix':'PRIYA'}"
+
+            };
+            PersonHistory personHistory = _fixture.Db.PersonHistory.SingleOrDefault(p => p.PersonId == 122);
+            Assert.Null(personHistory);
+            //Act
+            await _personIdentity.InsertNamePopupDetails(persondetails);
+            //Assert
+            personHistory = _fixture.Db.PersonHistory.First(p => p.PersonId == 122);
+            Assert.NotNull(personHistory);
+            Assert.Equal("PRIYA", personHistory.Person.PersonMiddleName);
+        }
+
+
+        [Fact]
+        public async Task PersonIdentityService_InsertUpdatePersonCitizenship()
+        {
+            //Arrange
+            PersonCitizenshipVm citizenship = new PersonCitizenshipVm
+            {
+                PersonCitizenshipId = 17,
+                PersonId = 105,
+                CitizenshipCountry = "DEN MARK",
+                CitizenshipStatus = "CLIENT VISIT",
+                PersonCitizenshipStatus = PersonCitizenshipStatus.Update,
+                NotificationAutomateFlag = true,
+                PassportNumber = "PAS_NO_7478454"
+            };
+            PersonCitizenship personCitizenship = _fixture.Db.PersonCitizenship.Single(p => p.PersonId == 105);
+            Assert.Null(personCitizenship.CitizenshipStatus);
+            //Act
+            await _personIdentity.InsertUpdatePersonCitizenship(citizenship);
+
+            //Assert
+            personCitizenship = _fixture.Db.PersonCitizenship.Single(p => p.PersonId == 105);
+            Assert.Equal("CLIENT VISIT", personCitizenship.CitizenshipStatus);
+        }
+
+
+        [Fact]
+        public async Task PersonIdentityService_InsertUpdatePersonDetails()
+        {
+            //Arrange
+            PersonIdentity identity = new PersonIdentity
+            {
+                customFields = new List<CustomField>
+                {
+                    new CustomField
+                    {
+                        CustomFieldLookupId = 12
+
+                    }
+                },
+                PersonDlNoExpiration = 10,
+                PersonAge = 40,
+                PersonEmail = "suriyasivakumar@gmail.com",
+                FacilityId = 2,
+                InmateId = 120,
+                PersonFirstName = "SAKTHI",
+                PersonLastName = "KUMAR",
+                PersonPhone2 = "9787974541",
+                PersonPhone = "784123648",
+                PersonBusinessFax = "7845(4124)",
+                PersonSuffix = "SK",
+                PersonMissingDate = DateTime.Now.AddDays(-1),
+                InmatePreBookId = 12,
+                PersonDoc = "PHOTO AND SING",
+                PersonCii = "451",
+                PersonSsn = "10011",
+                PersonHistoryList =
+                    @"{'First Names':'SAKTHI', 'Last Names':'SIVA', 'Middle Names':KUMAR , 'Person Dob':'1980 - 11 - 11 00:00:00.000'}"
+            };
+            Person person = _fixture.Db.Person.SingleOrDefault(p => p.PersonFirstName == "SAKTHI");
+            Assert.Null(person);
+            //Act
+            await _personIdentity.InsertUpdatePersonDetails(identity);
+            //Assert
+            person = _fixture.Db.Person.Single(p => p.PersonFirstName == "SAKTHI");
+            Assert.NotNull(person.PersonFirstName);
+        }
+
+        [Fact]
+        public async Task DeleteUndoPersonCitizenship()
+        {
+            PersonCitizenshipVm personCitizenship = new PersonCitizenshipVm
+            {
+                PersonCitizenshipId = 18
+            };
+
+            PersonCitizenship citizenship = _fixture.Db.PersonCitizenship.Single(p => p.PersonId == 85);
+            Assert.True(citizenship.DeleteFlag);
+            //Act
+            PersonCitizenshipDetail citizenshipdetail = await _personIdentity.DeleteUndoPersonCitizenship(personCitizenship);
+            //Assert
+            Assert.NotNull(citizenshipdetail);
+            citizenship = _fixture.Db.PersonCitizenship.Single(p => p.PersonId == 85);
+            Assert.False(citizenship.DeleteFlag);
+        }
+    }
+}

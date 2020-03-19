@@ -1,0 +1,51 @@
+﻿using System.Collections.Generic;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
+using ServerAPI.Services;
+using ServerAPI.ViewModels;
+
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    public class PersonnelController : ControllerBase
+    {
+        private readonly IPersonnelService _personnelService;
+    
+        public PersonnelController(IPersonnelService personnelService)
+        {
+            _personnelService = personnelService;           
+        }        
+
+        [HttpGet("GetPersonnelDetails")]
+        public IActionResult GetPersonnelDetails(PersonnelFilter personnelSearch)
+        {
+            return Ok(_personnelService.GetPersonnelDetails(personnelSearch));
+        }
+
+        [HttpGet("GetPersonnelInputDetails")]
+        public IActionResult GetPersonnelInputDetails(int personnelId)
+        {
+            return Ok(_personnelService.GetPersonnelInputDetails(personnelId));
+        }
+
+        [HttpPost("InsertUserPersonnel")]
+        public async Task<IActionResult> InsertUserPersonnel([FromBody] PersonnelInputVm obj)
+        {
+            return Ok(await _personnelService.InsertUserPersonnel(obj));
+           
+        }          
+
+        [HttpGet("GetDepartmentPosition")]
+        public IActionResult GetDepartmentPosition(string forFlag)
+        {
+            return Ok(_personnelService.GetDepartmentPosition(forFlag));
+        }
+
+        [HttpPost("InsertDepartmentPosition")]
+        public async Task<IActionResult> InsertDepartmentPosition([FromBody] KeyValuePair<string, string> obj)
+        {
+            return Ok(await _personnelService.InsertDepartmentPosition(obj));
+
+        }
+    }
+}

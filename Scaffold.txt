@@ -1,0 +1,17 @@
+﻿{
+Scaffold-DbContext -Connection "Data Source=192.168.100.30\MSSQLSVR2016;Initial Catalog=ATIMS_8011_V2;User ID=jmsdeveloper;Password=jmsdeveloper;" -Provider Microsoft.EntityFrameworkCore.SqlServer -OutputDir Models -Context AAtims -Force -Tables AccountAO_Inmate,Address,Agency,Agency_Court_Dept,AKA,AltSent,AltSent_Program,AltSent_Site,AppAO,AppAO_FieldLabel,AppAO_Module,AppAO_SubModule,AppAO_UserControl_Fields,AppAO_Wizard_Fixed,AppAO_Wizard_Fixed_Steps,AppAO_Wizard_Steps,Applets_Saved,Applets_Saved_History,Appointment,Appointment_Arrest_xref,Arrest,atims_number,Biometrics_Fingerprint,Contact,crime,Crime_Force,Crime_History,crime_lookup,Facility,Form_Bookmark,Form_Category,Form_Mapped_Field,Form_Record,Form_Record_SaveHistory,Form_Templates,Form_Templates_Xref,Housing_Unit,Housing_Unit_Visitation,Identifiers,Incarceration,Incarceration_Arrest_Xref,Inmate,Inmate_Classification,Inmate_Classification_Narrative,Inmate_Prebook,Inmate_Prebook_Charge,Inmate_Prebook_Warrant,Inmate_privilege_xref,Inmate_TRAK,Keep_Separate,Keep_Sep_assoc_inmate,Keep_Sep_subset_inmate,License,Lookup,Observation_Schedule,Observation_ScheduleAction,Person,Personnel,Person_Alert,Person_Classification,Person_Description,Person_descriptor,Person_DNA,Person_Flag,Person_History,Person_Military,Person_Testing,Personal_Inventory,Personal_Inventory_Bin,Personal_Inventory_Group,Personal_Inventory_Group_History,Personal_Inventory_History,Personal_Inventory_PreBook,privileges,Registrant_Lookup,Registrant_Person,Temphold,Warrant,warrant_hold,Work_Crew,Work_Crew_Lookup -Verbose
+
+
+
+
+==========================================================================================
+public partial class AAtims : DbContext
+    {
+        public AAtims(DbContextOptions<AAtims> options) : base(options)
+        {
+
+        }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<AccountAoInmate>(entity =>

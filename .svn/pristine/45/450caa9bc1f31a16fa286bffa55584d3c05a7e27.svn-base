@@ -1,0 +1,232 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using ServerAPI.ViewModels;
+using GenerateTables.Models;
+using Newtonsoft.Json;
+using Microsoft.AspNetCore.Http;
+
+namespace ServerAPI.Services
+{
+    public class PersonAkaService : IPersonAkaService
+    {
+        private readonly AAtims _context;
+        private readonly int _personnelId;
+        private readonly IPersonService _personService;
+
+        public PersonAkaService(AAtims context, ICommonService commonService,
+            IHttpContextAccessor ihHttpContextAccessor, IPersonService personService)
+        {
+            _context = context;
+            _personnelId = Convert.ToInt32(ihHttpContextAccessor.HttpContext.User.FindFirst("personnelId")?.Value);
+            _personService = personService;
+        }
+
+        public List<AkaVm> GetAkaDetails(int personId)
+        {
+            List<AkaVm> personAka = (from a in _context.Aka
+                where a.PersonId == personId
+                select new AkaVm
+                {
+                    AkaId = a.AkaId,
+                    AkaFirstName = a.AkaFirstName,
+                    AkaLastName = a.AkaLastName,
+                    AkaMiddleName = a.AkaMiddleName,
+                    AkaSuffix = a.AkaSuffix,
+                    CreateDate = a.CreateDate,
+                    AkaDob = a.AkaDob,
+                    AkaDl = a.AkaDl,
+                    AkaDlState = a.AkaDlState,
+                    AkaSsn = a.AkaSsn,
+                    AkaFbi = a.AkaFbi,
+                    AkaCii = a.AkaCii,
+                    AkaAlienNo = a.AkaAlienNo,
+                    AkaDoc = a.AkaDoc,
+                    AkaOtherIdType = a.AkaOtherIdType,
+                    AkaOtherIdState = a.AkaOtherIdState,
+                    AkaOtherIdNumber = a.AkaOtherIdNumber,
+                    CreatedBy = a.CreatedBy,
+                    PersonGangName = a.PersonGangName,
+                    UpdateDate = a.UpdateDate,
+                    AkaAfisNumber = a.AkaAfisNumber,
+                    DeleteFlag = a.DeleteFlag,
+                    AkaOtherIdDescription = a.AkaOtherIdDescription,
+                    AkaOtherPhoneType = a.AkaOtherPhoneType,
+                    AkaOtherPhoneNumber = a.AkaOtherPhoneNumber,
+                    AkaOtherPhoneDescription = a.AkaOtherPhoneDescription,
+                    AkaInmateNumber = a.AkaInmateNumber,
+                    AkaSiteInmateNumber = a.AkaSiteInmateNumber,
+                    UpdatedBy = a.UpdatedBy,
+                    AkaSocialMediaAccount = a.SocialMediaAccount,
+                    AkaSocialMediaType = a.SocialMediaType,
+                    AkaSocialMediaDescription = a.SocialMediaDescription
+                }).ToList();
+
+            if (personAka.Count > 0)
+            {
+                List<int> personnelId =
+                    personAka.Select(i => new[] {i.CreatedBy, i.UpdatedBy})
+                        .SelectMany(i => i).Where(i => i.HasValue)
+                        .Select(i => i.Value).ToList();
+
+                List<PersonnelVm> lstPersonDet = _personService.GetPersonNameList(personnelId);
+
+                personAka.ForEach(aka =>
+                {
+                    PersonnelVm personInfo = lstPersonDet.SingleOrDefault(p => p.PersonnelId == aka.CreatedBy);
+                    aka.CreateByOfficerBadgeNumber = personInfo?.OfficerBadgeNumber;
+                    aka.CreateByPersonLastName = personInfo?.PersonLastName;
+                    aka.CreateByPersonFirstName = personInfo?.PersonFirstName;
+                    aka.CreateByPersonMiddleName = personInfo?.PersonMiddleName;
+
+                    if (aka.UpdatedBy > 0)
+                    {
+                        personInfo = lstPersonDet.SingleOrDefault(p => p.PersonnelId == aka.UpdatedBy);
+                        aka.UpdatedByPersonLastName = personInfo?.PersonLastName;
+                        aka.UpdatedByOfficerBadgeNumber = personInfo?.OfficerBadgeNumber;
+                        aka.UpdatedByPersonFirstName = personInfo?.PersonFirstName;
+                        aka.UpdatedByPersonMiddleName = personInfo?.PersonMiddleName;
+                    }
+                });
+            }
+            return personAka;
+        }
+
+        public Task<int> DeleteUndoPersonAka(AkaVm aka)
+        {
+            Aka dbPerAka = (from pAka in _context.Aka
+                where pAka.AkaId == aka.AkaId
+                select pAka).SingleOrDefault();
+
+            DateTime? deleteDate = DateTime.Now;
+            if (dbPerAka != null)
+            {
+                dbPerAka.DeleteBy = (aka.DeleteFlag == 1) ? new int?() : _personnelId;
+                dbPerAka.DeleteDate = (aka.DeleteFlag == 1) ? null : deleteDate;
+                dbPerAka.DeleteFlag = (aka.DeleteFlag == 1) ? 0 : 1;
+             LoadInsertAkaHistory(aka.AkaId, aka.AkaHistoryList); 
+            }
+            return _context.SaveChangesAsync();
+        }
+
+        public List<HistoryVm> GetPersonAkaHistory(int akaId)
+        {
+            List<HistoryVm> lstAkaHistory = (from ah in _context.AkaHistory
+                where ah.AkaId == akaId
+                orderby ah.CreateDate descending
+                select new HistoryVm
+                {
+                    HistoryId = ah.AkaHistoryId,
+                    CreateDate = ah.CreateDate,
+                    PersonId = ah.Personnel.PersonId,
+                    OfficerBadgeNumber = ah.Personnel.OfficerBadgeNum,
+                    HistoryList = ah.AkaHistoryList
+                }).ToList();
+
+            if (lstAkaHistory.Count > 0)
+            {
+                //For Improve Performance All Person Details Loaded By Single Hit Before Looping
+                int[] personIds = lstAkaHistory.Select(p => p.PersonId).ToArray();
+                //get person list
+                List<Person> lstPersonDet = (from per in _context.Person
+                    where personIds.Contains(per.PersonId)
+                    select new Person
+                    {
+                        PersonId = per.PersonId,
+                        PersonLastName = per.PersonLastName
+                    }).ToList();
+
+                lstAkaHistory.ForEach(item =>
+                {
+                    item.PersonLastName = lstPersonDet.SingleOrDefault(p => p.PersonId == item.PersonId)?.PersonLastName;
+                    //To GetJson Result Into Dictionary
+                    if (item.HistoryList != null)
+                    {
+                        Dictionary<string, string> personHistoryList =
+                            JsonConvert.DeserializeObject<Dictionary<string, string>>(item.HistoryList);
+                            int historylstCount= personHistoryList.Select(ph => new PersonHeader {Header = ph.Key, Detail = ph.Value})
+                            .ToList().Count();
+                        if (historylstCount > 0)
+                        {
+                            item.Header =
+                            personHistoryList.Select(ph => new PersonHeader { Header = ph.Key, Detail = ph.Value })
+                            .ToList();
+                        }
+                      
+                    }
+                });
+            }
+            return lstAkaHistory;
+        }
+
+        public Task<int> InsertUpdatePersonAka(AkaVm aka)
+        {
+            Aka dbPerAka = (from pa in _context.Aka
+                where pa.AkaId == aka.AkaId
+                select pa).SingleOrDefault();
+            if (dbPerAka == null)
+            {
+                dbPerAka = new Aka
+                {
+                    PersonId = aka.PersonId,
+                    AkaDlNoExpiration = aka.AkaDlNoExpiration,
+                    CreatedBy = _personnelId,
+                    CreateDate = DateTime.Now,
+                };
+            }
+            else
+            {
+                dbPerAka.UpdatedBy = _personnelId;
+                dbPerAka.UpdateDate = DateTime.Now;
+            }
+            dbPerAka.AkaLastName = aka.AkaLastName;
+            dbPerAka.AkaFirstName = aka.AkaFirstName;
+            dbPerAka.AkaMiddleName = aka.AkaMiddleName;
+            dbPerAka.AkaSuffix = aka.AkaSuffix;
+            dbPerAka.PersonGangName = aka.PersonGangName;
+            dbPerAka.PersonGangStatus = aka.PersonGangStatus;
+            dbPerAka.AkaDob = aka.AkaDob;
+            dbPerAka.AkaSsn = aka.AkaSsn;
+            dbPerAka.AkaDl = aka.AkaDl;
+            dbPerAka.AkaDlState = aka.AkaDlState;
+            dbPerAka.AkaDlExpiration = aka.AkaDlExpiration;
+            dbPerAka.AkaFbi = aka.AkaFbi;
+            dbPerAka.AkaCii = aka.AkaCii;
+            dbPerAka.AkaAlienNo = aka.AkaAlienNo;
+            dbPerAka.AkaDoc = aka.AkaDoc;
+            dbPerAka.AkaOtherIdType = aka.AkaOtherIdType;
+            dbPerAka.AkaOtherIdState= aka.AkaOtherIdState;
+            dbPerAka.AkaOtherIdNumber = aka.AkaOtherIdNumber;
+            dbPerAka.AkaAfisNumber = aka.AkaAfisNumber;
+            dbPerAka.AkaInmateNumber = aka.AkaInmateNumber;
+            dbPerAka.AkaSiteInmateNumber = aka.AkaSiteInmateNumber;
+            dbPerAka.AkaOtherIdDescription = aka.AkaOtherIdDescription;
+            dbPerAka.AkaOtherPhoneType = aka.AkaOtherPhoneType;
+            dbPerAka.AkaOtherPhoneNumber = aka.AkaOtherPhoneNumber;
+            dbPerAka.AkaOtherPhoneDescription = aka.AkaOtherPhoneDescription;
+            dbPerAka.SocialMediaType = aka.AkaSocialMediaType;
+            dbPerAka.SocialMediaAccount = aka.AkaSocialMediaAccount;
+            dbPerAka.SocialMediaDescription = aka.AkaSocialMediaDescription;
+            if (dbPerAka.AkaId <= 0)
+            {
+                _context.Aka.Add(dbPerAka);
+            }
+            LoadInsertAkaHistory(dbPerAka.AkaId, aka.AkaHistoryList); 
+
+            return _context.SaveChangesAsync();
+        }
+
+        public void LoadInsertAkaHistory(int akaId, string personAkaList)
+        {
+            AkaHistory dbAkaHisDet = new AkaHistory
+            {
+                CreateDate = DateTime.Now,
+                AkaId = akaId,
+                PersonnelId = _personnelId,
+                AkaHistoryList = personAkaList
+            };
+            _context.AkaHistory.Add(dbAkaHisDet);
+        }
+    }
+}

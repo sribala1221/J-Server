@@ -1,0 +1,474 @@
+﻿using Microsoft.AspNetCore.Mvc;
+using ServerAPI.Interfaces;
+using ServerAPI.ViewModels;
+using ServerAPI.Services;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using GenerateTables.Models;
+using jsreport.Client;
+using jsreport.Types;
+using Microsoft.Extensions.Configuration;
+using Newtonsoft.Json;
+using System;
+using ServerAPI.Authorization;
+
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    public class RecordsVisitationController : Controller
+    {
+        private readonly IRegisterService _registerService;
+        private readonly IRoomManagementService _roomManagementService;
+        private readonly IScheduleService _scheduleService;
+        private readonly IHistoryService _historyService;
+        private readonly ICommonService _commonService;
+        private readonly IConfiguration _configuration;
+        public RecordsVisitationController(IRegisterService registerService, IRoomManagementService roomManagementService, IScheduleService scheduleService,
+        IHistoryService historyService, ICommonService commonService, IConfiguration configuration)
+        {
+            _registerService = registerService;
+            _roomManagementService = roomManagementService;
+            _scheduleService = scheduleService;
+            _historyService = historyService;
+            _commonService = commonService;
+            _configuration = configuration;
+        }
+
+        [HttpGet("GetVisitRegistrationWizard")]
+        public IActionResult GetVisitRegistrationWizard()
+        {
+            return Ok(_registerService.GetVisitRegistrationWizard());
+        }
+
+        [HttpGet("GetVisitDetails")]
+        public IActionResult GetVisitDetails(VisitParam objVisitParam)
+        {
+            return Ok(_registerService.GetVisitDetails(objVisitParam));
+        }
+
+        [HttpGet("GetRoomManagementDetails")]
+        public IActionResult GetRoomManagementDetails(VisitParam objVisitParam)
+        {
+            return Ok(_roomManagementService.GetRoomManagementDetails(objVisitParam));
+        }
+        // [HttpGet("GetVisitBoothDetailsnew")]
+        // public IActionResult GetVisitBoothDetailsnew(VisitScheduledBoothVm objParam)
+        // {
+        //     return Ok(_roomManagementService.GetVisitBoothDetails(objParam));
+        // }
+        [HttpGet("GetScheduleVisitDetails")]
+        public IActionResult GetScheduleVisitDetails(VisitParam objVisitParam)
+        {
+            return Ok(_registerService.GetScheduleVisitDetails(objVisitParam));
+        }
+
+        [HttpGet("GetIdentifiedVisitorDetails")]
+        public IActionResult GetIdentifiedVisitorDetails(VisitParam objVisitParam)
+        {
+            return Ok(_registerService.GetIdentifiedVisitorDetails(objVisitParam));
+        }
+
+        [HttpGet("GetProfessionalDetails")]
+        public IActionResult GetProfessionalDetails(ProfessionalSearchDetails objParam)
+        {
+            return Ok(_registerService.GetProfessionalDetails(objParam));
+        }
+      
+        [HttpPost("InsertUpdateVisitorPersonDetails")]
+        public async Task<IActionResult> InsertUpdateVisitorPersonDetails([FromBody] PersonIdentity visitor)
+        {
+            return Ok(await _registerService.InsertUpdateVisitorPersonDetails(visitor));
+        }
+        [FuncPermission(496,FuncPermissionType.Add)]
+        [HttpPost("InsertIdentifiedVisitorDetails")]
+        public async Task<IActionResult> InsertIdentifiedVisitorDetails([FromBody] IdentifyVisitorVm objParam)
+        {
+            return Ok(await _registerService.InsertIdentifiedVisitorDetails(objParam));
+        }
+        [FuncPermission(496,FuncPermissionType.Edit)]
+        [HttpPost("UpdateIdentifiedVisitorDetails")]
+        public async Task<IActionResult> UpdateIdentifiedVisitorDetails([FromBody] IdentifyVisitorVm objParam)
+        {
+            return Ok(await _registerService.UpdateIdentifiedVisitorDetails(objParam));
+        }
+
+        [HttpPost("UpdateVisitDenyDetails")]
+        public async Task<IActionResult> UpdateVisitDenyDetails([FromBody] VisitDetails objParam)
+        {
+            return Ok(await _registerService.UpdateVisitDenyDetails(objParam));
+        }
+
+        [HttpPost("DenyVisitor")]
+        public async Task<IActionResult> DenyVisitor([FromBody] VisitDetails objParam)
+        {
+            return Ok(await _registerService.DenyVisitor(objParam));
+        }
+
+        //[HttpPost("InsertChildVisitors")]
+        //public async Task<IActionResult> InsertChildVisitors([FromBody] List<VisitToChild> objChildList)
+        //{
+        //    return Ok(await _registerService.InsertChildVisitors(objChildList));
+        //}
+
+        //[HttpPost("UpdateChildVisitors")]
+        //public async Task<IActionResult> UpdateChildVisitors([FromBody] List<VisitToChild> objChildList)
+        //{
+        //    return Ok(await _registerService.UpdateChildVisitors(objChildList));
+        //}
+
+        [HttpGet("GetSavedVisitorDetails")]
+        public IActionResult GetSavedVisitorDetails(int scheduleId)
+        {
+            return Ok(_registerService.GetSavedVisitorDetails(scheduleId));
+        }
+
+        [HttpGet("GetSelectedInmateVisitDetails")]
+        public IActionResult GetSelectedInmateVisitDetails(int inmateId, List<int> lstVisitorId, int scheduleId)
+        {
+            return Ok(_registerService.GetSelectedInmateVisitDetails(inmateId, lstVisitorId, scheduleId));
+        }
+
+        [HttpPost("InsertVisitorToInmate")]
+        public async Task<IActionResult> InsertVisitorToInmate([FromBody] List<VisitorToInmateDetails> lstVisitorToInmateDetail)
+        {
+            return Ok(await _registerService.InsertVisitorToInmate(lstVisitorToInmateDetail));
+        }
+
+        [HttpPost("UpdateVisitorToInmate")]
+        public async Task<IActionResult> UpdateVisitorToInmate([FromBody] List<VisitorToInmateDetails> lstVisitorToInmateDetail)
+        {
+            return Ok(await _registerService.UpdateVisitorToInmate(lstVisitorToInmateDetail));
+        }
+
+        [HttpPut("UpdateScheduleInmate")]
+        public async Task<IActionResult> UpdateScheduleInmate(int scheduleId, int inmateId)
+        {
+            return Ok(await _registerService.UpdateScheduleInmate(scheduleId, inmateId));
+        }
+
+        #region Step-3 Visit Schedule
+        [HttpGet("GetSchedulePrimaryDetail")]
+        public IActionResult GetSchedulePrimaryDetail(PrimaryVisitorVm objParam)
+        {
+            return Ok(_registerService.GetSchedulePrimaryDetail(objParam));
+        }
+        [HttpGet("GetVisitInmateDetails")]
+        public IActionResult GetVisitInmateDetails(int inmateId)
+        {
+            return Ok(_registerService.GetVisitInmateDetails(inmateId));
+        }
+        [HttpGet("GetVisitRoomDetails")]
+        public IActionResult GetVisitRoomDetails(VisitScheduledVm visitationRoomInfo)
+        {
+            return Ok(_registerService.GetVisitRoomDetails(visitationRoomInfo));
+        }
+
+        [HttpGet("GetVisitBoothDetails")]
+        public IActionResult GetVisitBoothDetails(VisitScheduledBoothVm visitationBoothInfo)
+        {
+            return Ok(_registerService.GetVisitBoothDetails(visitationBoothInfo));
+        }
+
+        [HttpPost("UpdateRoomBoothDetails")]
+        public async Task<IActionResult> UpdateRoomBoothDetails([FromBody]VisitSchedule visitSchedule)
+        {
+            return Ok(await _registerService.UpdateRoomBoothDetails(visitSchedule));
+        }
+        [HttpGet("SchedulingConflict")]
+        public IActionResult SchedulingConflict(VisitSchedule visitSchedule)
+        {
+            return Ok(_registerService.SchedulingConflict(visitSchedule));
+        }
+        #endregion
+
+        [HttpGet("GetConfirmVisitorIdDetails")]
+        public IActionResult GetConfirmVisitorIdDetails(int inmateId, int scheduleId)
+        {
+            return Ok(_registerService.GetConfirmVisitorIdDetails(inmateId, scheduleId));
+        }
+
+        [HttpPut("UpdateConfirmIdDetails")]
+        public async Task<IActionResult> UpdateConfirmIdDetails(int scheduleId)
+        {
+            return Ok(await _registerService.UpdateConfirmIdDetails(scheduleId));
+        }
+
+        [HttpPut("UpdateAcknowledgementBackground")]
+        public async Task<IActionResult> UpdateAcknowledgementBackground(int scheduleId, bool backgroundFlag)
+        {
+            return Ok(await _registerService.UpdateAcknowledgementBackground(scheduleId, backgroundFlag));
+        }
+
+        [HttpPut("UpdateCompleteRegistration")]
+        public async Task<IActionResult> UpdateCompleteRegistration(int scheduleId)
+        {
+            return Ok(await _registerService.UpdateCompleteRegistration(scheduleId));
+        }
+
+        [HttpDelete("DeleteVisitRegistration")]
+        public async Task<IActionResult> DeleteVisitRegistration(int scheduleId)
+        {
+            return Ok(await _registerService.DeleteVisitRegistration(scheduleId));
+        }
+
+        //[HttpGet("GetVisitorList")]
+        //public IActionResult GetVisitorList(SearchRegisterDetails searchDetails)
+        //{
+        //    return Ok(_registerService.GetVisitorList(searchDetails));
+        //}
+
+        //[HttpGet("GetScheduleList")]
+        //public IActionResult GetScheduleList(int inmateId)
+        //{
+        //    return Ok(_registerService.GetScheduleList(inmateId));
+        //}
+
+        [HttpGet("GetVisitScheduleDetails")]
+        public IActionResult GetVisitScheduleDetails(FacilityApptVm scheduleApptDetails)
+        {
+            return Ok(_scheduleService.GetVisitScheduleDetails(scheduleApptDetails));
+        }
+
+        [HttpGet("GetCompleteVisits")]
+        public IActionResult GetCompleteVisits()
+        {
+            return Ok(_registerService.GetCompleteVisits());
+        }
+
+        [HttpPost("UpdateScheduleVisits")]
+        public async Task<IActionResult> UpdateScheduleVisits([FromBody] ScheduledVisits scheduledVisits)
+        {
+            return Ok(await _registerService.UpdateScheduleVisits(scheduledVisits));
+        }
+
+        [HttpPost("UpdateScheduleBooth")]
+        public async Task<IActionResult> UpdateScheduleBooth([FromBody] BoothInfo boothInfo)
+        {
+            return Ok(await _roomManagementService.UpdateScheduleBooth(boothInfo));
+        }
+        [HttpGet("GetVisitationInmateDetails")]
+        public IActionResult GetVisitationInmateDetails(FacilityApptVm scheduleApptDetails)
+        {
+            return Ok(_scheduleService.GetVisitationInmateDetails(scheduleApptDetails));
+        }
+
+        [HttpGet("GetInmateConflict")]
+        public IActionResult GetInmateConflict(int inmateId, int personId)
+        {
+            return Ok(_registerService.GetInmateConflict(inmateId, personId));
+        }
+
+
+        //      [HttpGet("GetExistingVisitDetails")]
+        //      public IActionResult GetExistingVisitDetails(int inmateId)
+        //      {
+        //          return Ok(_registerService.GetExistingVisitDetails(inmateId));
+        //      }
+
+        //      [HttpGet("GetFutureVisitDetails")]
+        //      public IActionResult GetFutureVisitDetails(int inmateId, DateTime currentDate)
+        //      {
+        //          return Ok(_registerService.GetFutureVisitDetails(inmateId, currentDate));
+        //      }
+
+        //      [HttpGet("GetSelectedVisitor")]
+        //      public IActionResult GetSelectedVisitor(int inmateId, bool isProfFlag)
+        //      {
+        //          return Ok(_registerService.GetSelectedVisitor(inmateId, isProfFlag));
+        //      }
+
+        //      [HttpGet("GetVisitorDetails")]
+        //      public IActionResult GetVisitorDetails(int inmateId, int visitorListId)
+        //      {
+        //          return Ok(_registerService.GetVisitorDetails(inmateId, visitorListId));
+        //      }
+
+        //      [HttpGet("GetRecentVisitorInfo")]
+        //      public IActionResult GetRecentVisitorInfo(int inmateId, bool isPersonalFlag)
+        //      {
+        //          return Ok(_registerService.GetRecentVisitorInfo(inmateId, isPersonalFlag));
+        //      }
+
+        //      [HttpPost("InsertVisitationConflict")]
+        //      public async Task<IActionResult> InsertVisitationConflict([FromBody] KeyValuePair<int, string> floorNoteNarrative)
+        //      {
+        //          return Ok(await _registerService.InsertVisitationConflict(floorNoteNarrative));
+        //      }
+
+        //      [HttpGet("GetDuplicateVisitor")]
+        //      public IActionResult GetDuplicateVisitor(int personId, int inmateId, DateTime currentDate)
+        //      {
+        //          return Ok(_registerService.GetDuplicateVisitor(personId, inmateId, currentDate));
+        //      }
+
+        //      [HttpPost("InsertUpdateVisitorDetails")]
+        //      public async Task<IActionResult> InsertUpdateVisitorDetails([FromBody] RecordsVisitationVm recordsVisitation)
+        //      {
+        //          return Ok(await _registerService.InsertUpdateVisitorDetails(recordsVisitation));
+        //      }
+
+        //      [HttpPost("DeleteVisitorDetails")]
+        //      public async Task<IActionResult> DeleteVisitorDetails([FromBody] int visitorId)
+        //      {
+        //          return Ok(await _registerService.DeleteVisitorDetails(visitorId));
+        //      }
+
+        //      [HttpGet("GetVisitationConflict")]
+        //      public IActionResult GetVisitationConflict(int inmateId, int locationId, DateTime visitorDate)
+        //      {
+        //          return Ok(_registerService.GetVisitationConflict(inmateId, locationId, visitorDate));
+        //      }
+
+        //[HttpGet("CheckScheduleConflict")]
+        //public IActionResult CheckScheduleConflict(int inmateId, DateTime? startDate, DateTime? endDate, int locationId)
+        //{
+        //	return Ok(_registerService.CheckScheduleConflict(inmateId, startDate, endDate, locationId));
+        //}
+
+        ////Get Visit Booth Conflict Details Based on Location
+        //[HttpGet("GetBoothConflict")]
+        //public IActionResult GetBoothConflict(RecordsVisitationVm visitReq)
+        //{
+        //	return Ok(_registerService.GetBoothConflict(visitReq));
+        //}
+
+        //      [HttpPost("UpdateConsoleVisit")]
+        //      public async Task<IActionResult> UpdateConsoleVisit([FromBody] RegisterDetails value)
+        //      {
+        //          return Ok(await _registerService.UpdateConsoleVisit(value));
+        //      }
+
+        #region Visit History
+        [HttpGet("GetVisitLocation")]
+        public IActionResult GetVisitLocation(int facilityId)
+        {
+            return Ok(_historyService.GetVisitLocation(facilityId));
+        }
+
+        [HttpGet("GetVisitHistoryDetails")]
+        public IActionResult GetVisitHistoryDetails(SearchVisitHistoryVm objVisitHistoryParam)
+        {
+            return Ok(_historyService.GetVisitHistoryDetails(objVisitHistoryParam));
+        }
+
+
+        #endregion
+        [HttpPost("GetVisitRegistrationWizardProgress")]
+        public IActionResult GetVisitRegistrationWizardProgress([FromBody] List<int> lstScheduleId)
+        {
+            return Ok(_registerService.GetVisitRegistrationWizardProgress(lstScheduleId));
+        }
+
+        [HttpGet("VisitorPassPdf")]
+        public async Task<IActionResult> VisitorPassPdf(int inmateId, int scheduleId, string visitationSummary)
+        {
+            ConfirmVisitorIdVm visitorIdVm = _registerService.GetConfirmVisitorIdDetails(inmateId, scheduleId);
+            VisitorPassVm VisitorPassPdf = new VisitorPassVm();
+            if (visitorIdVm != null)
+            {
+                VisitorPassPdf.InmateNumber = visitorIdVm.InmateDetail.InmateNumber;
+                VisitorPassPdf.InmateName = visitorIdVm.InmateDetail.Person.PersonLastName + ", " + visitorIdVm.InmateDetail.Person.PersonFirstName;
+                VisitorPassPdf.ScheduleRoom = visitorIdVm.VisitSchedule.RoomLocation;
+                VisitorPassPdf.ScheduleDate = visitorIdVm.VisitSchedule.StartDate.ToString("MM/dd/yyyy").Replace('-', '/');
+                VisitorPassPdf.Booth = visitorIdVm.VisitSchedule.VisitBooth;
+                VisitorPassPdf.VisitorPassCombineFlag = visitorIdVm.VisitSchedule.VisitorPassCombineFlag;
+                if (!visitorIdVm.VisitSchedule.VisitOpenScheduleFlag)
+                {
+                    VisitorPassPdf.Time = visitorIdVm.VisitSchedule.StartDate.ToString("HH:mm") + '-' + visitorIdVm.VisitSchedule.EndDate?.ToString("HH:mm");
+                }
+                else
+                {
+                    VisitorPassPdf.Time = visitorIdVm.VisitSchedule.StartDate.ToString("HH:mm");
+                }
+                VisitorPassPdf.FromTime = visitorIdVm.VisitSchedule.StartDate.ToString("HH:mm");
+                if (visitorIdVm.LstVisitorIdentityAndRelationship != null)
+                {
+                    if (visitorIdVm.LstVisitorIdentityAndRelationship.Count > 0)
+                    {
+                        VisitorPassPdf.VisitorType = visitorIdVm.LstVisitorIdentityAndRelationship[0].VisitorType;
+                        if (VisitorPassPdf.VisitorType != 0)
+                        {
+                            VisitorPassPdf.ProfessionalType = visitorIdVm.LstVisitorIdentityAndRelationship[0].ProfessionalType;
+                        }
+                        else
+                        {
+                            VisitorPassPdf.VistorRelationShip = visitorIdVm.LstVisitorIdentityAndRelationship[0].Relationship;
+                        }
+
+                        VisitorPassPdf.VisitorName = visitorIdVm.LstVisitorIdentityAndRelationship[0].PersonIdentity.PersonLastName + ", " + visitorIdVm.LstVisitorIdentityAndRelationship[0].PersonIdentity.PersonFirstName;
+                    }
+                    VisitorPassPdf.VisitChildDetail = _registerService.GetChildVisitors(scheduleId, 0);
+                    VisitorPassPdf.VisitAdultDetail = _registerService.GetInmateRelationShipDetails(scheduleId, visitorIdVm.LstVisitorIdentityAndRelationship[0]);
+
+                }
+
+
+
+
+                // VisitorPassPdf.VisitAdultDetail.ForEach(e =>
+                // {
+
+
+                // });
+
+            };
+            string json = JsonConvert.SerializeObject(VisitorPassPdf);
+            ReportingService rs = new ReportingService(_configuration.GetSection("SiteVariables")["ReportUrl"]);
+            //try catch used for to handle 2 exceptions (10061 & 404) from jsreport.
+            try
+            {
+                Report report = await rs.RenderByNameAsync(visitationSummary, json);
+                FileContentResult result =
+                    new FileContentResult(_commonService.ConvertStreamToByte(report.Content), "application/pdf");
+                return result;
+            }
+            catch (Exception ex)
+            {
+                //10061 is status code for no connection could be made because the target machine actively refused it
+                //404 for file not found in jsreport
+                return ex.InnerException != null ? Ok(10061) : Ok(404);
+            }
+        }
+
+        [HttpGet("VisitorInmateHallPassPdf")]
+        public async Task<IActionResult> VisitorInmateHallPassPdf(VisitDetails visit)
+        {
+            visit.VisitChildDetail = _registerService.GetChildVisitors(visit.ScheduleId, visit.PrimaryVisitor != null ? visit.PrimaryVisitor.PersonId : 0);            
+            ConfirmVisitorIdVm visitorIdVm = _registerService.GetConfirmVisitorIdDetails(visit.InmateId, visit.ScheduleId);            
+            visit.VisitAdultDetail = _registerService.GetInmateRelationShipDetails(visit.ScheduleId, visitorIdVm.LstVisitorIdentityAndRelationship[0]);    
+            visit.ScheduleDate = visit.ScheduleDateTime.ToString("MM/dd/yyyy").Replace('-', '/');
+            if (!visit.VisitOpenScheduleFlag)
+            {
+                visit.ScheduleTime = visit.StartDate.ToString("HH:mm") + '-' + visit.EndDate?.ToString("HH:mm");
+            }
+            else
+            {
+                visit.ScheduleTime = visit.StartDate.ToString("HH:mm");
+            }
+            string json = JsonConvert.SerializeObject(visit);
+            ReportingService rs = new ReportingService(_configuration.GetSection("SiteVariables")["ReportUrl"]);
+            //try catch used for to handle 2 exceptions (10061 & 404) from jsreport.
+            try
+            {
+                Report report = await rs.RenderByNameAsync("visit inmate hall pass", json);
+                FileContentResult result =
+                    new FileContentResult(_commonService.ConvertStreamToByte(report.Content), "application/pdf");
+                return result;
+            }
+            catch (Exception ex)
+            {
+                //10061 is status code for no connection could be made because the target machine actively refused it
+                //404 for file not found in jsreport
+                return ex.InnerException != null ? Ok(10061) : Ok(404);
+            }
+        }
+
+
+        [HttpGet("GetVisitationPermissionRights")]
+        public IActionResult GetVisitationPermissionRights()
+        {
+            return Ok(_registerService.GetVisitationPermissionRights());
+        }
+
+    }
+}

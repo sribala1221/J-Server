@@ -1,0 +1,36 @@
+﻿using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
+using ServerAPI.Services;
+using ServerAPI.ViewModels;
+
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    public class CustomQueueController : Controller
+    {
+        private readonly ICustomQueueService _customQueueService;
+
+        public CustomQueueController(ICustomQueueService customQueueService)
+        {
+            _customQueueService = customQueueService;
+        }
+
+        [HttpGet("GetCustomQueue")]
+        public IActionResult GetCustomQueue()
+        {
+            return Ok(_customQueueService.GetCustomQueue());
+        }
+
+        [HttpGet("GetCustomQueueEntryDetails")]
+        public IActionResult GetCustomQueueEntryDetails(int customQueueId)
+        {
+            return Ok(_customQueueService.GetCustomQueueEntryDetails(customQueueId));
+        }
+
+        [HttpPost("GetCustomQueueSearch")]
+        public async Task<IActionResult> GetCustomQueueSearch([FromBody] CustomQueueSearchInput customQueueSearch)
+        {
+            return Json(await _customQueueService.GetCustomQueueSearch(customQueueSearch));
+        }
+    }
+}

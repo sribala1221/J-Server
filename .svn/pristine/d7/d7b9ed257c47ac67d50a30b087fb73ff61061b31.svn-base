@@ -1,0 +1,130 @@
+﻿using ServerAPI.ViewModels;
+using Microsoft.AspNetCore.Mvc;
+using ServerAPI.Services;
+
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    public class MoneyCashController : Controller
+    {
+        private readonly IMoneyCashService _moneyCashService;
+        public MoneyCashController(IMoneyCashService moneyCashService)
+        {
+            _moneyCashService = moneyCashService;
+        }
+        #region Money->Cash->Ledger
+        [HttpGet("GetCashDrawers")]
+        public IActionResult GetCashDrawers(int facilityId)
+        {
+            return Ok(_moneyCashService.MoneyGetCashDrawer(facilityId));
+        }
+        [HttpGet("GetCashDetails")]
+        public IActionResult GetCashDetails(MoneyCashDetailVm searchValue)
+        {
+            return Ok(_moneyCashService.GetCashDetails(searchValue));
+        }
+        [HttpGet("GetAccountDetail")]
+        public IActionResult GetAccountDetail(int facilityId)
+        {
+            return Ok(_moneyCashService.GetAccountDetail(facilityId));
+        }
+        [HttpPost("DepositTransaction")]
+        public IActionResult DepositTransaction([FromBody]CashTransactionDetailVm detail)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+            return Ok(_moneyCashService.DepositTransaction(detail));
+        }
+        [HttpPost("WithdrawTransaction")]
+        public IActionResult WithdrawTransaction([FromBody]CashTransactionDetailVm detail)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+            return Ok(_moneyCashService.WithdrawTransaction(detail));
+        }
+        [HttpPost("BankToCashTransaction")]
+        public IActionResult BankToCashTransaction([FromBody]CashTransactionDetailVm detail)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+            return Ok(_moneyCashService.BankToCashTransaction(detail));
+        }
+        [HttpPost("CashToBankTransaction")]
+        public IActionResult CashToBankTransaction([FromBody]CashTransactionDetailVm detail)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+            return Ok(_moneyCashService.CashToBankTransaction(detail));
+        }
+        [HttpPost("VaultToCashTransaction")]
+        public IActionResult VaultToCashTransaction([FromBody]CashTransactionDetailVm detail)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+            return Ok(_moneyCashService.VaultToCashTransaction(detail));
+        }
+        [HttpPost("CashToVaultTransaction")]
+        public IActionResult CashToVaultTransaction([FromBody]CashTransactionDetailVm detail)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+            return Ok(_moneyCashService.CashToVaultTransaction(detail));
+        }
+        [HttpPost("CashToCashTransaction")]
+        public IActionResult CashToCashTransaction([FromBody]CashTransactionDetailVm detail)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+            return Ok(_moneyCashService.CashToCashTransaction(detail));
+        }
+        [HttpPost("Journal")]
+        public IActionResult Journal([FromBody]CashTransactionDetailVm detail)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+            return Ok(_moneyCashService.Journal(detail));
+        }
+        [HttpGet("GetTransactionDetail")]
+        public IActionResult GetTransactionDetail(int transId)
+        {
+            return Ok(_moneyCashService.GetTransactionDetail(transId));
+        }
+        #endregion
+
+        #region Money->Cash->Verify
+
+        [HttpPost("MoneyCashInsert")]
+        public IActionResult MoneyCashInsert([FromBody]MoneyCashInsertVm param)
+        {
+            return Ok(_moneyCashService.MoneyCashInsert(param));
+        }
+        [HttpGet("MoneyCashVerify")]
+        public IActionResult MoneyCashVerify(int bankId, int cashBalanceId)
+        {
+            return Ok(_moneyCashService.MoneyCashVerify(bankId,cashBalanceId));
+        }
+
+        [HttpGet("MoneyCashBalance")]
+        public IActionResult MoneyCashBalance(int cashBalanceId)
+        {
+            return Ok(_moneyCashService.MoneyCashBalance(cashBalanceId));
+        }
+        #endregion
+    }
+}

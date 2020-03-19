@@ -1,0 +1,372 @@
+﻿using GenerateTables.Models;
+using ServerAPI.ViewModels;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+// ReSharper disable once CheckNamespace
+namespace ServerAPI.Services
+{
+    public class WizardService : IWizardService
+    {
+        private readonly AAtims _context;
+        private readonly IAtimsHubService _atimsHubService;
+
+        public WizardService(AAtims context, IAtimsHubService atimsHubService)
+        {
+            _context = context;
+            _atimsHubService = atimsHubService;
+        }
+
+        //To get wizard steps
+        public List<AoWizardVm> GetWizardSteps() => GetWizardSteps(0);
+
+        public List<AoWizardVm> GetWizardSteps(int aoWizardId)
+        {
+            List<AoWizardVm> wizards = (
+                from w in _context.AoWizard
+                where (aoWizardId == 0 || w.AoWizardId == aoWizardId)
+                select new AoWizardVm
+                {
+                    WizardId = w.AoWizardId,
+                    HasFixedOrder = w.HasFixedOrder,
+                    IsSubWizard = w.IsSubWizard,
+                    WizardName = w.WizardName,
+                    WizardFacilities = w.AoWizardFacility
+                        .Select(f => new AoWizardFacilityVm
+                        {
+                            WizardFacilityId = f.AoWizardFacilityId,
+                            Facility = new FacilityVm
+                            {
+                                FacilityId = f.FacilityId > 0 ? f.Facility.FacilityId : 0,
+                                FacilityAbbr = f.FacilityId > 0 ? f.Facility.FacilityAbbr : null,
+                                FacilityName = f.FacilityId > 0 ? f.Facility.FacilityName : null
+                            },
+                            IsSequential = f.IsSequential,
+                            WizardFacilitySteps = f.AoWizardFacilityStep.Where(ws => ws.IsActive)
+                                .Select(s => new AoWizardFacilityStepVm
+                                {
+                                    WizardFacilityStepId = s.AoWizardFacilityStepId,
+                                    Component = new AoComponentVm
+                                    {
+                                        ComponentId = s.AoComponent.AoComponentId,
+                                        AppAoFunctionalityId = s.AoComponent.AppAofunctionalityId,
+                                        ComponentName = s.AoComponent.ComponentName,
+                                        DisplayName = s.AoComponent.DisplayName,
+                                        IsEntryScreen = s.AoComponent.IsEntryScreen,
+                                        IsLastScreen = s.AoComponent.IsLastScreen,
+                                        IsBookingData = s.AoComponent.IsBookingData,
+                                    },
+                                    Order = s.Order,
+                                    CreateBy = new PersonnelVm
+                                    {
+                                        PersonnelId = s.CreateBy.PersonnelId
+                                    },
+                                    BookingTypeFilterString = s.BookingTypeFilterString,
+                                    FormTemplateId = s.FormTemplatesId.HasValue && (s.FormTemplates.Inactive == 0 || !s.FormTemplates.Inactive.HasValue) 
+                                    ? s.FormTemplatesId :  default,
+                                    FormTemplateName = s.FormTemplatesId.HasValue && (s.FormTemplates.Inactive == 0 || !s.FormTemplates.Inactive.HasValue) 
+                                    ? s.FormTemplates.DisplayName : default,
+                                    AoTaskLookupId = s.AoTaskLookupId,
+                                    AoComponentParamId=s.AoComponentParamId,
+                                    TaskName = _context.AoTaskLookup.FirstOrDefault(x => x.AoTaskLookupId == s.AoTaskLookupId).TaskName
+                                }).OrderBy(o => o.Order).ToList()
+                        }).ToList()
+                }).ToList();
+
+            return wizards;
+        }
+
+        public AoWizardFacilityVm GetAoWizardFacility(int wizardId, int facilityId)
+        {
+            AoWizardFacilityVm wizardFacility = _context.AoWizardFacility
+                .Where(w => w.FacilityId == facilityId && w.AoWizardId == wizardId)
+                .Select(f => new AoWizardFacilityVm
+                {
+                    WizardFacilityId = f.AoWizardFacilityId,
+                    Facility = new FacilityVm
+                    {
+                        FacilityId = f.FacilityId > 0 ? f.Facility.FacilityId : 0,
+                        FacilityAbbr = f.FacilityId > 0 ? f.Facility.FacilityAbbr : null,
+                        FacilityName = f.FacilityId > 0 ? f.Facility.FacilityName : null
+                    },
+                    IsSequential = f.IsSequential,
+                    WizardFacilitySteps = f.AoWizardFacilityStep
+                        .Where(ws => ws.IsActive)
+                        .Select(s => new AoWizardFacilityStepVm
+                        {
+                            WizardFacilityStepId = s.AoWizardFacilityStepId,
+                            Component = new AoComponentVm
+                            {
+                                ComponentId = s.AoComponent.AoComponentId,
+                                AppAoFunctionalityId = s.AoComponent.AppAofunctionalityId,
+                                ComponentName = s.AoComponent.ComponentName,
+                                DisplayName = s.AoComponent.DisplayName,
+                                IsEntryScreen = s.AoComponent.IsEntryScreen,
+                                IsLastScreen = s.AoComponent.IsLastScreen,
+                                IsBookingData = s.AoComponent.IsBookingData,
+                            },
+                            Order = s.Order,
+                            CreateBy = new PersonnelVm
+                            {
+                                PersonnelId = s.CreateBy.PersonnelId
+                            },
+                            BookingTypeFilterString = s.BookingTypeFilterString,
+                            FormTemplateId = s.FormTemplatesId.HasValue && (s.FormTemplates.Inactive == 0 || !s.FormTemplates.Inactive.HasValue) 
+                            ? s.FormTemplatesId :  default,
+                            FormTemplateName = s.FormTemplatesId.HasValue && (s.FormTemplates.Inactive == 0 || !s.FormTemplates.Inactive.HasValue) 
+                            ? s.FormTemplates.DisplayName : default,
+                            AoTaskLookupId = s.AoTaskLookupId,
+                            AoComponentParamId = s.AoComponentParamId,
+                            TaskName = _context.AoTaskLookup.FirstOrDefault(x => x.AoTaskLookupId == s.AoTaskLookupId).TaskName
+                        }).OrderBy(o => o.Order).ToList()
+                }).SingleOrDefault();
+
+            return wizardFacility;
+        }
+
+        public async Task<int> CreateWizardProgress(AoWizardProgressVm wizardProgress)
+        {
+            if (wizardProgress.IncarcerationId.HasValue)
+            {
+                AoWizardProgressIncarceration intakeWizard = _context.AoWizardProgressIncarceration.FirstOrDefault(i =>
+                    i.IncarcerationId == wizardProgress.IncarcerationId && i.AoWizardId == wizardProgress.WizardId);
+                if (!(intakeWizard is null)) return intakeWizard.AoWizardProgressId;
+                intakeWizard = new AoWizardProgressIncarceration
+                {
+                    IncarcerationId = wizardProgress.IncarcerationId ?? 0,
+                    AoWizardId = wizardProgress.WizardId
+                };
+                _context.AoWizardProgressIncarceration.Add(intakeWizard);
+                await _context.SaveChangesAsync();
+                return intakeWizard.AoWizardProgressId;
+            }
+
+            if (wizardProgress.ArrestId.HasValue)
+            {
+                AoWizardProgressArrest arrestWizard = _context.AoWizardProgressArrest.FirstOrDefault(a =>
+                    a.ArrestId == wizardProgress.ArrestId && a.AoWizardId == wizardProgress.WizardId);
+                if (!(arrestWizard is null)) return arrestWizard.AoWizardProgressId;
+                arrestWizard = new AoWizardProgressArrest
+                {
+                    AoWizardId = wizardProgress.WizardId,
+                    ArrestId = wizardProgress.ArrestId ?? 0
+                };
+
+                _context.AoWizardProgressArrest.Add(arrestWizard);
+                await _context.SaveChangesAsync();
+                return arrestWizard.AoWizardProgressId;
+            }
+
+            if (wizardProgress.InmatePrebookStagingId.HasValue)
+            {
+                AoWizardProgressInmatePrebookStaging prebookStagingWizard = _context.AoWizardProgressInmatePrebookStaging.FirstOrDefault(a =>
+                    a.InmatePrebookStagingId == wizardProgress.InmatePrebookStagingId && a.AoWizardId == wizardProgress.WizardId);
+                if (!(prebookStagingWizard is null)) return prebookStagingWizard.AoWizardProgressId;
+                prebookStagingWizard = new AoWizardProgressInmatePrebookStaging
+                {
+                    AoWizardId = wizardProgress.WizardId,
+                    InmatePrebookStagingId = wizardProgress.InmatePrebookStagingId ?? 0
+                };
+
+                _context.AoWizardProgressInmatePrebookStaging.Add(prebookStagingWizard);
+                await _context.SaveChangesAsync();
+                return prebookStagingWizard.AoWizardProgressId;
+            }
+
+            if (wizardProgress.DisciplinaryInmateId.HasValue)
+            {
+                AoWizardProgressDisciplinaryInmate disciplinaryWizard =
+                    _context.AoWizardProgressDisciplinaryInmate.FirstOrDefault(d =>
+                        d.DisciplinaryInmateId == wizardProgress.DisciplinaryInmateId.Value &&
+                        d.AoWizardId == wizardProgress.WizardId);
+                if (!(disciplinaryWizard is null)) return disciplinaryWizard.AoWizardProgressId;
+                disciplinaryWizard = new AoWizardProgressDisciplinaryInmate
+                {
+                    DisciplinaryInmateId = wizardProgress.DisciplinaryInmateId ?? 0,
+                    AoWizardId = wizardProgress.WizardId
+                };
+                _context.AoWizardProgressDisciplinaryInmate.Add(disciplinaryWizard);
+                await _context.SaveChangesAsync();
+                return disciplinaryWizard.AoWizardProgressId;
+            }
+
+            if (wizardProgress.GrievanceId.HasValue)
+            {
+                AoWizardProgressGrievance grievanceWizard = _context.AoWizardProgressGrievance.FirstOrDefault(g =>
+                    g.GrievanceId == wizardProgress.GrievanceId && g.AoWizardId == wizardProgress.WizardId);
+                if (!(grievanceWizard is null)) return grievanceWizard.AoWizardProgressId;
+                grievanceWizard = new AoWizardProgressGrievance
+                {
+                    GrievanceId = wizardProgress.GrievanceId ?? 0,
+                    AoWizardId = wizardProgress.WizardId
+                };
+                _context.AoWizardProgressGrievance.Add(grievanceWizard);
+                await _context.SaveChangesAsync();
+                return grievanceWizard.AoWizardProgressId;
+            }
+
+            if (wizardProgress.InmatePrebookId.HasValue)
+            {
+                AoWizardProgressInmatePrebook inmatePrebookWizard =
+                    _context.AoWizardProgressInmatePrebook.FirstOrDefault(p =>
+                        p.InmatePrebookId == wizardProgress.InmatePrebookId && p.AoWizardId == wizardProgress.WizardId);
+                if (!(inmatePrebookWizard is null)) return inmatePrebookWizard.AoWizardProgressId;
+                inmatePrebookWizard = new AoWizardProgressInmatePrebook
+                {
+                    InmatePrebookId = wizardProgress.InmatePrebookId ?? 0,
+                    AoWizardId = wizardProgress.WizardId
+                };
+                _context.AoWizardProgressInmatePrebook.Add(inmatePrebookWizard);
+                await _context.SaveChangesAsync();
+                return inmatePrebookWizard.AoWizardProgressId;
+            }
+
+            if (wizardProgress.InmatePrebookStagingId.HasValue)
+            {
+                AoWizardProgressInmatePrebookStaging inmatePrebookStaging =
+                    _context.AoWizardProgressInmatePrebookStaging.FirstOrDefault(p =>
+                        p.InmatePrebookStagingId == wizardProgress.InmatePrebookStagingId && p.AoWizardId == wizardProgress.WizardId);
+                if (!(inmatePrebookStaging is null)) return inmatePrebookStaging.AoWizardProgressId;
+                inmatePrebookStaging = new AoWizardProgressInmatePrebookStaging
+                {
+                    InmatePrebookStagingId = wizardProgress.InmatePrebookStagingId ?? 0,
+                    AoWizardId = wizardProgress.WizardId
+                };
+                _context.AoWizardProgressInmatePrebookStaging.Add(inmatePrebookStaging);
+                await _context.SaveChangesAsync();
+                return inmatePrebookStaging.AoWizardProgressId;
+            }
+
+            if (wizardProgress.TempHoldId.HasValue)
+            {
+                AoWizardProgressTempHold tempHoldWizard = _context.AoWizardProgressTempHold.FirstOrDefault(t =>
+                    t.TempHoldId == wizardProgress.TempHoldId && t.AoWizardId == wizardProgress.TempHoldId);
+                if (!(tempHoldWizard is null)) return tempHoldWizard.AoWizardProgressId;
+                tempHoldWizard = new AoWizardProgressTempHold
+                {
+                    TempHold = _context.TempHold.First(t => t.TempHoldId == wizardProgress.TempHoldId),
+                    AoWizardId = wizardProgress.WizardId
+                };
+                _context.AoWizardProgressTempHold.Add(tempHoldWizard);
+                await _context.SaveChangesAsync();
+                return tempHoldWizard.AoWizardProgressId;
+            }
+
+            if (wizardProgress.ScheduleId.HasValue)
+            {
+                AoWizardProgressSchedule ScheduleWizard = _context.AoWizardProgressSchedule.FirstOrDefault(t =>
+                   t.ScheduleId == wizardProgress.ScheduleId && t.AoWizardId == wizardProgress.ScheduleId);
+                if (!(ScheduleWizard is null)) return ScheduleWizard.AoWizardProgressId;
+                ScheduleWizard = new AoWizardProgressSchedule
+                {
+                    Schedule = _context.Schedule.First(t => t.ScheduleId == wizardProgress.ScheduleId),
+                    AoWizardId = wizardProgress.WizardId
+                };
+                _context.AoWizardProgressSchedule.Add(ScheduleWizard);
+                await _context.SaveChangesAsync();
+                return ScheduleWizard.AoWizardProgressId;
+            }
+            return await _context.SaveChangesAsync();
+        }
+
+        public AoWizardProgressVm GetWizardProgress(int aoWizardProgressId)
+        {
+            AoWizardProgressVm wizardProgress = (
+                from wp in _context.AoWizardProgress
+                where wp.AoWizardProgressId == aoWizardProgressId
+                select new AoWizardProgressVm
+                {
+                    WizardStepProgress = (
+                        from p in _context.AoWizardStepProgress
+                        where p.AoWizardProgressId == wp.AoWizardProgressId
+                        select new AoWizardStepProgressVm
+                        {
+                            ComponentId = p.AoComponentId,
+                            AoWizardFacilityStepId = p.AoWizardFacilityStepId ?? 0,
+                            Component = new AoComponentVm
+                            {
+                                ComponentId = p.AoComponent.AoComponentId,
+                                AppAoFunctionalityId = p.AoComponent.AppAofunctionalityId,
+                                ComponentName = p.AoComponent.ComponentName,
+                                DisplayName = p.AoComponent.DisplayName,
+                                IsLastScreen = p.AoComponent.IsLastScreen
+                            },
+                            StepComplete = p.StepComplete,
+                            StepCompleteBy = new PersonnelVm
+                            {
+                                PersonnelId = p.StepCompleteBy.PersonnelId,
+                                OfficerBadgeNumber = p.StepCompleteBy.OfficerBadgeNum,
+                                PersonFirstName = p.StepCompleteBy.PersonNavigation.PersonFirstName,
+                                PersonMiddleName = p.StepCompleteBy.PersonNavigation.PersonMiddleName,
+                                PersonLastName = p.StepCompleteBy.PersonNavigation.PersonLastName,
+                                PersonnelNumber = p.StepCompleteBy.PersonnelNumber
+                            },
+                            StepCompleteDate = p.StepCompleteDate,
+                            StepCompleteNote = p.StepCompleteNote,
+                            WizardProgressId = p.AoWizardProgressId,
+                            WizardStepProgressId = p.AoWizardStepProgressId
+                        }).ToList(),
+                    WizardId = wp.AoWizardId,
+                    WizardProgressId = wp.AoWizardProgressId
+                }).First();
+            return wizardProgress;
+        }
+
+        public async Task<AoWizardProgressVm> SetWizardStepComplete(AoWizardStepProgressVm wizardStepProgress)
+        {
+            AoWizardStepProgress aoWizardStepProgress;
+            if (wizardStepProgress.WizardStepProgressId > 0)
+            {
+                aoWizardStepProgress = _context.AoWizardStepProgress.Single(x =>
+                    x.AoWizardStepProgressId == wizardStepProgress.WizardStepProgressId);
+                aoWizardStepProgress.AoWizardFacilityStepId = wizardStepProgress.AoWizardFacilityStepId;
+                aoWizardStepProgress.StepComplete = wizardStepProgress.StepComplete;
+                aoWizardStepProgress.StepCompleteById = wizardStepProgress.StepCompleteById;
+                aoWizardStepProgress.StepCompleteDate = wizardStepProgress.StepCompleteDate;
+                aoWizardStepProgress.StepCompleteNote = wizardStepProgress.StepCompleteNote;
+            }
+            else
+            {
+                aoWizardStepProgress = _context.AoWizardStepProgress.SingleOrDefault(x =>
+                    x.AoComponentId == wizardStepProgress.ComponentId &&
+                    x.AoWizardFacilityStepId == wizardStepProgress.AoWizardFacilityStepId &&
+                    x.AoWizardProgressId == wizardStepProgress.WizardProgressId);
+                if (aoWizardStepProgress is null)
+                {
+                    aoWizardStepProgress = new AoWizardStepProgress
+                    {
+                        AoComponentId = wizardStepProgress.ComponentId,
+                        AoWizardFacilityStepId = wizardStepProgress.AoWizardFacilityStepId,
+                        AoWizardProgressId = wizardStepProgress.WizardProgressId,
+                        StepComplete = wizardStepProgress.StepComplete,
+                        StepCompleteById = wizardStepProgress.StepCompleteById,
+                        StepCompleteDate = wizardStepProgress.StepCompleteDate,
+                        StepCompleteNote=wizardStepProgress.StepCompleteNote
+                    };
+
+                    await _context.AoWizardStepProgress.AddAsync(aoWizardStepProgress);
+                    await _context.SaveChangesAsync();
+                }
+            }
+            if (wizardStepProgress.DispInmateId > 0)
+            {
+                DisciplinaryInmate disciplinaryInmate = _context.DisciplinaryInmate
+                .Single(a => a.DisciplinaryInmateId == wizardStepProgress.DispInmateId);
+                disciplinaryInmate.IncidentWizardStep = wizardStepProgress.NextStepComponentId;
+            }
+            await _context.SaveChangesAsync();
+            return GetWizardProgress(wizardStepProgress.WizardProgressId);
+        }
+
+        public int GetTemplateIdFromWizardSteps(int wizardStepId) => _context.AppAoWizardSteps.SingleOrDefault(aa =>
+                                                                             aa.AppAoWizardStepsId == wizardStepId)
+                                                                         ?.AppAoUserControlParam ?? 0;
+
+        public bool WizardStepChanged(int facilityId, int wizardId, string wizardName)
+        {
+            _atimsHubService.WizardStepChanged(facilityId, wizardId, wizardName);
+            return true;
+        }
+    }
+}

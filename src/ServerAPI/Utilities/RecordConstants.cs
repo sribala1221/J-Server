@@ -1,0 +1,47 @@
+﻿namespace ServerAPI.Utilities
+{
+    public class DataMergeConstants
+    {
+        public const string DUPLICATE = "[DUP]";
+        public const string PURGED = "PURGED";
+        public const string MERGEINMATEBALANCETRANSFER = "MERGE INMATE BALANCE TRANSFER";
+        public const string MERGEINMATEOWETRANSFER = "MERGE INMATE OWE TRANSFER";
+        public const string DEBIT = "Debit";
+        public const string ACCOUNTAOFEE = "AccountAO_Fee";
+        public const string ACCOUNTAORECEIVE="AccountAO_Receive";
+        public const string PERSONFLAGHISTORY = "PERSON_FLAG_HISTORY";
+        public const string PERSONFLAG="PERSON_FLAG";
+        public const string MERGEINMATEPENDINGTRANSFER="MERGE INMATE PENDING TRANSFER";
+        public const string MERGEDRECORD="Merged Record";
+    }
+
+    public class ContactConstants
+    {
+        public const string HOUSINGNUMBER = "HOUSING NUM";
+        public const string HOUSINGBEDNUMBER = "HOUSING BED";
+        public const string INTAKE = "INTAKE";
+        public const string VISIT = "VISIT";
+        public const string CHECKOUTLOC = "CHECKOUT LOC";
+        public const string INCIDENT = "INCIDENT";
+        public const string GRIEVANCE = "GRIEVANCE";
+        public const string JMSCLASSIFY = "JMS CLASSIFY";
+        public const string JMSKEEPSEP = "JMS KEEP SEP";
+        public const string RELEASE = "RELEASE";
+        public const string HOUSINGMOVE = "HOUSING MOVE";
+        public const string PHOTO = "PHOTO";
+        public const string CLASSIFY = "CLASSIFY";
+        public const string FLOORNOTE = "FLOORNOTE";
+        public const string DNA = "DNA";
+        public const string TESTING = "TESTING";
+        public const string RELEASEDBY = "RELEASED BY";
+        public const string CLEAREDBY = "CLEARED BY";
+        public const string TAKENBY="TAKEN BY";
+        public const string HEARING2 = "HEARING2";
+        public const string HEARING1 = "HEARING1";
+    }
+
+    public class OverrideConflictConstant {
+        public const string VisitationConflictOverRide = "921";
+    }
+
+}

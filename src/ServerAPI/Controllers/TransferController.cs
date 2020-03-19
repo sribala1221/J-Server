@@ -1,0 +1,189 @@
+﻿using Microsoft.AspNetCore.Mvc;
+using ServerAPI.Authorization;
+using ServerAPI.Services;
+using ServerAPI.ViewModels;
+using System;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+using Newtonsoft.Json;
+using jsreport.Client;
+using jsreport.Types;
+using Microsoft.Extensions.Configuration;
+using Newtonsoft.Json.Linq;
+
+
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    public class TransferController : ControllerBase
+    {
+        private readonly ITransferService _transferService;
+        private readonly ICommonService _commonService;
+        private readonly IConfiguration _configuration;
+
+        public TransferController(ITransferService transferService, ICommonService commonService, IConfiguration configuration)
+        {
+            _transferService = transferService;
+            _commonService = commonService;
+            _configuration = configuration;
+        }
+
+        #region Eligible Transfer 
+
+        [HttpGet("GetTransferEligibles")]
+        public IActionResult GetTransferEligibles([FromQuery] EligibleSearchVm eligibleSearch)
+        {
+            return Ok(_transferService.GetTransferEligibles(eligibleSearch));
+        }
+        [HttpPost("InsertUpdateIncarceration")]
+        public async Task<IActionResult> UpdateIncarceration([FromBody] TransferEligibleVm eligible)
+        {
+            return Ok(await _transferService.UpdateIncarceration(eligible));
+        }
+
+        [FuncPermission(1210, FuncPermissionType.Edit)]
+        [HttpGet("GetTransferHistoryDetails")]
+        public IActionResult GetTransferHistoryDetails(int incarcerationId)
+        {  
+            return Ok(_transferService.GetTransferHistoryDetails(incarcerationId));
+        }
+
+        [FuncPermission(1211, FuncPermissionType.Edit)]
+        [HttpGet("GetTransferHistoryApproval")]
+        public IActionResult GetTransferHistoryApproval(int incarcerationId)
+        {
+            return Ok(_transferService.GetTransferHistoryDetails(incarcerationId));
+        }
+
+        [HttpGet("GetInmateCount")]
+        public IActionResult GetInmateCount(int inmateId, int personId)
+        {
+            return Ok(_transferService.GetInmateCount(inmateId, personId));
+        }
+        #endregion
+
+        #region Internal Transfer
+
+        [HttpGet("GetInternalTransfer")]
+        public IActionResult GetInternalTransferDetails(DateTime transferDate, int facilityId, bool inProgress)
+        {
+            return Ok(_transferService.GetInternalTransfer(transferDate, facilityId, inProgress));
+        }
+
+        // Generate Internal Sheet details jsreport	
+        [HttpPost("CreateSheetReport")]
+        public async Task<IActionResult> CreateSheetReport([FromBody]List<KeyValuePair<string, List<AoAppointmentVm>>> details, [FromQuery]string reportName)
+        {          
+            ReportingService rs = new ReportingService(_configuration.GetSection("SiteVariables")["ReportUrl"]);
+            //try catch used for to handle 2 exceptions (10061 & 404) from jsreport.
+            try
+            {
+                JObject data =  JObject.FromObject(new { Data = details });
+                _commonService.atimsReportsContentLog(reportName, JsonConvert.SerializeObject(data));
+                Report report = await rs.RenderByNameAsync(reportName,JsonConvert.SerializeObject(data));
+                FileContentResult result =
+                    new FileContentResult(_commonService.ConvertStreamToByte(report.Content), "application/pdf");
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                //10061 is status code for no connection could be made because the target machine actively refused it
+                //404 for file not found in jsreport
+                return ex.InnerException != null ? Ok(10061) : Ok(404);
+            }
+        }
+        #endregion
+
+        #region External Transfer
+        [HttpGet("GetLocationCountDetails")]
+        public IActionResult GetLocationCountDetails(int facilityId, DateTime startDate)
+        {
+            return Ok(_transferService.GetLocationCountDetails(facilityId,startDate));
+        }
+        [HttpGet("GetLocationInmateDetails")]
+        public IActionResult GetLocationInmateDetails(int locationId, int facilityId,bool isAppointment, DateTime startDate)
+        {
+            return Ok(_transferService.GetLocationInmateDetails(locationId, facilityId,isAppointment,startDate));
+        }
+        [HttpGet("GetExternalLocations")]
+        public IActionResult GetExternalLocations()
+        {
+            return Ok(_transferService.GetExternalLocations());
+        }
+        [HttpGet("GetInventoryBinList")]
+        public IActionResult GetInventoryBinList()
+        {
+            return Ok(_transferService.GetInventoryBinList());
+        }
+
+        [HttpPost("UpdateCheckInLibBook")]
+        public async Task<IActionResult> UpdateCheckInLibBook([FromBody] List<int> inmateIds)
+        {
+            return Ok(await _transferService.UpdateCheckInLibBook(inmateIds));
+        }
+
+        [HttpPost("UpdateIssuedProperty")]
+        public async Task<IActionResult> IssuedProperty([FromBody] List<ExternalSearchVm> externalSearch, int isFlag)
+        {
+            return Ok(await _transferService.IssuedProperty(externalSearch, isFlag));
+        }
+
+        [HttpPost("UpdateFacilityTransfer")]
+        public async Task<IActionResult> UpdateFacilityTransfer([FromBody] ExtTransferFacilityVm extlTransfer)
+        {
+            return Ok(await _transferService.UpdateFacilityTransfer(extlTransfer));
+        }
+
+        #endregion
+
+        #region Schedule Transfer
+
+        [HttpGet("GetScheduleTransfer")]
+        public IActionResult GetScheduleList(DateTime fromDate, int facilityId)
+        {
+            return Ok(_transferService.GetScheduleTransfer(fromDate,facilityId));
+        }
+        [FuncPermission(493, FuncPermissionType.Add)]
+        [HttpPost("InsertAddInmate")]
+        public async Task<IActionResult> InsertAddInmate([FromBody] InmateApptDetailsVm inmateApptDetails)
+        {
+            return Ok(await _transferService.InsertAddInmateAsync(inmateApptDetails));
+        }
+
+        [HttpGet("HousingDetails")]
+        public IActionResult HousingDetails(int facilityId,int inmateId)
+        {
+            return Ok(_transferService.HousingDetails(facilityId, inmateId));
+        }
+
+        [HttpGet("GetAppointmentSavedHistory")]
+        public IActionResult GetAppointmentSavedHistory(int scheduledId)
+        {
+            return Ok(_transferService.GetAppointmentSavedHistory(scheduledId));
+        }
+
+        [FuncPermission(493, FuncPermissionType.Delete)]
+        [HttpPut("DeleteScheduledAppointment")]
+        public IActionResult DeleteScheduledAppointment()
+        {
+            return Ok();
+        }
+
+        [FuncPermission(493, FuncPermissionType.Edit)]
+        [HttpPut("EditScheduledAppointment")]
+        public IActionResult EditScheduledAppointment()
+        {
+            return Ok();
+        }
+        #endregion
+        //Newly added for functionality Permission
+        [FuncPermission(1201,FuncPermissionType.Edit)]
+        [HttpPut("EditExternalDetail")]
+        public IActionResult EditExternalDetail()
+        {
+            return Ok();
+        }
+
+    }
+}

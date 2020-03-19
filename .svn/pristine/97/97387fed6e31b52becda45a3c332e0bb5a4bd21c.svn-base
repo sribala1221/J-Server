@@ -1,0 +1,59 @@
+﻿{
+  "ConnectionStrings": {
+    "DefaultConnection": "Data Source=atims-conv;Initial Catalog=GCSO_Conversion;Integrated Security=true;"
+  },
+  "Logging": {
+    "IncludeScopes": false,
+    "LogLevel": {
+      "Default": "Warning",
+      "System": "Warning",
+      "Microsoft": "Warning"
+    }
+  },
+  "SecretKey": "iNivDmHLpUA223sqsfhqGbMRdRj1PVkH",
+  "JwtIssuerOptions": {
+    "Issuer": "AtimsJms",
+	"Audience": "http://web2019-v2:6742/"
+  },
+  "SiteVariables": {
+    "PhotoPath": "\\\\web2019-v2\\D$\\ATIMS_Images\\GCSO_6712",
+    "FormtemplatePath": "\\\\web2019-v2\\D$\\ATIMS_Images\\GCSO_6712\\V2Forms",
+	"AuditLogPath": "\\\\web2019-v2\\D$\\ATIMS_Images\\GCSO_6712\\V2Forms\\logs",
+	"AtimsPhotoPath": "http://web2019-v2:6742/atims_dir/",
+    "PBPCUrl": "http://web2019-v2:6752/",
+    "JMSUrl": "http://web2019-v2:6762/",
+	//"InterfaceEngine": "http://web2019-v2:6721/",
+    "AdminUrl": "http://web2019-v2:6792/",
+    "V1AdminUrl": "http://atims-web2:6712/",
+	"ReportUrl": "http://192.168.250.178:5488/",
+    "ClientExternalPhotoPath": "https://photos.sacjustice.ca.gov:8425/",
+	"ClientExternalAppletsPath": "\\\\web2019-v2\\D$\\ATIMS_Images\\GCSO_6712\\",
+    "AtimsExternalAppletsPath": "\\\\web2019-v2\\D$\\ATIMS_Images\\GCSO_6712\\"
+  },
+  "AttachmentPaths": {
+    "MEDATTACHTYPE": "\\APPLETSMED\\",
+    "BOOKATTACHTYPE": "\\APPLETSBooking\\",
+    "CLASATTACHTYPE": "\\APPLETSClassify\\",
+    "INCATTACHTYPE": "\\APPLETSIncident\\",
+    "INCARATTACHTYPE": "\\APPLETSIncarceration\\",
+    "REGATTACHTYPE": "\\APPLETSRegistrant\\",
+    "HOUSATTACHTYPE": "\\APPLETSHousing\\", // In V1, APPLETSHousing path has been same for both HOUSATTACHTYPE and PBPCATTACHTYPE.
+    "PBPCATTACHTYPE": "\\APPLETSPrebook\\", //  For Ref at V1 code: Attach.ascx.vb line no(671 - 674).
+    "ALTSENTREQATTYPE": "\\APPLETSAltSent\\",
+    "ALTSENTATTACHTYPE": "\\APPLETSAltSentFile\\",
+    "GRIEVATTACHTYPE": "\\APPLETSGrievance\\",
+    "PROGCASEATTACHTYPE": "\\APPLETSPrograms\\"
+  },
+  "LdapAuth": {
+    "Hostname": "<<ldap server host name goes here>>",
+    "Port": 389
+  },
+  "Saml":{
+	"Required":false,
+	"Certificate": "-----BEGIN CERTIFICATE-----\r\nMIIC/zCCAeegAwIBAgIJLHNebZmzaClyMA0GCSqGSIb3DQEBCwUAMB0xGzAZBgNV\r\nBAMTEmF0aW1zaWRwLmF1dGgwLmNvbTAeFw0xODEyMjcwMDExNDNaFw0zMjA5MDQw\r\nMDExNDNaMB0xGzAZBgNVBAMTEmF0aW1zaWRwLmF1dGgwLmNvbTCCASIwDQYJKoZI\r\nhvcNAQEBBQADggEPADCCAQoCggEBALl6Zb2wqozosiTqvs1FhJL9e26RPcCueItH\r\nYBKwe/00T8eR9MePtYelBNZj6NEkN7sM5R2m0nuL/e8f93NsIamcLEkDyLDRE3ZS\r\niMe/n+7fxYZET67lDQoOn92hOuE/di+U69ej1+prxsCfwmte1BfUyVWtLf/QOzip\r\nHaEi6Jw5Msyjixv5Qkq3Sw63PtFDl83icOm8MTTAChotCUPCbTzBP0xhHbj3dvCH\r\nro/hRf3/yWO5f8bDF7yNAHQH3Xx2S4E99qDiYBGeOcZz9wc4d+On+KuQ3OSsxJM2\r\n1yUge3ioC2MVg32csSHcuQoapVt/Y9zcXd8mXe4SpEzR8erxCE0CAwEAAaNCMEAw\r\nDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQU9eclN8V4G2i2zXYTQX474PPB/VUw\r\nDgYDVR0PAQH/BAQDAgKEMA0GCSqGSIb3DQEBCwUAA4IBAQATFIxK5WVUft0iJKxH\r\nULtJ/v5p/6lpXWPwn9BMyX63U6tFC2d7KfvT4U0mt2I6uSt2dFnSGaAtfo3x6ucM\r\niAxE6aSs2nMjhuaGk4jAisyxJqeM3txtFr6OIEKAZnF6BMpHwRR93gQc7n992Y4M\r\nSHfoq9c4Kc/ZpOSZl+OZq1pPOwi4cajWavoYe15gcl8BuYwZecAWgx7dhlarjoJi\r\nkX0rSSXu6PApzak7uW6BfGKjKV84+NzpEWWEHaadvTel4G1nt+jcG6A6hgbJcxS0\r\n+IAWu+KxDQPAm/VRd4oMOBUPTSY5Dx24/FHjdECWjyrHg+uIXW5Xmg9tWgwunO/h\r\nY711\r\n-----END CERTIFICATE-----\r\n",
+    "IdpTargetUrl": "https://atimsidp.auth0.com/samlp/OBIgW97Xg8O2WnqtayPZUTV0S1sT9aZF",
+    "IdpLogoutUrl": "https://atimsidp.auth0.com/v2/logout",
+    "AssertionConsumerServiceUrlJMS": "http://localhost:5151/auth/SamlLoginJms",
+    "AttributeName": "http://schemas.auth0.com/nickname"
+  }
+}

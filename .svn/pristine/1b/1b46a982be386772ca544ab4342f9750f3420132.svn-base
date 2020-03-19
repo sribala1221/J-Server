@@ -1,0 +1,29 @@
+﻿using Microsoft.AspNetCore.Mvc;
+using ServerAPI.Services;
+using System;
+
+namespace ServerAPI.Controllers
+{
+
+    [Route("[controller]")]
+    public class ClassifyAlertsController : Controller
+    {
+        private readonly IClassifyAlertsPrivilegeService _classifyAlertsPrivilegeService;
+        public ClassifyAlertsController(IClassifyAlertsPrivilegeService classifyAlertsPrivilegeService)
+        {
+            _classifyAlertsPrivilegeService = classifyAlertsPrivilegeService;
+
+        }
+
+        #region Classify->Alerts->Privilege
+        [HttpGet("GetClassifyPrivilegeDetails")]
+        public IActionResult GetClassifyPrivilegeDetails(int facilityId, DateTime? fromDate, DateTime? toDate, int officerId)
+        {
+            return Ok(_classifyAlertsPrivilegeService.GetClassifyPrivilegeDetails(facilityId, fromDate, toDate, officerId));
+        }
+
+        #endregion
+    }
+}
+
+

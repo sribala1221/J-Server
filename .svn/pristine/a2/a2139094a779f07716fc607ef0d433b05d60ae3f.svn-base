@@ -1,0 +1,183 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using GenerateTables.Models;
+using ServerAPI.ViewModels;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
+using ServerAPI.Interfaces;
+using Newtonsoft.Json;
+
+namespace ServerAPI.Services
+{
+
+
+    public class MiscIssuedPropertyService : IMiscIssuedPropertyService
+    {
+        private readonly AAtims _context;
+        private readonly int _personnelId;
+        private readonly IPersonService _personService;
+
+        public MiscIssuedPropertyService(AAtims context, IHttpContextAccessor httpContextAccessor,
+            IPersonService personService)
+        {
+            _context = context;
+            _personnelId = Convert.ToInt32(httpContextAccessor.HttpContext.User.FindFirst("personnelId")?.Value);
+            _personService = personService;
+        }
+
+        public List<IssuedPropertyLookupFacilityVm> GetIssuedPropertyLookup(int facilityId) => _context.IssuedPropertyLookupFacility.
+            Where(w => w.FacilityId == facilityId && (!w.IssuedPropertyLookup.InactiveFlag.HasValue || w.IssuedPropertyLookup.InactiveFlag == 0)).Select(s => new IssuedPropertyLookupFacilityVm
+            {
+                PropertyName = s.IssuedPropertyLookup.PropertyName,
+                PropertyDescription = s.IssuedPropertyLookup.PropertyDescription,
+                IssuedPropertyLookupId = s.IssuedPropertyLookupId,
+                IssuedPropertyLookupFacilityId = s.IssuedPropertyLookupFacilityId,
+                FacilityId = s.FacilityId,
+            }).OrderBy(o => o.PropertyName).ToList();
+
+        public List<IssuedPropertyMethod> GetIssuedProperty(int inmateId) => _context.IssuedProperty.Where(w => w.InmateId == inmateId).Select(s => new IssuedPropertyMethod
+        {
+            PropertyName = s.IssuedPropertyLookup.PropertyName,
+            PropertyDescription = s.IssuedPropertyLookup.PropertyDescription,
+            IssuedPropertyLookupId = s.IssuedPropertyLookupId,
+            IssueNote = s.IssueNote,
+            IssueNumber = s.IssueNumber,
+            IssuedCount = s.IssuedCount,
+            IssuedPropertyId = s.IssuedPropertyId,
+            ActiveFlag = s.ActiveFlag == 1,
+            InactiveDate = s.InactiveDate,
+            DeleteFlag = s.DeleteFlag == 1,
+            DeleteDate = s.DeleteDate,
+            IssueDate = s.IssueDate,
+            IssuedDetails = new PersonnelVm
+            {
+                PersonnelId = s.IssueBy,
+                PersonFirstName = s.IssueByNavigation.PersonNavigation.PersonFirstName,
+                PersonLastName = s.IssueByNavigation.PersonNavigation.PersonLastName,
+                OfficerBadgeNumber = s.IssueByNavigation.OfficerBadgeNum,
+                PersonMiddleName = s.IssueByNavigation.PersonNavigation.PersonMiddleName,
+            },
+            InactiveDetails = new PersonnelVm
+            {
+                PersonnelId = s.InactiveBy ?? 0,
+                PersonFirstName = s.InactiveByNavigation.PersonNavigation.PersonFirstName,
+                PersonLastName = s.InactiveByNavigation.PersonNavigation.PersonLastName,
+                OfficerBadgeNumber = s.InactiveByNavigation.OfficerBadgeNum,
+                PersonMiddleName = s.InactiveByNavigation.PersonNavigation.PersonMiddleName,
+            },
+            ExpireUponRelease = s.IssuedPropertyLookup.ExpireUponRelease
+        }).OrderBy(o => o.PropertyName).ToList();
+
+        public async Task<int> InsertAndUpdateIssuedProperty(IssuedPropertyMethod issued)
+        {
+            IssuedProperty issuedPro = _context.IssuedProperty.Find(issued.IssuedPropertyId);
+            if (issuedPro is null)
+            {
+                IssuedProperty issuedProperty = new IssuedProperty
+                {
+                    ActiveFlag = issued.ActiveFlag ? 1 : 0,
+                    InmateId = issued.InmateId,
+                    IssueBy = _personnelId,
+                    IssueDate = DateTime.Now,
+                    IssueNote = issued.IssueNote,
+                    IssueNumber = issued.IssueNumber,
+                    IssuedCount = issued.IssuedCount,
+                    IssuedPropertyLookupId = issued.IssuedPropertyLookupId
+                };
+                _context.IssuedProperty.Add(issuedProperty);
+                await _context.SaveChangesAsync();
+                issued.IssuedPropertyId = issuedProperty.IssuedPropertyId;
+            }
+            else
+            {
+                issuedPro.IssueNote = issued.IssueNote;
+                issuedPro.IssueNumber = issued.IssueNumber;
+                issuedPro.IssuedCount = issued.IssuedCount;
+                issuedPro.IssuedPropertyLookupId = issued.IssuedPropertyLookupId;
+            }
+            InsertAndUpdateIssuedPropertyHistory(issued);
+            return await _context.SaveChangesAsync();
+        }
+
+        private void InsertAndUpdateIssuedPropertyHistory(IssuedPropertyMethod issued)
+        {
+            IssuedPropertyHistory issuedHistory = new IssuedPropertyHistory
+            {
+                IssuedPropertyId = issued.IssuedPropertyId,
+                CreateDate = DateTime.Now,
+                PersonnelId = _personnelId,
+                IssuedPropertyHistoryList = issued.IssuedPropertyHistoryList
+            };
+            _context.IssuedPropertyHistory.Add(issuedHistory);
+        }
+
+        public async Task<int> DeleteIssuedProperty(List<IssuedPropertyMethod> item)
+        {
+            if (item.Any())
+            {
+                item.ForEach(issued =>
+                {
+                    IssuedProperty issuedPro = _context.IssuedProperty.Find(issued.IssuedPropertyId);
+                    switch (issued.IssuedType)
+                    {
+                        case IssuedType.Delete:
+                            issuedPro.DeleteBy = _personnelId;
+                            issuedPro.DeleteDate = DateTime.Now;
+                            issuedPro.DeleteFlag = 1;
+                            break;
+                        case IssuedType.UndoDelete:
+                            issuedPro.DeleteBy = null;
+                            issuedPro.DeleteDate = null;
+                            issuedPro.DeleteFlag = 0;
+                            break;
+                        case IssuedType.InActive:
+                            issuedPro.ActiveFlag = 0;
+                            issuedPro.InactiveBy = _personnelId;
+                            issuedPro.InactiveDate = DateTime.Now;
+                            break;
+                        case IssuedType.Active:
+                            issuedPro.ActiveFlag = 1;
+                            issuedPro.InactiveBy = _personnelId;
+                            issuedPro.InactiveDate = DateTime.Now;
+                            break;
+                    }
+                    InsertAndUpdateIssuedPropertyHistory(issued);
+                });
+            }
+            return await _context.SaveChangesAsync();
+        }
+
+        public List<HistoryVm> GetIssuedPropertyHistory(int issuedPropertyId)
+        {
+            List<HistoryVm> lstIssuedPropertyHistory = _context.IssuedPropertyHistory.Where(w => w.IssuedPropertyId == issuedPropertyId)
+            .Select(s => new HistoryVm
+            {
+                PersonId = s.Personnel.PersonId,
+                HistoryId = s.IssuedPropertyHistoryId,
+                OfficerBadgeNumber = s.Personnel.OfficerBadgeNum,
+                CreateDate = s.CreateDate,
+                HistoryList = s.IssuedPropertyHistoryList
+            }).OrderByDescending(de => de.HistoryId).ToList();
+            if (lstIssuedPropertyHistory.Count <= 0) return lstIssuedPropertyHistory;
+            //To Improve Performence All Person Details Loaded By Single Hit Before Looping
+            int[] personIds = lstIssuedPropertyHistory.Select(x => x.PersonId).ToArray();
+            //get person list
+            List<Person> lstPersonDet = _context.Person.Where(per => personIds.Contains(per.PersonId)).ToList();
+            lstIssuedPropertyHistory.ForEach(item =>
+                {
+                    item.PersonLastName = lstPersonDet.SingleOrDefault(p => p.PersonId == item.PersonId)?.PersonLastName;
+                    //To GetJson Result Into Dictionary
+                    if (item.HistoryList == null) return;
+                    Dictionary<string, string> personHistoryList =
+                        JsonConvert.DeserializeObject<Dictionary<string, string>>(item.HistoryList);
+                    item.Header =
+                        personHistoryList.Select(ph => new PersonHeader { Header = ph.Key, Detail = ph.Value })
+                            .ToList();
+                });
+            return lstIssuedPropertyHistory;
+        }
+
+
+    }
+}

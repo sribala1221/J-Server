@@ -1,0 +1,121 @@
+﻿using Microsoft.AspNetCore.Mvc;
+using ServerAPI.Authorization;
+using ServerAPI.Services;
+using ServerAPI.ViewModels;
+using System.Collections.Generic;
+
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    public class TrackingController : Controller
+    {
+        private readonly IProgramService _programService;
+        private readonly ITrackFurlService _trackFurl;
+        private readonly IWorkCrewService _iWorkCrew;
+        private readonly IApptService _apptService;
+        private readonly ITrackHousingService _housingService;
+        private readonly IEnrouteService _enrouteService;
+        private readonly IAppointmentViewerService _iAppointmentViewerService;
+
+        public TrackingController(IProgramService programService, ITrackFurlService trackFurl,
+            IWorkCrewService iworkCrew, IApptService apptService,
+            ITrackHousingService housingService, IEnrouteService enrouteService,
+            IAppointmentViewerService iAppointmentViewerService)
+        {
+            _programService = programService;
+            _trackFurl = trackFurl;
+            _iWorkCrew = iworkCrew;
+            _apptService = apptService;
+            _housingService = housingService;
+            _enrouteService = enrouteService;
+            _iAppointmentViewerService = iAppointmentViewerService;
+        }
+
+        #region Program
+
+        [HttpGet("GetLocation")]
+        public IActionResult GetLocation(int facilityId)
+        {
+            return Ok(_programService.GetLocationList(facilityId));
+        }
+
+        [HttpGet("GetProgram")]
+        public IActionResult GetProgram(int facilityId)
+        {
+            return Ok(_programService.GetProgramList(facilityId));
+        }
+
+        [HttpGet("GetProgramAppts")]
+        public IActionResult GetProgramAppts()
+        {
+            return Ok(_programService.GetProgramAppts());
+        }
+
+        #endregion
+
+        [FuncPermission(1184, FuncPermissionType.Access)]
+        [HttpGet("GetFurloughDetails")]
+        public IActionResult GetFurloughDetails(int facilityId)
+        {
+            return Ok(_trackFurl.GetFurloughDetails(facilityId));
+        }
+
+        #region WorkCrewTracking
+
+        [HttpGet("GetWorkCrewEntriesCount")]
+        public IActionResult GetWorkCrewEntriesCount(int facilityid,List<int> housingUnitListId)
+        {
+            return Ok(_iWorkCrew.GetWorkCrewEntriesCount(facilityid, housingUnitListId));
+        }
+
+        [HttpGet("GetWorkcrewInmateDetails")]
+        public IActionResult GetWorkcrewInmateDetails(int facilityId)
+        {
+            return Ok(_iWorkCrew.GetWorkcrewInmateDetails(facilityId));
+        }
+
+        #endregion
+
+        #region Appointment
+
+        [HttpGet("GetApptCourtAndLocation")]
+        public IActionResult GetApptCourtAndLocation(ApptParameter objApptParameter)
+        {
+            return Ok(_apptService.GetApptCourtAndLocation(objApptParameter));
+        }
+
+        #endregion
+
+        #region Schedule
+        
+        [HttpGet("GetTrackingSchedule")]
+        public IActionResult GetTrackingSchedule(CalendarInputs trackingSchedule)
+        {
+            return Ok(_iAppointmentViewerService.GetTrackingSchedule(trackingSchedule));
+        }
+        #endregion
+
+        #region Housing
+        [HttpGet("GetTrackingLocation")]
+        public IActionResult GetTrackingLocation(int facilityId, int housingNumber, int housingGroup)
+        {
+            return Ok(_housingService.GetTrackingLocation(facilityId, housingNumber, housingGroup));
+        }
+
+        [HttpGet("GetTrackingHousing")]
+        public IActionResult GetTrackingHousing(int facilityId, int housingNumber,int housingGroup)
+        {
+            return Ok(_housingService.GetTrackingHousing(facilityId, housingNumber, housingGroup));
+        }
+
+        #endregion
+
+        #region Enroute
+        [HttpGet("GetEnrouteLocations")]
+        public IActionResult GetEnrouteLocations(int facilityId)
+        {
+            return Ok(_enrouteService.GetEnrouteLocations(facilityId));
+        }
+        #endregion
+    }
+}

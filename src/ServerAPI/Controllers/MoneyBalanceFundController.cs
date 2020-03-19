@@ -1,0 +1,24 @@
+using Microsoft.AspNetCore.Mvc;
+using ServerAPI.Services;
+
+
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    public class MoneyBalanceFundController : ControllerBase
+    {
+        private readonly IMoneyBalanceFundService _moneyBalanceFundService;
+
+        public MoneyBalanceFundController(IMoneyBalanceFundService moneyBalanceFundService)
+        {
+            _moneyBalanceFundService = moneyBalanceFundService;
+        }
+
+        [HttpGet("GetMoneyAccount")]
+        public IActionResult GetMoneyAccount()
+        {
+            return Ok(_moneyBalanceFundService.GetMoneyAccount());
+        }
+
+    }
+}

@@ -1,0 +1,418 @@
+﻿using GenerateTables.Models;
+using Microsoft.AspNetCore.Http;
+using ServerAPI.Interfaces;
+using ServerAPI.ViewModels;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace ServerAPI.Services
+{
+
+    public class SafetyCheckService : ISafetyCheckService
+    {
+        private readonly AAtims _context;
+        private readonly ICommonService _commonService;
+        private readonly ICellService _cellService;
+        private readonly int _personnelId;
+        private readonly IFacilityPrivilegeService _facilityPrivilegeService;
+
+        private readonly IAtimsHubService _atimsHubService;
+        public SafetyCheckService(AAtims context, ICommonService commonService, ICellService cellService,
+            IHttpContextAccessor httpContextAccessor, IFacilityPrivilegeService facilityPrivilegeService,
+            IAtimsHubService atimsHubService)
+        {
+            _context = context;
+            _commonService = commonService;
+            _cellService = cellService;
+            _personnelId = Convert.ToInt32(httpContextAccessor.HttpContext.User.FindFirst("personnelId")?.Value);
+            _facilityPrivilegeService = facilityPrivilegeService;
+            _atimsHubService = atimsHubService;
+        }
+
+        //refresh the safety grid list
+        public List<SafetyCheckVm> GetSafetyCheckList(ConsoleInputVm value)
+        {
+            if (value.ListConsoleHousingId.Count > 0)
+            {
+                List<SafetyCheckVm> lstSafetyCheckHousing = LoadSafetyCheckHousingList(value);
+                return lstSafetyCheckHousing;
+            }
+            else
+            {
+                List<SafetyCheckVm> lstSafetyCheckLocation = LoadSafetyCheckLocationList(value);
+                return lstSafetyCheckLocation;
+            }
+        }
+
+        //loaded the safety check housing list 
+        public List<SafetyCheckVm> LoadSafetyCheckHousingList(ConsoleInputVm value)
+        {
+            List<HousingDetail> lstSafetyCheckHousing = _context.HousingUnit.Where(w =>
+                    w.FacilityId == value.FacilityId && w.HousingUnitListId > 0
+                    && w.Inmate.Where(we => we.InmateActive == 1).Select(s => s.HousingUnitId).Contains(w.HousingUnitId)
+                    && value.ListConsoleHousingId.Contains(w.HousingUnitListId))
+                .Select(s => new HousingDetail
+                {
+                    FacilityAbbr = s.Facility.FacilityAbbr,
+                    FacilityId = s.FacilityId,
+                    HousingUnitListId = s.HousingUnitListId,
+                    HousingUnitLocation = s.HousingUnitLocation,
+                    HousingUnitNumber = s.HousingUnitNumber
+                }).Distinct().ToList();
+
+            List<SafetyCheckVm> lstSafetyCheckDetails = _context.HousingUnitScheduleSafteyCheck.Where(w =>
+                    w.FacilityId == value.FacilityId && w.HousingUnitListId.HasValue
+                    && lstSafetyCheckHousing.Select(s => s.HousingUnitListId).Contains(w.HousingUnitListId ?? 0))
+                .Select(s => new SafetyCheckVm
+                {
+                    HousingUnitScheduleSafteyCheckId = s.HousingUnitScheduleSafteyCheckId,
+                    FacilityAbbr = s.Facility.FacilityAbbr,
+                    HousingUnitLocation = s.HousingUnitLocation,
+                    HousingUnitNumber = s.HousingUnitNumber,
+                    FacilityId = s.FacilityId,
+                    HousingUnitListId = s.HousingUnitListId,
+                    LastEntry = s.LastEntry,
+                    IntervalMinutes = s.IntervalMinutes,
+                    LateEntryMaxMin = s.LateEntryMaxMin,
+                    RequiredEndTime = s.RequireEndTime
+                }).ToList();
+
+            lstSafetyCheckDetails.AddRange(lstSafetyCheckHousing.Where(w =>
+                    w.FacilityId == value.FacilityId
+                    && !lstSafetyCheckDetails.Select(s => s.HousingUnitListId).Contains(w.HousingUnitListId))
+                .Select(s => new SafetyCheckVm
+                {
+                    FacilityAbbr = s.FacilityAbbr,
+                    FacilityId = s.FacilityId,
+                    HousingUnitListId = s.HousingUnitListId,
+                    HousingUnitLocation = s.HousingUnitLocation ?? "NO HOUSING",
+                    //TODO What is this???
+                    HousingUnitNumber = s.HousingUnitNumber == "" ? "" : s.HousingUnitNumber,
+                }).Distinct().ToList());
+
+            return lstSafetyCheckDetails;
+
+        }
+
+        public SafetyCheckVm LoadSafetyCheckHousingDetails(int facilityId, int housingUnitListId) =>
+            _context.HousingUnitScheduleSafteyCheck.Where(w =>
+                w.FacilityId == facilityId && w.HousingUnitListId == housingUnitListId).Select(s => new SafetyCheckVm
+                {
+                    FacilityAbbr = s.Facility.FacilityAbbr,
+                    HousingUnitLocation = s.HousingUnitLocation,
+                    HousingUnitNumber = s.HousingUnitNumber,
+                    FacilityId = facilityId,
+                    HousingUnitListId = s.HousingUnitListId,
+                    LateEntryMaxMin = s.LateEntryMaxMin,
+                    IntervalMinutes = s.IntervalMinutes,
+                    LastEntry = s.LastEntry,
+                    LateEntryNoteRequired = s.LateEntryNoteRequired,
+                    PersonNameDetails = new PersonnelVm
+                    {
+                        PersonLastName = s.LastEntryByNavigation.PersonNavigation.PersonLastName,
+                        PersonFirstName = s.LastEntryByNavigation.PersonNavigation.PersonFirstName,
+                        OfficerBadgeNumber = s.LastEntryByNavigation.OfficerBadgeNum
+                    },
+                    BedListItems = s.HousingUnitList.HousingUnit
+                          .Where(w => w.HousingUnitBedNumber != null)
+                          .OrderBy(o => o.HousingUnitBedNumber)
+                          .Select(se =>
+                              new SafetyCheckBedVm
+                              {
+                                  BedChecked = true,
+                                  HousingBedNumber = se.HousingUnitBedNumber,
+                                  HousingBedLocation = se.HousingUnitBedLocation
+                              })
+                          .ToList(),
+                    UnCheckBedNoteRequired = s.UnCheckBedNoteRequired == 1,
+                    RequiredEndTime = s.RequireEndTime
+                }).SingleOrDefault() ?? _context.HousingUnitList.Where(w =>
+                 w.FacilityId == facilityId && w.HousingUnitListId == housingUnitListId)
+                  .Select(s => new SafetyCheckVm
+                  {
+                      FacilityAbbr = s.Facility.FacilityAbbr,
+                      HousingUnitLocation = s.HousingUnitLocation,
+                      HousingUnitNumber = s.HousingUnitNumber,
+                      FacilityId = facilityId,
+                      HousingUnitListId = s.HousingUnitListId,
+                      BedListItems = s.HousingUnit
+                          .Where(w => w.HousingUnitBedNumber != null)
+                          .OrderBy(o => o.HousingUnitBedNumber)
+                          .Select(se =>
+                              new SafetyCheckBedVm
+                              {
+                                  BedChecked = true,
+                                  HousingBedNumber = se.HousingUnitBedNumber,
+                                  HousingBedLocation = se.HousingUnitBedLocation
+                              })
+                          .ToList(),
+                  }).SingleOrDefault();
+
+        //loaded the safety check location list 
+        public List<SafetyCheckVm> LoadSafetyCheckLocationList(ConsoleInputVm value) => _context.Privileges
+            .Where(s => (value.ListConsoleMyLocationId.Contains(s.PrivilegeId)
+                        || value.ListConsoleLocationId.Contains(s.PrivilegeId))
+                       && s.Inmate.Count > 0)
+            .OrderBy(s => s.PrivilegeDescription)
+            .Select(s => new SafetyCheckVm
+            {
+                PrivilegesId = s.PrivilegeId,
+                PrivilegesDescription = s.PrivilegeDescription,
+                FacilityAbbr = s.Facility1.FacilityAbbr,
+                FacilityId = s.FacilityId ?? 0,
+                SafetyCheckFlag = s.SafetyCheckFlag ?? 0,
+                LastEntry = s.SafetyCheckLastEntry,
+                IntervalMinutes = s.SafetyCheckIntervalMinutes,
+                SafetyCheckLateEntryMax = s.SafetyCheckLateEntryMax,
+                InmateCount = s.Inmate.Count,
+                RequiredEndTime = s.SafetyCheckRequireEndTime
+            }).ToList();
+
+        public SafetyCheckVm LoadSafetyCheckLocationDetails(int locationId) => _context.Privileges
+                .Where(s => s.PrivilegeId == locationId)
+                .OrderBy(s => s.PrivilegeDescription)
+                .Select(s => new SafetyCheckVm
+                {
+                    PrivilegesId = s.PrivilegeId,
+                    PrivilegesDescription = s.PrivilegeDescription,
+                    FacilityAbbr = s.FacilityId > 0 ? s.Facility1.FacilityAbbr : null,
+                    FacilityId = s.FacilityId > 0 ? s.Facility1.FacilityId : 0,
+                    SafetyCheckLateEntryMax = s.SafetyCheckLateEntryMax,
+                    SafetyCheckFlag = s.SafetyCheckFlag ?? 0,
+                    PersonNameDetails = new PersonnelVm
+                    {
+                        PersonLastName = s.SafetyCheckLastEntryByNavigation.PersonNavigation.PersonLastName,
+                        PersonFirstName = s.SafetyCheckLastEntryByNavigation.PersonNavigation.PersonFirstName,
+                        OfficerBadgeNumber = s.SafetyCheckLastEntryByNavigation.OfficerBadgeNum
+                    },
+                    SafetyCheckIntervalMinutes = s.SafetyCheckIntervalMinutes,
+                    SafetyCheckBatchNotAllowed = s.SafetyCheckBatchNotAllowed,
+                    LastEntry = s.SafetyCheckLastEntry,
+                    RequiredEndTime = s.SafetyCheckRequireEndTime
+                }).SingleOrDefault();
+
+        //insert safety check details
+        public async Task<int> InsertSafetyCheck(SafetyCheckVm value)
+        {
+
+            // select the housing safety check list using housing unit list id
+            List<HousingUnitScheduleSafteyCheck> lstHousingUnitScheduleSafteyCheck = _context
+                .HousingUnitScheduleSafteyCheck
+                .Where(h => h.FacilityId == value.FacilityId && h.HousingUnitListId == value.HousingUnitListId
+                            && (h.DeleteFlag == 0 || !h.DeleteFlag.HasValue)).ToList();
+
+            //TODO - rework needed
+            if (value.Mode == "Add")
+            {
+                SafetyCheck safetyCheck = new SafetyCheck
+                {
+                    FacilityId = value.PrivilegeFacilityId > 0 ? value.PrivilegeFacilityId : null,
+                    HousingUnitLocation = value.HousingUnitLocation,
+                    HousingUnitNumber = value.HousingUnitNumber,
+                    SafetyCheckLateEntryFlag = value.SafetyCheckLateEntryFlag ? 1 : 0,
+                    SafetyCheckNote = value.SafetyCheckNote,
+                    SafetyCheckCheckCount = value.SafetyCheckCount,
+                    SafetyCheckNoCheckCount = value.SafetyNoCheckCount,
+                    CreateBy = _personnelId,
+                    CreateDate = DateTime.Now,
+                    Location = value.PrivilegesDescription,
+                    LocationId = value.PrivilegesId > 0 ? value.PrivilegesId : default(int?),
+                    SafetyCheckOccured = value.SafetyCheckOccured,
+                    SafetyCheckEnded = value.EndDateTime
+                };
+
+                if (value.PrivilegesId > 0)
+                {
+                    safetyCheck.Location = value.PrivilegesDescription;
+                    safetyCheck.LocationId = value.PrivilegesId;
+
+                    Privileges privileges = _context.Privileges.Single(p => p.PrivilegeId == value.PrivilegesId);
+                    privileges.SafetyCheckLastEntry = DateTime.Now;
+                    privileges.SafetyCheckLastEntryBy = _personnelId;
+
+                }
+
+                safetyCheck.HousingUnitListId = value.HousingUnitListId > 0 ? value.HousingUnitListId : null;
+
+                _context.SafetyCheck.Add(safetyCheck);
+
+                // insert the bed no in db
+                if (!(value.BedListItems is null))
+                {
+                    List<SafetyCheckBed> lstsafetyCheckBed = value.BedListItems
+                        .Select(s => new SafetyCheckBed
+                        {
+                            SafetyCheckId = safetyCheck.SafetyCheckId,
+                            HousingUnitBedNumber = s.HousingBedNumber,
+                            CheckFlag = s.BedChecked ? 1 : 0,
+                            CheckNote = s.BedRequiredNotes,
+                            CreateDate = DateTime.Now,
+                            CreateBy = _personnelId
+                        }).ToList();
+
+                    _context.SafetyCheckBed.AddRange(lstsafetyCheckBed);
+
+                }
+
+                if (lstHousingUnitScheduleSafteyCheck.Count > 0 && value.HousingUnitListId > 0)
+                {
+                    DateTime lastEntryDate = lstHousingUnitScheduleSafteyCheck.Select(s =>
+                        {
+                            Debug.Assert(s.LastEntry != null, "SafetyCheckService: s.LastEntry != null");
+                            return s.LastEntry.Value.Date;
+                        })
+                        .SingleOrDefault();
+
+                    int housingUnitScheduleSafteyCheckId = lstHousingUnitScheduleSafteyCheck
+                        .Select(s => s.HousingUnitScheduleSafteyCheckId).SingleOrDefault();
+
+                    if (lastEntryDate < value.SafetyCheckOccured)
+                    {
+                        HousingUnitScheduleSafteyCheck housingUnitScheduleSafteyCheck
+                            = _context.HousingUnitScheduleSafteyCheck.Single(i =>
+                                i.HousingUnitScheduleSafteyCheckId == housingUnitScheduleSafteyCheckId);
+
+                        housingUnitScheduleSafteyCheck.LastEntry = value.SafetyCheckOccured;
+                        housingUnitScheduleSafteyCheck.LastEntryBy = _personnelId;
+                    }
+                }
+            }
+            //TODO What is this?
+            else if (value.Mode == "Edit")
+            {
+
+            }
+            var res = await _context.SaveChangesAsync();
+            await _atimsHubService.GetSafetyCheck();
+            return res;
+        }
+
+        //load the safety check history list for particular housing and location
+        public HeadCountHistoryDetails LoadSafetyCheckHistoryList(HeadCountHistoryDetails headCountHistoryDetails)
+        {
+            if (headCountHistoryDetails.IsPageInitialize)
+            {
+                headCountHistoryDetails.LocationList =
+                    _facilityPrivilegeService.GetLocationList(headCountHistoryDetails.FacilityId).OrderBy(a => a.Value).ToList();
+
+                headCountHistoryDetails.HousingList =
+                    _cellService.GetHousingUnit(headCountHistoryDetails.FacilityId).ToList();
+
+                headCountHistoryDetails.FacilityList = _commonService.GetFacilities()
+                    .Where(a => !string.IsNullOrEmpty(a.FacilityAbbr))
+                    .Select(a => new KeyValuePair<int, string>(a.FacilityId, a.FacilityAbbr)).OrderBy(a => a.Value)
+                    .ToList();
+            }
+            //         IQueryable<SafetyCheck> safetyChecks =
+            // _context.SafetyCheck.Where(s => headCountHistoryDetails.FacilityId > 0
+            // ? s.FacilityId == headCountHistoryDetails.FacilityId : (s.FacilityId = !s.FacilityId.HasValue));
+
+            IQueryable<SafetyCheck> safetyChecks =
+                _context.SafetyCheck.Where(s => headCountHistoryDetails.FacilityId > 0 ?
+                s.FacilityId == headCountHistoryDetails.FacilityId : !s.FacilityId.HasValue);
+
+            if (headCountHistoryDetails.HousingUnitListId > 0)
+            {
+                safetyChecks =
+                    safetyChecks.Where(s => s.HousingUnitListId == headCountHistoryDetails.HousingUnitListId);
+            }
+
+            if (headCountHistoryDetails.CellLogLocationId > 0)
+            {
+                safetyChecks = safetyChecks.Where(s => s.LocationId == headCountHistoryDetails.CellLogLocationId);
+            }
+
+            if (headCountHistoryDetails.PersonnelId > 0)
+            {
+                safetyChecks = safetyChecks.Where(s => s.CreateBy == headCountHistoryDetails.PersonnelId);
+            }
+
+            if (!(headCountHistoryDetails.FromDate is null) && !(headCountHistoryDetails.ToDate is null))
+            {
+                safetyChecks = safetyChecks.Where(s =>
+                    s.CreateDate.Value.Date >= headCountHistoryDetails.FromDate.Value.Date
+                    && s.CreateDate.Value.Date <= headCountHistoryDetails.ToDate.Value.Date);
+            }
+
+            headCountHistoryDetails.SafetyCheckHistoryList = safetyChecks
+                .OrderByDescending(o => o.SafetyCheckId)
+                .Select(s => new SafetyCheckVm
+                {
+                    FacilityId = s.FacilityId ?? 0,
+                    FacilityAbbr = s.Facility.FacilityAbbr,
+                    HousingUnitListId = s.HousingUnitListId ?? 0,
+                    HousingUnitLocation = s.HousingUnitLocation,
+                    HousingUnitNumber = s.HousingUnitNumber,
+                    PersonNameDetails = new PersonnelVm
+                    {
+                        PersonLastName = s.CreateByNavigation.PersonNavigation.PersonLastName,
+                        PersonFirstName = s.CreateByNavigation.PersonNavigation.PersonFirstName,
+                        OfficerBadgeNumber = s.CreateByNavigation.OfficerBadgeNum
+                    },
+                    SafetyCheckId = s.SafetyCheckId,
+                    SafetyCheckLateEntryFlag = s.SafetyCheckLateEntryFlag == 1,
+                    DeleteFlag = s.DeleteFlag,
+                    SafetyCheckNote = s.SafetyCheckNote,
+                    SafetyCheckOccured = s.SafetyCheckOccured,
+                    SafetyCheckCount = s.SafetyCheckCheckCount,
+                    SafetyNoCheckCount = s.SafetyCheckNoCheckCount,
+                    CreatedDate = s.CreateDate,
+                    PrivilegesDescription = s.Location,
+                    PrivilegesId = s.LocationId ?? 0,
+                    BedListItems = s.HousingUnitListId != null
+                        ? _context.SafetyCheckBed
+                            .Where(w => w.SafetyCheckId == s.SafetyCheckId)
+                            .OrderBy(o => o.HousingUnitBedNumber)
+                            .Select(se => new SafetyCheckBedVm
+                            {
+                                HousingBedNumber = se.HousingUnitBedNumber,
+                                BedChecked = se.CheckFlag.Value == 1,
+                                BedRequiredNotes = se.CheckNote
+                                // HousingBedLocation = se.
+                            }).ToList()
+                       : null,
+                    EndDateTime = s.SafetyCheckEnded
+                }).ToList();
+
+
+            //headCountHistoryDetails.SafetyCheckHistoryList.ForEach(item =>
+            //{
+            //    //item.BedListItems = item.HousingUnitListId > 0
+            //    //    ? _context.HousingUnit
+            //    //        .Where(w => w.HousingUnitBedNumber != null)
+            //    //        .OrderBy(o => o.HousingUnitBedNumber)
+            //    //        .Select(se =>
+            //    //            new SafetyCheckBedVm
+            //    //            {
+            //    //                BedChecked = true,
+            //    //                HousingBedNumber = se.HousingUnitBedNumber,
+            //    //                HousingBedLocation = se.HousingUnitBedLocation
+            //    //            })
+            //    //        .ToList()
+            //    //    : null;
+
+            //    if (item.HousingUnitListId > 0)
+            //    {
+            //        item.BedListItems.ForEach(s =>
+            //        {
+            //            s.HousingBedLocation = _context.HousingUnit
+            //                .Where(w => w.HousingUnitListId == item.HousingUnitListId)
+            //                .Select(s => s.HousingUnitBedLocation);
+            //        });
+            //    }
+            //});
+
+            if (headCountHistoryDetails.FromDate is null)
+            {
+                headCountHistoryDetails.SafetyCheckHistoryList = headCountHistoryDetails.SafetyCheckHistoryList
+                    .Take(100).ToList();
+            }
+
+            return headCountHistoryDetails;
+        }
+
+    }
+}

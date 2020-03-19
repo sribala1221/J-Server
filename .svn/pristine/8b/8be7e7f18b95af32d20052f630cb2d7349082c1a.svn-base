@@ -1,0 +1,187 @@
+
+<form #f="ngForm" (ngSubmit)="onSubmit(model)" [formGroup]="form" style="overflow:hidden">
+    <head>
+        <title>{{ model.title }}</title>
+        <style>
+            .rotate {
+                width: 19px;
+                height: 20px;
+                -ms-transform: rotate(270deg); /* IE 9 */
+                -moz-transform: rotate(270deg); /* Firefox */
+                -webkit-transform: rotate(270deg); /* Safari and Chrome */
+                -o-transform: rotate(270deg); /* Opera */
+            }
+        </style>
+    </head>
+    <table class="no-spacing">
+        <tr>
+            <td rowspan="9" style="border: black 1px solid; ">
+                <br />
+                <br />
+                <br />
+                <br />
+                <br />
+                <br />
+                <br />
+                <br />
+                <br />
+                <br />
+                <br />
+                <br />
+                <br />
+                <div class="rotate">
+                    Case Number: {{ model.arrest_case_number }}
+                </div>
+            </td>
+            <td rowspan="9" style="border-top: black 1px solid; border-bottom: black 1px solid; background-color: gray">
+                <div>
+                    &nbsp;
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="6" style="border-top: black 1px solid; border-left: black 1px solid; font-size: 17px;">
+                <b>
+                    WESTWORLD COUNTY
+                    <br />
+                    SHERIFF'S OFFICE
+                </b>
+            </td>
+            <td style="text-align: center; border-top: black 1px solid;  font-size: 17px;">
+                <b>CUSTODY REPORT </b>
+            </td>
+            <td colspan="3" style="border-top: black 1px solid; font-size: 13px;">
+                <b>
+                    <input type="checkbox" name="ccsoAdult" [checked]="(model.ccsoAdult=='true') ? true : false" (change)="model.ccsoAdult = (model.ccsoAdult=='true') ? false : true" /> ADULT
+                    <input type="checkbox" name="ccsoJuvi" [checked]="(model.ccsoJuvi=='true') ? true : false" (change)="model.ccsoJuvi = (model.ccsoJuvi=='true') ? false : true" /> JUVENILE
+                </b>
+            </td>
+            <td colspan="2" style="text-align: right; border-top: black 1px solid; border-right: black 1px solid;">
+                <b>
+                    PAGE OF
+                    <br />
+                    1 / 1
+                </b>
+            </td>
+        </tr>
+        <tr class="border">
+            <td style="height: 30px;">
+                CASE NUMBER<br />
+                <span style="width: 100px;">{{ model.arrest_case_number }}</span>
+            </td>
+            <td colspan="3">
+                REFER CASE NUMBER
+                <br />
+                <input type="text" name="CCSO_RefCaseNo" style="width: 100px;" [(ngModel)]="model.CCSO_RefCaseNo" [ngModelOptions]="{standalone: true}" />
+            </td>
+            <td colspan="3">
+                CAD INCIDENT NUMBER<br />
+                <input type="text" name="CCSO_CadIncidentNo" style="width: 100px;" [(ngModel)]="model.CCSO_CadIncidentNo" [ngModelOptions]="{standalone: true}" />
+            </td>
+            <td colspan="5">
+                CLASSIFICATION<br />
+                <input type="text" name="CCSO_Classification" style="width: 300px;" [(ngModel)]="model.CCSO_Classification" [ngModelOptions]="{standalone: true}" />
+            </td>
+        </tr>
+        <tr class="line">
+            <td colspan="2" style="border-bottom: none; height: 5px;">
+                DATE / TIME REPORTED
+            </td>
+            <td colspan="3" style="border-bottom: none;">
+                DATE / TIME ARRESTED
+            </td>
+            <td colspan="3" style="border-right: none; border-bottom: none; ">
+                TYPE OF CUSTODY
+            </td>
+            <td colspan="2" style="border-right: none; border-left: none; border-bottom: none; white-space: normal">
+                <input type="checkbox" name="ccsoStatusOff" [checked]="(model.ccsoStatusOff=='true') ? true : false" (change)="model.ccsoStatusOff = (model.ccsoStatusOff=='true') ? false : true" /> 3. STATUS OFFENSE
+            </td>
+            <td colspan="3" style="border-left: none; border-bottom: none; ">
+                <input type="checkbox" name="ccsoProtectCustody" [checked]="(model.ccsoProtectCustody=='true') ? true : false" (change)="model.ccsoProtectCustody = (model.ccsoProtectCustody=='true') ? false : true" /> 6. PROTECTIVE CUSTODY
+            </td>
+        </tr>
+        <tr class="line">
+            <td colspan="2" style="border-bottom: none; border-top: none; height: 5px;">
+                <span style="width: 130px;">{{ model.prebook_date_time }}</span>
+            </td>
+            <td colspan="3" style="border-top: none; border-left: none; border-bottom: none;">
+                <span style="width: 150px;">{{ model.arrest_date_time }}</span>
+            </td>
+            <td colspan="3" style="border: none;">
+                <input type="checkbox" name="ccsoProbCause" [checked]="(model.ccsoProbCause=='true') ? true : false" (change)="model.ccsoProbCause = (model.ccsoProbCause=='true') ? false : true" /> 1. PROBABLE CAUSE
+            </td>
+            <td colspan="2" style="border: none;">
+                <input type="checkbox" name="ccsoCitArrest" [checked]="(model.ccsoCitArrest=='true') ? true : false" (change)="model.ccsoCitArrest = (model.ccsoCitArrest=='true') ? false : true" /> 4. CITIZEN ARREST&nbsp;&nbsp;
+            </td>
+            <td colspan="3" style="border-bottom: none; border-left: none; border-top: none;">
+                <input type="checkbox" name="ccsoBlankField" [checked]="(model.ccsoBlankField=='true') ? true : false" (change)="model.ccsoBlankField = (model.ccsoBlankField=='true') ? false : true" /> 7.<input type="text" name="ccsoBlankField2"
+                    style="border-bottom: black 1px solid; width: 150px;" [(ngModel)]="model.ccsoBlankField2" [ngModelOptions]="{standalone: true}" />
+            </td>
+        </tr>
+        <tr class="line">
+            <td colspan="2" style="border-bottom: none; border-top: none; height: 5px;">
+                &nbsp;
+            </td>
+            <td colspan="3" style="border-bottom: none; border-left: none; border-top: none;">
+                &nbsp;
+            </td>
+
+            <td colspan="3" style="border-top: none; border-right: none; ">
+                <input type="checkbox" name="ccsoWarrant" [checked]="(model.ccsoWarrant=='true') ? true : false" (change)="model.ccsoWarrant = (model.ccsoWarrant=='true') ? false : true" /> 2. WARRANT
+            </td>
+            <td style="border-top: none; border-left: none; border-right: none;">
+                <input type="checkbox" name="ccsoCiteInLieu" [checked]="(model.ccsoCiteInLieu=='true') ? true : false" (change)="model.ccsoCiteInLieu = (model.ccsoCiteInLieu=='true') ? false : true" /> 5. CITE IN LIEU
+            </td>
+            <td colspan="3" style="border-top: none; border-left: none;">
+                &nbsp;
+            </td>
+        </tr>
+        <tr class="border">
+            <td colspan="8">
+                LOCATION OF CUSTODY
+                <input type="checkbox" name="ccsoLocOfCustody" [checked]="(model.ccsoLocOfCustody=='true') ? true : false" (change)="model.ccsoLocOfCustody = (model.ccsoLocOfCustody=='true') ? false : true" />
+                SAME AS INCIDENT LOCATION
+                <br />
+                <input type="text" name="ccsoIncLocation" style="width: 400px;" [(ngModel)]="model.ccsoIncLocation" [ngModelOptions]="{standalone: true}" />
+
+            </td>
+            <td colspan="4">
+                PRECINCT OF ARREST
+                <BR />
+                <input type="text" name="ccsoArrestLoc" style="width: 300px;" [(ngModel)]="model.ccsoArrestLoc" [ngModelOptions]="{standalone: true}" />
+            </td>
+        </tr>
+        <tr style="border: black 1px solid;">
+            <td colspan="8" style="border-left: black 1px solid; border-right: black 1px solid;">
+                NAME OF PERSON IN CUSTODY (LAST, FIRST, MIDDLE)
+                <BR />
+                <span name="person_name_lfm" style="width: 450px;">{{ model.person_name_lfm }}</span>
+            </td>
+            <td style="border-right: black 1px solid;">
+                CRN
+                <BR />
+                <input type="text" name="ccso_CRN" style="width: 100px;" [(ngModel)]="model.ccso_CRN" [ngModelOptions]="{standalone: true}" />
+            </td>
+            <td style="border-right: black 1px solid;">
+                SEX
+                <BR />
+                {{ model.person_sex }}
+            </td>
+            <td style="border-right: black 1px solid;">
+                RACE
+                <BR />
+                <span style="width: 80px;">{{ model.person_race }}</span>
+            </td>
+            <td style="border-right: black 1px solid;">
+                DOB
+                <BR />
+                <span style="width: 70px;">{{ model.person_dob }}</span>
+            </td>
+        </tr>
+    </table>
+    <br><div class="form-row">
+        <button type="submit" md-raised-button color="primary" [disabled]="!f.valid">
+            <i class="material-icons">save</i>Save
+        </button>
+    </div>
+</form>

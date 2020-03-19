@@ -1,0 +1,15 @@
+﻿
+using Microsoft.AspNetCore.Mvc;
+
+namespace ServerAPI.Controllers
+{
+
+    [Route("[controller]")]
+    public class ClassifyAlertsController
+    {
+        public ClassifyAlertsController()
+        {
+
+        }
+    }
+}

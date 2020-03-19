@@ -1,0 +1,104 @@
+﻿using Microsoft.AspNetCore.Mvc;
+using ServerAPI.Services;
+using ServerAPI.ViewModels;
+using System.Threading.Tasks;
+using ServerAPI.Authorization;
+
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    public class PrebookActiveController : Controller
+    {
+        private readonly IPrebookActiveService _prebookActiveService;
+
+        public PrebookActiveController(IPrebookActiveService prebookActiveService)
+        {
+            _prebookActiveService = prebookActiveService;
+        }
+
+        [HttpGet("GetPrebooks")]
+        public IActionResult GetPrebooks(bool deleteFlag = false)
+        {
+            return Ok(_prebookActiveService.GetPrebooks(deleteFlag));
+        }
+
+        [HttpGet("GetPrebook")]
+        public IActionResult GetPrebook(int inmatePrebookId)
+        {
+            return Ok(_prebookActiveService.GetPrebook(inmatePrebookId));
+        }
+
+        [HttpPost("GetPrebookSearch")]
+        public IActionResult GetPrebookSearch([FromBody] GetPrebookSearchVm value)
+        {
+            return Ok(_prebookActiveService.GetPrebookSearch(value));
+        }
+       
+        [HttpGet("DeletePrebook")]
+        public async Task<IActionResult> DeletePrebook(int inmatePrebookId)
+        {
+            if (inmatePrebookId <= 0) return BadRequest("inmatePrebookId is required");
+            return Ok(await _prebookActiveService.DeletePrebook(inmatePrebookId));
+        }
+
+        [HttpGet("UndoDeletePrebook")]
+        public async Task<IActionResult> UndoDeletePrebook(int inmatePrebookId)
+        {
+            if (inmatePrebookId <= 0) return BadRequest("inmatePrebookId is required");
+            return Ok(await _prebookActiveService.UndoDeletePrebook(inmatePrebookId));
+        }
+
+        [HttpGet("LoadPrebookDetails")]
+        public IActionResult LoadPrebookDetails(int personId)
+        {
+            return Ok(_prebookActiveService.LoadPrebookDetails(personId));
+        }
+
+        [HttpGet("GetPrebookValidateConfirm")]
+        public IActionResult GetPrebookValidateConfirm(int personId)
+        {
+            return Ok(_prebookActiveService.GetPrebookValidateConfirm(personId));
+        }
+
+        [HttpPut("UpdatePrebookValidateConfirm")]
+        public IActionResult UpdatePrebookValidateConfirm([FromBody] string values,
+            [FromQuery] int personId)
+        {
+            if (personId <= 0) return BadRequest("personId is required");
+            return Ok(_prebookActiveService.UpdatePrebookValidateConfirm(values, personId));
+        }
+
+        //[FuncPermission(2001,FuncPermissionType.Access)]
+        [HttpGet("GetPreBookActiveTabAccess")]
+        public IActionResult GetPreBookActiveTabAccess()
+        {
+            return Ok();
+        }
+
+        [FuncPermission(603,FuncPermissionType.Edit)]
+        [HttpPut("EditPreBookWizardAccess")]
+        public IActionResult EditPreBookWizardAccess()
+        {
+            return Ok();
+        }
+
+        [FuncPermission(603,FuncPermissionType.Delete)]
+        [HttpDelete("DeletePrebookWizardAccess")]
+        public IActionResult DeletePrebookWizardAccess()
+        {
+            return Ok();
+        }
+        [FuncPermission(602,FuncPermissionType.Edit)]
+        [HttpPut("EditPreBookWizardAccessSameOfficer")]
+        public IActionResult EditPreBookWizardAccessSameOfficer()
+        {
+            return Ok();
+        }
+        [FuncPermission(602,FuncPermissionType.Delete)]
+        [HttpDelete("DeletePreBookWizardAccessSameOfficer")]
+        public IActionResult DeletePreBookWizardAccessSameOfficer()
+        {
+            return Ok();
+        }
+    }
+}

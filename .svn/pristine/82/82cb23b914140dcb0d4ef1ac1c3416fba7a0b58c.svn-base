@@ -1,0 +1,700 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using GenerateTables.Models;
+using ServerAPI.ViewModels;
+using ServerAPI.Utilities;
+using Microsoft.AspNetCore.Http;
+using JwtDb.Models;
+using Microsoft.AspNetCore.Identity;
+using System.Security.Claims;
+using System.Threading.Tasks;
+
+// ReSharper disable once CheckNamespace
+namespace ServerAPI.Services
+{
+    public class InmateDetailsService : IInmateDetailsService
+    {
+        private readonly AAtims _context;
+
+        private readonly ICommonService _commonService;
+
+        private readonly IInmateBookingService _inmateBookingService;
+
+        private readonly IAppointmentViewerService _appointmentViewerService;
+        private readonly IAppointmentService _appointmentService;
+
+        private readonly IPersonService _personService;
+
+        private readonly int _personnelId;
+
+        private readonly JwtDbContext _jwtDbContext;
+        private readonly UserManager<AppUser> _userManager;
+        private readonly IPhotosService _photos;
+
+        public InmateDetailsService(AAtims context, ICommonService commonService,
+            IInmateBookingService inmateBookingService
+            , IHttpContextAccessor httpContextAccessor, JwtDbContext jwtDbContext, UserManager<AppUser> userManager,
+            IAppointmentViewerService appointmentViewerService, IPersonService personService, IPhotosService photosService,
+            IAppointmentService appointmentService)
+        {
+            _context = context;
+            _commonService = commonService;
+            _inmateBookingService = inmateBookingService;
+            _personnelId = Convert.ToInt32(httpContextAccessor.HttpContext.User
+                .FindFirst(AuthDetailConstants.PERSONNELID)?.Value);
+            _jwtDbContext = jwtDbContext;
+            _userManager = userManager;
+            _appointmentViewerService = appointmentViewerService;
+            _appointmentService = appointmentService;
+            _personService = personService;
+            _photos = photosService;
+        }
+
+        //To get Inmate details Parent SubModule 
+        public List<DetailVm> GetInmateDetailParent(int subModuleId)
+        {
+            List<DetailVm> listDetailParent =
+                _context.AppAoDetailParentXref.Where(
+                        w => w.AppAoSubModuleId == subModuleId && w.AppAoDetailParentVisible == 1)
+                    .Select(s => new DetailVm
+                    {
+                        DetailId = s.AppAoDetailParentId,
+                        DetailName = s.AppAoDetailParent.AppAoDetailParentName,
+                        DetailVisible = s.AppAoDetailParentVisible == 1,
+                        DetailToolTip = s.AppAoDetailParent.AppAoDetailParentToolTip
+                    }).ToList();
+            return listDetailParent;
+        }
+
+
+        public async Task<InmateFileDetailVm> GetInmateDetailsCountByInmateNumber(string inmateNumber)
+        {
+            int? inmateId = _context.Inmate.SingleOrDefault(w => w.InmateNumber == inmateNumber)?.InmateId;
+            InmateFileDetailVm inmateFileDetailvm = new InmateFileDetailVm();
+
+            return inmateId.HasValue ? await GetInmateFileCount(inmateId.Value) : inmateFileDetailvm;
+        }
+
+        public async Task<InmateFileDetailVm> GetInmateFileCount(int inmateId)
+        {
+            InmateFileDetailVm inmateFileDetail = new InmateFileDetailVm
+            {
+                PersonDetails = _personService.GetInmateDetails(inmateId)
+            };
+
+            //KEEPSEP
+            //To get keepsepInmate count for KeepSeparation
+            int keepsepInmate = _context.KeepSeparate
+                .Count(ks => (ks.KeepSeparateInmate1Id == inmateId
+                              || ks.KeepSeparateInmate2Id == inmateId)
+                             && ks.InactiveFlag == 0 && ks.KeepSeparateInmate1.InmateActive == 1 &&
+                             ks.KeepSeparateInmate2.InmateActive == 1);
+
+            //To get keepsepAssoc count for KeepSeparation
+            int keepsepAssoc =
+                _context.KeepSepAssocInmate.Count(a => a.KeepSepInmate2Id == inmateId && a.DeleteFlag == 0);
+
+            //To get keepsepSubset count for KeepSeparation
+            int keepsepSubset =
+                _context.KeepSepSubsetInmate.Count(s => s.KeepSepInmate2Id == inmateId && s.DeleteFlag == 0);
+
+            //ASSOCIATION
+            //To get LookupDescription in Lookup for Association count
+            int[] lookupClassGroup = _commonService.GetLookupList(LookupConstants.CLASSGROUP)
+            .Where(a => a.LookupFlag9 == 1 || a.LookupFlag10 == 1).Select(a => a.LookupIndex).ToArray();
+
+            //To get list from Appointment
+            DateTime startDate = DateTime.Now.Date.AddHours(0).AddMinutes(0).AddSeconds(0);
+            DateTime endDate = DateTime.Now.AddMonths(6).Date.AddHours(23).AddMinutes(59).AddSeconds(59);
+
+            CalendarInputs inputs = new CalendarInputs
+            {
+                CalendarTypes = "1,2,3",
+                InmateId = inmateId,
+                FromDate = startDate,
+                ToDate = endDate
+            };
+            int apptCnt = _appointmentViewerService.CheckAppointment(inputs).Count;
+
+            //To get list from WorkCrew for Workcrew count & Workfurlough count
+            IQueryable<WorkCrew> lstWorkCrew =
+                _context.WorkCrew.Where(w => w.InmateId == inmateId && w.DeleteFlag == 0);
+
+            List<Lookup> lstLookUp = _context.Lookup.Where(
+                x => x.LookupType == LookupConstants.LIBBOOKCAT
+                     || x.LookupType == LookupConstants.LIBBOOKCOND
+                     || x.LookupType == LookupConstants.LIBBOOKTYPE
+                     || x.LookupType == LookupConstants.ARRTYPE
+                     || x.LookupType == LookupConstants.LAWDISPO).ToList();
+
+            //Taking Book Category,Condition and Type LookupId from lookup table
+            int[] categoryId = lstLookUp
+                .Where(l => l.LookupType.Contains(LookupConstants.LIBBOOKCAT) && l.LookupInactive == 0)
+                .Select(l => l.LookupIndex).ToArray();
+            int[] conditionId = lstLookUp
+                .Where(l => l.LookupType.Contains(LookupConstants.LIBBOOKCOND) && l.LookupInactive == 0)
+                .Select(l => l.LookupIndex).ToArray();
+            int[] typeId = lstLookUp
+                .Where(l => l.LookupType.Contains(LookupConstants.LIBBOOKTYPE) && l.LookupInactive == 0)
+                .Select(l => l.LookupIndex).ToArray();
+
+            //Taking the Case status lookup MISC
+            string[] lstLookUpsMisc = _context.Lookup.Where(
+                    x => x.LookupType.Contains(LookupConstants.PROGCASESTATUS) && x.LookupInactive == 0)
+                .Select(x => x.LookupDescription).ToArray();
+
+            inmateFileDetail.ListBookingNumber = _context.Incarceration.Where(w => w.InmateId == inmateId)
+                .Select(s => new BookingDetailCountVm
+                {
+                    IncarcerationId = s.IncarcerationId,
+                    ArrestBookingNumber = s.BookingNo,
+                    ReleaseOut = s.ReleaseOut,
+                    DateIn = s.DateIn,
+                    VerifyId = s.VerifyIDFlag,
+                    InmateBookingNumberDetails = s.IncarcerationArrestXref
+                    .OrderBy(i => i.ArrestId)
+                    .OrderByDescending(i => i.Incarceration.DateIn)
+                    .Select(i => new InmateBookingNumberDetails
+                    {
+                        ArrestBookingNumber = i.Arrest.ArrestBookingNo,
+                        BookingDate = i.BookingDate,
+                        ArrestId = i.ArrestId,
+                        IncarcerationId = i.IncarcerationId,
+                        IncarcerationArrestXrefId = i.IncarcerationArrestXrefId,
+                        CourtDocket = i.Arrest.ArrestCourtDocket,
+                        ArrestAbbrevation = i.Arrest.ArrestingAgency.AgencyAbbreviation,
+                        BookingType = lstLookUp.Where(lkp =>
+                            lkp.LookupIndex == Convert.ToInt32(i.Arrest.ArrestType) &&
+                            lkp.LookupType == LookupConstants.ARRTYPE).Select(lkp => lkp.LookupDescription)
+                            .SingleOrDefault(),
+                        ArrestDate = i.Arrest.ArrestDate,
+                        ArrestCaseNumber = i.Arrest.ArrestCaseNumber,
+                        ClearDate = i.ReleaseDate,
+                        ClearReason = i.ReleaseReason,
+                        ArrestDisposition = lstLookUp.Where(lk => lk.LookupType == LookupConstants.LAWDISPO &&
+                            lk.LookupIndex == Convert.ToInt32(i.Arrest.ArrestLawEnforcementDisposition))
+                            .Select(lk => lk.LookupDescription).SingleOrDefault()
+                    }).ToList()
+                }).OrderByDescending(o => o.IncarcerationId).ToList();
+
+            //Getting Person details for Inmate Info & Clear 
+            int personCount =
+                _context.Person.Count(p =>
+                    p.PersonId == inmateFileDetail.PersonDetails.PersonId &&
+                    !inmateFileDetail.PersonDetails.InmateNumber.Contains("PURGED_%"));
+
+            //To get list from FormRecord for Forms count
+            IQueryable<FormRecord> lstFormRecord = _context.FormRecord.Where(f => f.DeleteFlag == 0);
+
+            //To get list from AppletsSaved for Attach count
+            IQueryable<AppletsSaved> lstAppletsSaved = _context.AppletsSaved.Where(i => i.AppletsDeleteFlag == 0);
+
+            int incarcerationId = 0;
+            if (inmateFileDetail.ListBookingNumber.Any())
+            {
+                incarcerationId = inmateFileDetail.ListBookingNumber.FirstOrDefault()?.IncarcerationId ?? 0;
+
+                inmateFileDetail.PersonDetails.InmatePreBookId = _context.InmatePrebook
+                    .First(ip => incarcerationId == ip.IncarcerationId.Value).InmatePrebookId;
+
+                //To get count from FormRecord for PreBook count
+                int inmatePreBookCnt = lstFormRecord
+                    .Count(f => f.DeleteFlag == 0 && f.FormTemplates.FormCategoryId == 1 &&
+                                f.InmatePrebook.PersonId == inmateFileDetail.PersonDetails.PersonId
+                                && f.InmatePrebook.IncarcerationId == incarcerationId &&
+                                f.InmatePrebook.IncarcerationId > 0);
+
+                //To get count from AppletsSaved for PreBook count
+                int appletsSavedCnt = lstAppletsSaved
+                    .Count(a => !a.InmatePrebook.DeleteFlag.HasValue && a.AppletsDeleteFlag == 0 &&
+                                a.InmatePrebook.PersonId == inmateFileDetail.PersonDetails.PersonId);
+
+                inmateFileDetail.ListBookingNumber.ForEach(a =>
+                {
+                    //FORMS
+                    int incarcerationFormsCnt = lstFormRecord
+                        .Count(f => f.FormTemplates.FormCategory.FormCategoryId == 10 //INCARCERATION FORMS
+                                    && f.Incarceration.IncarcerationId == a.IncarcerationId);
+
+                    //Booking Sheet forms
+                    int bookingSheetFormsCnt = lstFormRecord
+                        .Count(f => f.FormTemplates.FormCategory.FormCategoryId == 22 //Booking Sheet FORMS
+                                    && f.BooksSheetIncarcerationId == a.IncarcerationId);
+
+                    int incarcerationAttachCnt =
+                        lstAppletsSaved.Count(
+                            i => i.IncarcerationId == a.IncarcerationId);
+
+                    a.BookingCountVm = new BookingCountVm
+                    {
+                        //OVERALL
+                        Overall = personCount,
+
+                        //TRANSPORT
+                        Transport = _context.Incarceration.Count(i =>
+                            i.IncarcerationId == incarcerationId && i.TransportFlag == 1 &&
+                            i.Inmate.PersonId == inmateFileDetail.PersonDetails.PersonId),
+
+                        //PREBOOK
+                        Prebook = inmatePreBookCnt + appletsSavedCnt,
+
+                        //FORMS
+                        Bookingforms = incarcerationFormsCnt,
+
+                        //ATTACH
+                        Bookingattach = incarcerationAttachCnt,
+                        //Intake Currency
+                        Intakecurrency = _context.IncarcerationIntakeCurrency.Count(inc =>
+                            inc.IncarcerationId == incarcerationId),
+                        //History
+                        Bookinghistory = inmateFileDetail.ListBookingNumber.Count,
+                        //Keeper
+                        Keeper = _context.IncarcerationNoKeeperHistory.Count(inc =>
+                            inc.IncarcerationId == incarcerationId && inc.Keeper),
+                        //Booking Sheet Forms
+                        Bookingsheetforms = bookingSheetFormsCnt,
+                    };
+
+                    //Keeper - No Keeper Flag
+                    inmateFileDetail.PersonDetails.NoKeeper = _context.Incarceration
+                        .Single(inc => inc.IncarcerationId == incarcerationId).NoKeeper;
+                });
+            }
+
+            //To get Inmate BookingNo details for Booking dropdown
+            inmateFileDetail.ListBookingCasesNumber =
+                _context.IncarcerationArrestXref.Where(i => i.IncarcerationId == incarcerationId)
+                    .Select(i => new InmateBookingNumberDetails
+                    {
+                        ArrestBookingNumber = i.Arrest.ArrestBookingNo,
+                        BookingDate = i.BookingDate,
+                        ArrestId = i.ArrestId,
+                        ArrestType = i.Arrest.ArrestType,
+                        IncarcerationId = i.IncarcerationId,
+                        IncarcerationArrestXrefId = i.IncarcerationArrestXrefId,
+                        CourtDocket = i.Arrest.ArrestCourtDocket,
+                        ArrestAbbrevation = i.Arrest.ArrestingAgency.AgencyAbbreviation,
+                        ArrestBookingType = i.Arrest.ArrestType,
+                        ClearDate = i.ReleaseDate,
+                        ClearReason = i.ReleaseReason,
+                        Court = i.Arrest.ArrestCourtJurisdiction.AgencyName
+                    }).OrderBy(o => o.ArrestId).ToList();
+
+            inmateFileDetail.ListBookingCasesNumber?.ForEach(a =>
+            {
+                if (!string.IsNullOrEmpty(a.ArrestType))
+                {
+                    a.BookingType = lstLookUp.Single(lkp => lkp.LookupIndex == Convert.ToInt32(Convert.ToDecimal(a.ArrestType))
+                            && lkp.LookupType == LookupConstants.ARRTYPE).LookupDescription;
+                }
+
+                //To get list from Crime for Charges count
+                int crimeCnt = _context.Crime
+                    .Count(c => c.CrimeLookupId > 0 && c.CrimeDeleteFlag == 0 && !c.WarrantId.HasValue &&
+                                c.Arrest.ArrestId == a.ArrestId);
+
+                //To get list from CrimeForce for Charges count
+                int crimeForceCnt =
+                    _context.CrimeForce.Count(
+                        c => c.DeleteFlag == 0 && !c.DropChargeFlag.HasValue && !c.ForceCrimeLookupId.HasValue &&
+                             !c.WarrantId.HasValue && !c.ForceSupervisorReviewFlag.HasValue &&
+                             c.ArrestId == a.ArrestId);
+
+
+                int bookingFormsCnt =
+                    lstFormRecord.Count(f => f.FormTemplates.FormCategory.FormCategoryId == 11 //BOOKING FORMS
+                                             && f.ArrestId == a.ArrestId);
+
+                //ATTACH
+                int bookingAttachCnt =
+                    lstAppletsSaved.Count(i => i.ArrestId > 0 && i.ArrestId == a.ArrestId);
+
+                a.InmateBookingDetailsCountVm = new InmateBookingDetailsCountVm
+                {
+
+                    //INFO
+                    Info = personCount,
+
+                    //SHEET
+                    Sheet = personCount,
+
+                    //CLEAR
+                    Clear = inmateFileDetail.ListBookingCasesNumber.Count(x=>x.ClearDate.HasValue),
+
+                    //SENTENCE
+                    Sentence = _context.IncarcerationArrestXref.Count(
+                        s => (s.Arrest.ArrestSentenceCode == 1 || s.Arrest.ArrestSentenceCode == 2)
+                             && !s.Incarceration.ReleaseOut.HasValue &&
+                             s.Incarceration.IncarcerationId == a.IncarcerationId &&
+                             s.Arrest.Inmate.PersonId == inmateFileDetail.PersonDetails.PersonId),
+
+                    //CHARGES
+                    Charges = crimeCnt + crimeForceCnt,
+
+                    //WARRANT
+                    Warrant = _context.Warrant.Count(w => w.Arrest.ArrestId == a.ArrestId),
+
+                    //BAIL
+                    Bail = _context.BailTransaction
+                        .Count(b => !b.VoidFlag.HasValue && b.ArrestId == a.ArrestId &&
+                                    b.Arrest.Inmate.PersonId ==
+                                    inmateFileDetail.PersonDetails.PersonId),
+
+                    //NOTE
+                    Note = _context.ArrestNote.Count(an => an.ArrestId == a.ArrestId && an.DeleteFlag == 0),
+
+                    //FORMS
+                    Caseforms = bookingFormsCnt,
+
+                    //ATTACH
+                    Caseattach = bookingAttachCnt,
+
+                    //History
+                    Casehistory = inmateFileDetail.ListBookingNumber
+                    .SelectMany(x=>x.InmateBookingNumberDetails).Count(),
+                };
+            });
+
+            inmateFileDetail.inmateFileCount = new InmateFileCountVm
+            {
+                //IDENTITY
+                Identity = 1, //Hardcoded
+
+                //AKA
+                Aka = _context.Aka.Count(a => a.PersonId == inmateFileDetail.PersonDetails.PersonId && a.PersonId > 0 && (!a.DeleteFlag.HasValue || a.DeleteFlag == 0)),
+
+                //ADDRESS    
+                Address = _context.Address.Count(a => a.PersonId == inmateFileDetail.PersonDetails.PersonId),
+
+                //CHAR
+                Char = _context.PersonDescription.Count(a => a.PersonId == inmateFileDetail.PersonDetails.PersonId) > 0
+                    ? 1
+                    : 0,
+
+                //DESCRIPTOR
+                Descriptor = _context.PersonDescriptor.Count(
+                    a => a.PersonId == inmateFileDetail.PersonDetails.PersonId && a.DeleteFlag == 0 && a.Code != null),
+
+                //PHOTO
+                Photo = _context.Identifiers.Count(
+                    a => a.PersonId == inmateFileDetail.PersonDetails.PersonId && a.DeleteFlag == 0 &&
+                         (a.PhotographRelativePath != null || a.PhotographPath != null)),
+
+                //CONTACT
+                Contact = _context.Contact.Count(
+                    a => a.TypePersonId == inmateFileDetail.PersonDetails.PersonId && a.PersonId > 0 &&
+                         a.ContactActiveFlag == "1"),
+
+                //PROFILE
+                Profile = 1, //Hardcoded
+
+                //DNA
+                Dna = _context.PersonDna.Count(a => a.PersonId == inmateFileDetail.PersonDetails.PersonId),
+
+                //TESTING
+                Testing = _context.PersonTesting.Count(a => a.PersonId == inmateFileDetail.PersonDetails.PersonId),
+
+                //MILITARY
+                Military = _context.PersonMilitary.Count(a => a.PersonId == inmateFileDetail.PersonDetails.PersonId),
+
+                //BIOMETRICS
+                BioMetrics = _context.BiometricsFingerprint.Count(a =>
+                    a.PersonId == inmateFileDetail.PersonDetails.PersonId && a.DeleteFlag == 0),
+
+                //MESSAGE
+                Message =
+                    _context.PersonAlert.Count(a =>
+                        a.PersonId == inmateFileDetail.PersonDetails.PersonId && a.ActiveAlertFlag == 1 &&
+                        (!a.ExpireDate.HasValue || a.ExpireDate.Value.Date >= DateTime.Now.Date)),
+
+                //FLAG
+                Flag = _context.PersonFlag
+                    .Count(a => a.PersonId == inmateFileDetail.PersonDetails.PersonId && a.DeleteFlag == 0 &&
+                                (a.PersonFlagIndex > 0 || a.InmateFlagIndex > 0 || a.DietFlagIndex > 0)),
+
+
+                Keepsep = keepsepInmate + keepsepAssoc + keepsepSubset,
+
+
+                //Assoc                
+                Assoc =
+                    _context.PersonClassification.Count(pc =>
+                        pc.InactiveFlag == 0 && pc.PersonId == inmateFileDetail.PersonDetails.PersonId &&
+                        (!pc.PersonClassificationDateThru.HasValue ||
+                         pc.PersonClassificationDateThru.Value.Date >= DateTime.Now.Date) &&
+                        lookupClassGroup.Contains(pc.PersonClassificationTypeId ?? 0)),
+                //PRIVILEGE
+                Privilege =
+                    _context.InmatePrivilegeXref.Count(
+                        ip => ip.Privilege.InactiveFlag == 0 && !ip.PrivilegeRemoveOfficerId.HasValue &&
+                              (ip.PrivilegeExpires >= DateTime.Now || !ip.PrivilegeExpires.HasValue)
+                              && ip.InmateId == inmateId),
+
+                //OBSERVATION
+                Observation = _context.ObservationSchedule
+                    .Count(o => o.InmateId == inmateId && o.DeleteFlag == 0 && o.StartDate.Value <= DateTime.Now &&
+                                (!o.EndDate.HasValue || o.EndDate.Value >= DateTime.Now)),
+
+                //HOUSING
+                Housing = _context.HousingUnitMoveHistory.Count(h => h.InmateId == inmateId),
+
+                //TRACKING
+                Tracking = _context.InmateTrak.Count(i => i.InmateId == inmateId),
+
+                //APPOINTMENT
+                //Appoint = apptCnt + visitCnt,
+                Appoint = apptCnt,
+
+                //VISIT
+                //Visit =
+                //    _context.VisitToVisitor.Count(v => v.PersonId == inmateFileDetail.PersonDetails.PersonId && !v.Visitor.VisitorDeletedFlag),
+
+                //CLASSIFY
+                Classify = _context.InmateClassification.Count(i => i.InmateId == inmateId),
+
+                //NOTES
+                Notes = _context.FloorNoteXref.Count(fxref => fxref.InmateId == inmateId),
+
+                //INMATEREQUEST
+                Inmaterequest =
+                    _context.Request.Count(r => r.InmateId == inmateId && r.RequestActionLookup.RequestByInmate
+                                                                       && !r.RequestActionLookup.InactiveFlag),
+
+                //INCIDENT
+                Incident = _context.DisciplinaryInmate.Count(d => d.InmateId == inmateId),
+
+                //GRIEVANCE
+                Grievance = _context.Grievance.Count(g => g.InmateId == inmateId && g.DeleteFlag == 0),
+
+                //WORKCREW
+                Workcrew =
+                    lstWorkCrew.Count(w => !w.WorkCrewLookup.WorkFurloughFlag.HasValue),
+
+                //WORKFURLOUGH
+                Workfurlough =
+                    lstWorkCrew.Count(w => w.WorkCrewLookup.WorkFurloughFlag.HasValue),
+
+                //INVENTORY
+                Inventory = _context.PersonalInventory.Count(
+                    i => i.InventoryDispositionCode == 4 && i.DeleteFlag == 0 && i.InmateId == inmateId),
+
+                //PHONE
+                Phone = _context.PhoneCallLog.Count(p => p.DeleteFlag == 0 && p.InmateId == inmateId),
+
+                //LABEL
+                Label = _context.PersonFormTemplate.Count(p => p.ShowInLabel == true && p.DeleteFlag != true
+                            && p.Inactive != true && !string.IsNullOrEmpty(p.ShortId)),
+
+                //NCIC
+                Ncic = 1, //Hardcoded
+
+                //RECCHK
+                Recchk = _context.RecordsCheckRequest.Count(r =>
+                    r.PersonId == inmateFileDetail.PersonDetails.PersonId && r.DeleteFlag == 0),
+
+                //ATTENDEE
+                Attendee = _context.ArrestSentenceAttendance.Count(a => a.DeleteFlag == 0 && a.InmateId == inmateId),
+
+                //ISSUEDPROP
+                Issuedprop =
+                    _context.IssuedProperty.Count(i =>
+                        i.DeleteFlag == 0 && i.ActiveFlag == 1 && i.InmateId == inmateId),
+
+                //LIBRARY              
+                Library = _context.LibraryBook
+                    .Count(l => l.DeleteFlag == 0 && l.LibraryRoom.DeleteFlag == 0
+                                                  && l.CurrentCheckoutInmateId == inmateId
+                                                  && categoryId.Contains(l.BookCategoryId)
+                                                  && typeId.Contains(l.BookTypeId)
+                                                  && conditionId.Contains(
+                                                      l.CurrentConditionId ?? 0)
+                                || l.LibraryRoomLocation.DeleteFlag == 0),
+
+                //ALTSENT
+                Altsent = _context.AltSent.Count(a =>
+                    a.Incarceration.InmateId == inmateId && a.Incarceration.IncarcerationId > 0 &&
+                    !a.Incarceration.ReleaseOut.HasValue),
+
+                //Case
+                Case = _context.Inmate.Count(
+                    i => i.InmateId == inmateId && lstLookUpsMisc.Contains(i.ProgramCaseStatus)),
+                //Assign = programAssignNonReoccur + programAssignReoccur,
+
+                // This program table need to change based on programClass
+                //REQUEST
+                Programrequest = _context.ProgramRequest.Count(p =>
+                    p.InmateId == inmateId && p.DeleteFlag == 0 && p.ProgramClassId > 0
+                    && !p.AppointmentProgramAssignId.HasValue),
+                Ledger = _context.AccountAoTransaction.Count(a => a.InmateId == inmateId),
+
+                Tasks = _context.AoTaskQueue.Count(queue => queue.InmateId == inmateId && !queue.CompleteFlag),
+
+                Mail = _context.MailRecord.Count(r => r.InmateId == inmateId && !r.DeleteFlag)
+            };
+
+            //Unrestricted PHI medical flag count
+            List<Lookup> lstLookup = _context.Lookup.Where(l =>
+                !l.LookupNoAlert.HasValue && l.LookupInactive == 0
+                && l.LookupType == LookupConstants.MEDFLAG && l.LookupFlag6 == 1).ToList();
+
+            if (lstLookup.Count > 0)
+            {
+                int medicalFlagCnt = _context.PersonFlag
+                        .Count(a => a.PersonId == inmateFileDetail.PersonDetails.PersonId && a.DeleteFlag == 0 &&
+                                    a.MedicalFlagIndex > 0 && lstLookup.Any(d => (int?)d.LookupIndex == a.MedicalFlagIndex));
+                inmateFileDetail.inmateFileCount.Flag = inmateFileDetail.inmateFileCount.Flag + medicalFlagCnt;
+            }
+
+            inmateFileDetail.CourtCommitCnt = _inmateBookingService
+                .GetActiveCommitDetails(inmateFileDetail.PersonDetails.PersonId).Count;
+            if (inmateFileDetail.PersonDetails.InmateActive)
+            {
+                await UpdateLastXInmate(inmateId);
+            }
+
+            return inmateFileDetail;
+        }
+
+        public BookingHistoryVm GetBookingHistory(int inmateId)
+        {
+            BookingHistoryVm inmateBookingCount = new BookingHistoryVm();
+
+            List<Lookup> lookups = _context.Lookup.Where(x =>
+                x.LookupType == LookupConstants.ARRTYPE || x.LookupType == LookupConstants.LAWDISPO).ToList();
+
+            inmateBookingCount.BookingDetailCount = _context.Incarceration.Where(w => w.InmateId == inmateId)
+                .Select(s => new BookingDetailCountVm
+                {
+                    IncarcerationId = s.IncarcerationId,
+                    ArrestBookingNumber = s.BookingNo,
+                    DateIn = s.DateIn,
+                    ReleaseOut = s.ReleaseOut,
+                    InmateBookingNumberDetails = s.IncarcerationArrestXref
+                    .OrderBy(i => i.ArrestId)
+                    .OrderByDescending(i => i.Incarceration.DateIn)
+                    .Select(i => new InmateBookingNumberDetails {
+                        ArrestBookingNumber = i.Arrest.ArrestBookingNo,
+                        BookingDate = i.BookingDate,
+                        ArrestId = i.ArrestId,
+                        IncarcerationId = i.IncarcerationId,
+                        IncarcerationArrestXrefId = i.IncarcerationArrestXrefId,
+                        CourtDocket = i.Arrest.ArrestCourtDocket,
+                        ArrestAbbrevation = i.Arrest.ArrestingAgency.AgencyAbbreviation,
+                        BookingType = lookups.Where(lkp =>
+                            lkp.LookupIndex == Convert.ToInt32(i.Arrest.ArrestType) &&
+                            lkp.LookupType == LookupConstants.ARRTYPE).Select(lkp => lkp.LookupDescription)
+                            .SingleOrDefault(),
+                        ArrestDate = i.Arrest.ArrestDate,
+                        ArrestCaseNumber = i.Arrest.ArrestCaseNumber,
+                        ClearDate = i.ReleaseDate,
+                        ClearReason = i.ReleaseReason,
+                        ArrestDisposition = lookups.Where(lk => lk.LookupType == LookupConstants.LAWDISPO &&
+                            lk.LookupIndex == Convert.ToInt32(i.Arrest.ArrestLawEnforcementDisposition))
+                            .Select(lk => lk.LookupDescription).SingleOrDefault()
+                    }).ToList()
+                }).OrderByDescending(o => o.IncarcerationId).ToList();
+            return inmateBookingCount;
+
+        }
+        public async Task<IdentityResult> UpdateLastXInmate(int inmateId)
+        {
+            string userId = _jwtDbContext.UserClaims.Where(w => w.ClaimType == "personnel_id"
+                   && w.ClaimValue == _personnelId.ToString())
+                  .Select(s => s.UserId).FirstOrDefault();
+
+            AppUser appUser = _userManager.FindByIdAsync(userId).Result;
+
+            IList<Claim> claims = await _userManager.GetClaimsAsync(appUser);
+
+            Claim inmateIdClaim = claims.FirstOrDefault(f => f.Type == "inmate_id");
+            IdentityResult result;
+
+            if (inmateIdClaim == null)
+            {
+                result = await _userManager.AddClaimAsync(appUser, new Claim("inmate_id", inmateId.ToString()));
+            }
+            else
+            {
+                List<string> lstLastInmateId = inmateIdClaim.Value.Split(',').Where(val => val != inmateId.ToString()).ToList();
+                lstLastInmateId.Insert(0, inmateId.ToString());
+                if (lstLastInmateId.Count > 10)
+                {
+                    lstLastInmateId.RemoveAt(10);
+                }
+
+                result = await _userManager.ReplaceClaimAsync(appUser, inmateIdClaim,
+                    new Claim("inmate_id", string.Join(",", lstLastInmateId.Select(x => x.ToString()).ToArray())));
+            }
+            return result;
+
+        }
+
+        public async Task<List<InmateSearchVm>> GetLastXInmates()
+        {
+            string userId = _jwtDbContext.UserClaims.Where(w => w.ClaimType == "personnel_id"
+                   && w.ClaimValue == _personnelId.ToString())
+                  .Select(s => s.UserId).FirstOrDefault();
+
+            AppUser appUser = _userManager.FindByIdAsync(userId).Result;
+
+            IList<Claim> claims = await _userManager.GetClaimsAsync(appUser);
+
+            Claim inmateIdClaim = claims.FirstOrDefault(f => f.Type == "inmate_id");
+
+            List<InmateSearchVm> inmateList = new List<InmateSearchVm>();
+            if (inmateIdClaim == null) return inmateList;
+            List<int> lstLastInmateId = inmateIdClaim.Value.Split(',').Select(int.Parse).ToList();
+
+            List<InmateSearchVm> listIncar = _context.Incarceration.Where(i => lstLastInmateId.Contains(i.Inmate.InmateId))
+                .Select(f =>
+                    new InmateSearchVm
+                    {
+                        InmateId = f.InmateId ?? 0,
+                        IncarcerationId = f.IncarcerationId,
+                        BookingNo = f.BookingNo
+                    }).ToList();
+
+            inmateList = _context.Inmate.Where(w => lstLastInmateId.Contains(w.InmateId) && w.InmateActive == 1)
+                .Select(i => new InmateSearchVm
+                {
+                    InmateNumber = i.InmateNumber,
+                    InmateId = i.InmateId,
+                    PersonId = i.PersonId,
+                    HousingUnitId = i.HousingUnitId,
+                    InmateActive = i.InmateActive,
+                    FacilityId = i.FacilityId,
+                    FacilityAbbr = i.Facility.FacilityAbbr,
+                    HousingDetail = new HousingDetail
+                    {
+                        HousingUnitLocation = i.HousingUnit.HousingUnitLocation,
+                        HousingUnitNumber = i.HousingUnit.HousingUnitNumber,
+                        HousingUnitBedNumber = i.HousingUnit.HousingUnitBedNumber,
+                        HousingUnitBedLocation = i.HousingUnit.HousingUnitBedLocation,
+                        HousingUnitListId = i.HousingUnit.HousingUnitListId
+                    },
+                    PersonDetail = new PersonInfoVm
+                    {
+                        PersonFirstName = i.Person.PersonFirstName,
+                        PersonLastName = i.Person.PersonLastName,
+                        PersonMiddleName = i.Person.PersonMiddleName,
+                        PersonSuffix = i.Person.PersonSuffix,
+                        PersonId = i.PersonId,
+                        PersonDob = i.Person.PersonDob,
+                        InmateClassificationId = i.InmateClassificationId
+                    },
+                    PhotoFilePath = _photos.GetPhotoByCollectionIdentifier(i.Person.Identifiers),
+                }).ToList();
+            inmateList.ForEach(inm =>
+            {
+                inm.IncarcerationId = listIncar.OrderByDescending(o => o.IncarcerationId)
+                    .FirstOrDefault(w => w.InmateId == inm.InmateId)?.IncarcerationId;
+                inm.BookingNo = listIncar.OrderByDescending(o => o.BookingNo)
+                    .FirstOrDefault(w => w.InmateId == inm.InmateId)?.BookingNo;
+            });
+            inmateList = inmateList.OrderBy(i => lstLastInmateId.IndexOf(i.InmateId)).ToList();
+
+            return inmateList;
+        }
+    }
+}

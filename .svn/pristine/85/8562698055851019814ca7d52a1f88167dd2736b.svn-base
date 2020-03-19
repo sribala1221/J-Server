@@ -1,0 +1,659 @@
+using GenerateTables.Models;
+using ServerAPI.ViewModels;
+using System.Collections.Generic;
+using System.Linq;
+
+// ReSharper disable once CheckNamespace
+namespace ServerAPI.Services
+{
+    public class MoneyInmateService : IMoneyInmateService
+    {
+        private readonly AAtims _context;
+        public MoneyInmateService(AAtims context)
+        {
+            _context = context;
+        }
+
+        #region Main  inmate ledger grid
+        // Money -> Inmate -> Ledger
+        public MoneyAccountTransactionDetailVm GetMoneyInmateLedger(int iBankId, int iInmateId)
+        {
+
+            MoneyAccountTransactionDetailVm inmateLedger = new MoneyAccountTransactionDetailVm
+            {
+                PendingDetails = _context.AccountAoReceive
+                    .Where(w => (!w.TransactionVerified.HasValue || w.TransactionVerified == 0) &&
+                                (!w.TransactionVoidFlag.HasValue || w.TransactionVoidFlag == 0) &&
+                                w.InmateId == iInmateId && w.AccountAoFund.FundInmateOnlyFlag == 1 &&
+                                w.AccountAoFund.AccountAoBankId == iBankId)
+                    .Select(s => new MoneyAccountTransactionVm
+                    {
+                        TransactionDate = s.TransactionDate,
+                        TransactionAmount = s.TransactionAmount ?? 0,
+                        TransactionDescription = s.TransactionDescription,
+                        TransactionReceipt = s.TransactionReceipt,
+                        Person = new PersonVm
+                        {
+                            PersonLastName = s.Inmate.Person.PersonLastName,
+                            PersonFirstName = s.Inmate.Person.PersonFirstName,
+                            PersonMiddleName = s.Inmate.Person.PersonMiddleName,
+                            PersonSuffix = s.Inmate.Person.PersonSuffix,
+                            PersonId = s.Inmate.PersonId,
+                            FacilityId = s.Inmate.FacilityId,
+
+                        },
+                        HousingUnit = s.Inmate.HousingUnitId > 0 ? new HousingDetail
+                        {
+                            HousingUnitId = s.Inmate.HousingUnit.HousingUnitId,
+                            HousingUnitLocation = s.Inmate.HousingUnit.HousingUnitLocation,
+                            HousingUnitNumber = s.Inmate.HousingUnit.HousingUnitNumber,
+                            HousingUnitBedNumber = s.Inmate.HousingUnit.HousingUnitBedNumber,
+                            HousingUnitBedLocation = s.Inmate.HousingUnit.HousingUnitBedLocation,
+                        } : new HousingDetail(),
+                        InmateId = s.InmateId ?? 0,
+                        FacilityAbbr = s.Inmate.Facility.FacilityAbbr,
+                        InmateNumber = s.Inmate.InmateNumber,
+                        FundName = s.AccountAoFund.FundName,
+                        BankId = s.AccountAoFund.AccountAoBankId,
+                        FundId = s.AccountAoFund.AccountAoFundId,
+                        DepositoryName = s.AccountAoDepository.DepositoryName,
+                        VoidFlag = s.TransactionVoidFlag == 1,
+                        TransactionId = s.AccountAoReceiveId,
+                        TransactionVerified = s.TransactionVerified == 1,
+                        ReceiveCashFlag = s.TransactionReceiveCashFlag == 1,
+                        TransactionType = s.TransactionType,
+                        BankAccountAbbr = s.AccountAoFund.AccountAoBank.BankAccountAbbr,
+                        ReceiveNumber = s.TransactionReceiveNumber,
+                        ReceiveFrom = s.TransactionReceiveFrom,
+                        ClearDate = s.TransactionVerifiedDate,
+                        BalanceInmate = s.BalanceInmatePending,
+                        BalanceFund = s.BalanceAccountPending,
+                        BalanceAccount = s.BalanceAccountPending,
+                        TransactionNotes = s.TransactionNotes,
+                        VoidDate = s.TransactionVoidDate,
+                        ClearBy = s.TransactionVerifiedBy > 0 ?
+                            new PersonnelVm
+                            {
+                                PersonFirstName =
+                                    s.TransactionVerifiedByNavigation.PersonNavigation.PersonFirstName,
+                                PersonLastName =
+                                    s.TransactionVerifiedByNavigation.PersonNavigation.PersonLastName,
+                                OfficerBadgeNumber = s.TransactionVerifiedByNavigation.OfficerBadgeNum
+                            } : new PersonnelVm(),
+                        VoidBy = s.TransactionVoidBy > 0 ? new PersonnelVm
+                        {
+                            PersonFirstName = s.TransactionVoidByNavigation.PersonNavigation.PersonFirstName,
+                            PersonLastName = s.TransactionVoidByNavigation.PersonNavigation.PersonLastName,
+                            OfficerBadgeNumber = s.TransactionVoidByNavigation.OfficerBadgeNum
+                        } : new PersonnelVm(),
+                        PersonnelBy = s.CreatedBy > 0 ? new PersonnelVm
+                        {
+                            PersonFirstName = s.CreatedByNavigation.PersonNavigation.PersonFirstName,
+                            PersonLastName = s.CreatedByNavigation.PersonNavigation.PersonLastName,
+                            OfficerBadgeNumber = s.CreatedByNavigation.OfficerBadgeNum
+                        } : new PersonnelVm(),
+                        AccountAoDepositoryId = s.AccountAoDepositoryId
+                    }).OrderByDescending(o => o.TransactionId).ToList(),
+                UnpaidDetails = _context.AccountAoFee
+                    .Where(w => (!w.TransactionCleared.HasValue || w.TransactionCleared == 0) &&
+                                (!w.TransactionVoidFlag.HasValue || w.TransactionVoidFlag == 0) &&
+                                w.InmateId == iInmateId && w.AccountAoFund.AccountAoBankId == iBankId)
+                    .Select(s => new MoneyAccountTransactionVm
+                    {
+                        TransactionId = s.AccountAoFeeId,
+                        TransactionDate = s.TransactionDate,
+                        TransactionAmount = s.TransactionFee ?? 0,
+                        TransactionDescription = s.TransactionDescription,
+                        InmateId = s.InmateId ?? 0,
+                        InmateNumber = s.Inmate.InmateNumber,
+                        Person = new PersonVm
+                        {
+                            PersonLastName = s.Inmate.Person.PersonLastName,
+                            PersonFirstName = s.Inmate.Person.PersonFirstName,
+                            PersonMiddleName = s.Inmate.Person.PersonMiddleName,
+                            PersonSuffix = s.Inmate.Person.PersonSuffix,
+                            PersonId = s.Inmate.PersonId,
+                            FacilityId = s.Inmate.FacilityId,
+
+                        },
+                        HousingUnit = s.Inmate.HousingUnitId > 0 ? new HousingDetail
+                        {
+                            HousingUnitId = s.Inmate.HousingUnit.HousingUnitId,
+                            HousingUnitLocation = s.Inmate.HousingUnit.HousingUnitLocation,
+                            HousingUnitNumber = s.Inmate.HousingUnit.HousingUnitNumber,
+                            HousingUnitBedNumber = s.Inmate.HousingUnit.HousingUnitBedNumber,
+                            HousingUnitBedLocation = s.Inmate.HousingUnit.HousingUnitBedLocation,
+                        } : new HousingDetail(),
+                        FundName = s.AccountAoFund.FundName,
+                        FacilityAbbr = s.Inmate.Facility.FacilityAbbr,
+                        FundId = s.AccountAoFund.AccountAoFundId,
+                        BankId = s.AccountAoFund.AccountAoBankId,
+                        TransactionType = s.TransactionType,
+                        BankAccountAbbr = s.AccountAoFund.AccountAoBank.BankAccountAbbr,
+                        TransactionNotes = s.TransactionNotes,
+                        VoidDate = s.TransactionVoidDate,
+                        ClearDate = s.TransactionClearedDate,
+                        BalanceInmate = s.BalanceInmateFee,
+                        BalanceFund = s.BalanceFundFee,
+                        BalanceAccount = s.BalanceAccountFee,
+                        ClearBy = s.TransactionClearedBy > 0 ?
+                            new PersonnelVm
+                            {
+                                PersonFirstName = s.TransactionClearedByNavigation.PersonNavigation.PersonFirstName,
+                                PersonLastName = s.TransactionClearedByNavigation.PersonNavigation.PersonLastName,
+                                OfficerBadgeNumber = s.TransactionClearedByNavigation.OfficerBadgeNum
+                            } : new PersonnelVm(),
+                        VoidBy = s.TransactionVoidBy > 0 ? new PersonnelVm
+                        {
+                            PersonFirstName = s.TransactionVoidByNavigation.PersonNavigation.PersonFirstName,
+                            PersonLastName = s.TransactionVoidByNavigation.PersonNavigation.PersonLastName,
+                            OfficerBadgeNumber = s.TransactionVoidByNavigation.OfficerBadgeNum
+                        } : new PersonnelVm(),
+                        PersonnelBy = s.CreatedBy > 0 ? new PersonnelVm
+                        {
+                            PersonFirstName = s.CreatedByNavigation.PersonNavigation.PersonFirstName,
+                            PersonLastName = s.CreatedByNavigation.PersonNavigation.PersonLastName,
+                            OfficerBadgeNumber = s.CreatedByNavigation.OfficerBadgeNum
+                        } : new PersonnelVm(),
+                        ClearFlag = s.TransactionCleared == 1,
+                        VoidFlag = s.TransactionVoidFlag == 1,
+                    }).OrderByDescending(o => o.TransactionId).ToList(),
+
+                AccountLedgerDetails = _context.AccountAoTransaction
+                    .Where(w =>
+                        w.InmateId == iInmateId && w.AccountAoFund.FundInmateOnlyFlag == 1 &&
+                        w.AccountAoFund.AccountAoBankId == iBankId)
+                    .Select(s => new MoneyAccountTransactionVm
+                    {
+                        AccountAoReceiveId = s.AccountAoReceiveId ?? 0,
+                        TransactionCheckNumber = s.TransactionCheckNumber,
+                        ReceiveCashFlag = s.TransactionReceiveCashFlag == 1,
+                        TransactionDate = s.TransactionDate,
+                        TransactionAmount = s.TransactionAmount,
+                        TransactionDescription = s.TransactionDescription,
+                        TransactionReceipt = s.TransactionReceipt,
+                        InmateId = s.InmateId ?? 0,
+                        InmateNumber = s.Inmate.InmateNumber,
+                        Person = new PersonVm
+                        {
+                            PersonLastName = s.Inmate.Person.PersonLastName,
+                            PersonFirstName = s.Inmate.Person.PersonFirstName,
+                            PersonMiddleName = s.Inmate.Person.PersonMiddleName,
+                            PersonSuffix = s.Inmate.Person.PersonSuffix,
+                            PersonId = s.Inmate.PersonId,
+                            FacilityId = s.Inmate.FacilityId,
+
+                        },
+                        HousingUnit = s.Inmate.HousingUnitId > 0 ? new HousingDetail
+                        {
+                            HousingUnitId = s.Inmate.HousingUnit.HousingUnitId,
+                            HousingUnitLocation = s.Inmate.HousingUnit.HousingUnitLocation,
+                            HousingUnitNumber = s.Inmate.HousingUnit.HousingUnitNumber,
+                            HousingUnitBedNumber = s.Inmate.HousingUnit.HousingUnitBedNumber,
+                            HousingUnitBedLocation = s.Inmate.HousingUnit.HousingUnitBedLocation,
+                        } : new HousingDetail(),
+                        FundName = s.AccountAoFund.FundName,
+                        FacilityAbbr = s.Inmate.Facility.FacilityAbbr,
+                        FundId = s.AccountAoFund.AccountAoFundId,
+                        BankId = s.AccountAoFund.AccountAoBankId,
+                        AccountAoTransactionId = s.AccountAoTransactionId,
+                        BalanceAccount = s.BalanceAccount,
+                        TransactionId = s.AccountAoTransactionId,
+                        VoidFlag = s.TransactionVoidFlag == 1,
+                        DepositoryName = s.AccountAoReceive.AccountAoDepository.DepositoryName,
+                        TransactionType = s.TransactionType,
+                        BankAccountAbbr = s.AccountAoFund.AccountAoBank.BankAccountAbbr,
+                        TransactionNotes = s.TransactionNotes,
+                        VoidDate = s.TransactionVoidDate,
+                        ClearDate = s.TransactionClearedDate,
+                        BalanceInmate = s.BalanceInmate,
+                        BalanceFund = s.BalanceFund,
+                        ClearFlag = s.TransactionCleared == 1,
+                        ReturnCashFlag = s.TransactionReturnCashFlag == 1,
+                        AccountAoFeeId = s.AccountAoFeeId ?? 0,
+                        ReceiveFrom = s.TransactionReceiveFrom,
+                        TransactionPayToTheOrderOf = s.TransactionPayToTheOrderOf,
+                        ReceiveNumber = s.TransactionReceiveNumber,
+                        TransactionDebitMemo = s.TransactionDebitMemo,
+                        TransactionFromId = s.AccountAoTransactionFromId ?? 0,
+                        TransactionToId = s.AccountAoTransactionToId ?? 0,
+                        ClearBy = s.TransactionClearedBy > 0 ?
+                            new PersonnelVm
+                            {
+                                PersonFirstName = s.TransactionClearedByNavigation.PersonNavigation.PersonFirstName,
+                                PersonLastName = s.TransactionClearedByNavigation.PersonNavigation.PersonLastName,
+                                OfficerBadgeNumber = s.TransactionClearedByNavigation.OfficerBadgeNum
+                            } : new PersonnelVm(),
+                        VoidBy = s.TransactionVoidBy > 0 ? new PersonnelVm
+                        {
+                            PersonFirstName = s.TransactionVoidByNavigation.PersonNavigation.PersonFirstName,
+                            PersonLastName = s.TransactionVoidByNavigation.PersonNavigation.PersonLastName,
+                            OfficerBadgeNumber = s.TransactionVoidByNavigation.OfficerBadgeNum
+                        } : new PersonnelVm(),
+                        PersonnelBy = s.CreatedBy > 0 ? new PersonnelVm
+                        {
+                            PersonFirstName = s.CreatedByNavigation.PersonNavigation.PersonFirstName,
+                            PersonLastName = s.CreatedByNavigation.PersonNavigation.PersonLastName,
+                            OfficerBadgeNumber = s.CreatedByNavigation.OfficerBadgeNum
+                        } : new PersonnelVm(),
+                    }).OrderByDescending(o => o.TransactionId).ToList()
+            };
+
+            inmateLedger.AccountLedgerDetails.ForEach(
+                item =>
+                {
+                    if (!item.ReturnCashFlag && (item.TransactionToId > 0 || item.TransactionFromId > 0))
+                    {
+                        item.FromFundName = (item.TransactionFromId > 0) ?
+                                    GetAccountTransactionId(item.TransactionFromId) : GetAccountTransactionId(item.TransactionId);
+                        item.ToFundName = (item.TransactionToId > 0) ?
+                         GetAccountTransactionId(item.TransactionToId) : GetAccountTransactionId(item.TransactionId);
+                    }
+
+                });
+            AccountAoInmate accountAoInmate = _context.AccountAoInmate.
+            SingleOrDefault(s => s.InmateId == iInmateId && s.AccountAoBankId == iBankId);
+            if (accountAoInmate != null)
+            {
+                inmateLedger.PendingBalanceAmount = accountAoInmate.BalanceInmatePending;
+                inmateLedger.UnpaidFeeBalanceAmount = accountAoInmate.BalanceInmateFee;
+                inmateLedger.AccountLedgerBalanceAmount = accountAoInmate.BalanceInmate;
+
+            }
+            return inmateLedger;
+        }
+
+        #endregion
+
+
+
+        public string GetAccountTransactionId(int transId)
+        {
+            string value = string.Empty;
+            if (transId > 0)
+            {
+                AccountAoTransaction aoTransaction = _context.AccountAoTransaction.Find(transId);
+                if (aoTransaction.AccountAoFundId > 0 && aoTransaction.InmateId > 0)
+                {
+                    value = _context.AccountAoFund.Find(aoTransaction.AccountAoFundId).FundName;
+                }
+            }
+            return value;
+        }
+        #region Main inmate deposit grid
+        // load the money inmate deposit grid details
+        public MoneyAccountTransactionDetailVm GetMoneyInmateDeposit(int iBankId, int iInmateId)
+        {
+            IQueryable<AccountAoInmate> accountAoInmate = _context.AccountAoInmate;
+
+            List<MoneyAccountTransactionVm> inmateDeposit = _context.AccountAoReceive.Where(w => w.InmateId == iInmateId && w.AccountAoFund.FundInmateOnlyFlag == 1
+                                                                     && w.AccountAoFund.AccountAoBankId == iBankId)
+                .Select(s => new MoneyAccountTransactionVm
+                {
+                    TransactionDate = s.TransactionDate,
+                    TransactionAmount = s.TransactionAmount ?? 0,
+                    TransactionDescription = s.TransactionDescription,
+                    TransactionReceipt = s.TransactionReceipt,
+                    Person = s.InmateId > 0 ? new PersonVm
+                    {
+                        PersonLastName = s.Inmate.Person.PersonLastName,
+                        PersonFirstName = s.Inmate.Person.PersonFirstName,
+                        PersonMiddleName = s.Inmate.Person.PersonMiddleName,
+                        PersonSuffix = s.Inmate.Person.PersonSuffix,
+                        PersonId = s.Inmate.PersonId,
+                        FacilityId = s.Inmate.FacilityId,
+
+                    } : new PersonVm(),
+                    HousingUnit = s.InmateId > 0 && s.Inmate.HousingUnitId > 0 ? new HousingDetail
+                    {
+                        HousingUnitId = s.Inmate.HousingUnit.HousingUnitId,
+                        HousingUnitLocation = s.Inmate.HousingUnit.HousingUnitLocation,
+                        HousingUnitNumber = s.Inmate.HousingUnit.HousingUnitNumber,
+                        HousingUnitBedNumber = s.Inmate.HousingUnit.HousingUnitBedNumber,
+                        HousingUnitBedLocation = s.Inmate.HousingUnit.HousingUnitBedLocation,
+                    } : new HousingDetail(),
+                    InmateId = s.InmateId ?? 0,
+                    FacilityAbbr = s.Inmate.Facility.FacilityAbbr,
+                    InmateNumber = s.Inmate.InmateNumber,
+                    FundName = s.AccountAoFund.FundName,
+                    BankId = s.AccountAoFund.AccountAoBankId,
+                    FundId = s.AccountAoFund.AccountAoFundId,
+                    DepositoryName = s.AccountAoDepository.DepositoryName,
+                    VoidFlag = s.TransactionVoidFlag == 1,
+                    TransactionId = s.AccountAoReceiveId,
+                    TransactionVerified = s.TransactionVerified == 1,
+                    ReceiveCashFlag = s.TransactionReceiveCashFlag == 1,
+                    TransactionType = s.TransactionType,
+                    BankAccountAbbr = s.AccountAoFund.AccountAoBank.BankAccountAbbr,
+                    ReceiveNumber = s.TransactionReceiveNumber,
+                    ReceiveFrom = s.TransactionReceiveFrom,
+                    ClearDate = s.TransactionVerifiedDate,
+                    BalanceInmate = s.BalanceInmatePending,
+                    BalanceFund = s.BalanceAccountPending,
+                    BalanceAccount = s.BalanceAccountPending,
+                    TransactionNotes = s.TransactionNotes,
+                    VoidDate = s.TransactionVoidDate,
+                    ClearBy = new PersonnelVm
+                    {
+                        PersonFirstName = s.TransactionVerifiedByNavigation.PersonNavigation.PersonFirstName,
+                        PersonLastName = s.TransactionVerifiedByNavigation.PersonNavigation.PersonLastName,
+                        OfficerBadgeNumber = s.TransactionVerifiedByNavigation.OfficerBadgeNum
+                    },
+                    VoidBy = new PersonnelVm
+                    {
+                        PersonFirstName = s.TransactionVoidByNavigation.PersonNavigation.PersonFirstName,
+                        PersonLastName = s.TransactionVoidByNavigation.PersonNavigation.PersonLastName,
+                        OfficerBadgeNumber = s.TransactionVoidByNavigation.OfficerBadgeNum
+                    },
+                    PersonnelBy = new PersonnelVm
+                    {
+                        PersonFirstName = s.CreatedByNavigation.PersonNavigation.PersonFirstName,
+                        PersonLastName = s.CreatedByNavigation.PersonNavigation.PersonLastName,
+                        OfficerBadgeNumber = s.CreatedByNavigation.OfficerBadgeNum
+                    },
+                    AccountAoDepositoryId = s.AccountAoDepositoryId
+                }).OrderByDescending(o => o.TransactionId).ToList();
+
+            MoneyAccountTransactionDetailVm depositDetailsVm = new MoneyAccountTransactionDetailVm
+            {
+                // load the pending details for money inmate deposit.
+                PendingDetails = inmateDeposit.Where(w => !w.TransactionVerified || w.TransactionVerified)
+                    .Select(s => s).ToList(),
+                // load the history details for money inmate deposit.
+                DepositDetails = inmateDeposit.Where(w => w.TransactionVerified).Select(s => s).ToList(),
+
+                PendingBalanceAmount = accountAoInmate.Where(w => inmateDeposit.Any(a => a.InmateId == w.InmateId) && w.AccountAoBankId == iBankId)
+                    .Select(s => s.BalanceInmatePending).FirstOrDefault(),
+
+                DepositBalanceAmount = accountAoInmate.Where(w => inmateDeposit.Any(a => a.InmateId == w.InmateId) && w.AccountAoBankId == iBankId)
+                    .Select(s => s.BalanceInmatePending).FirstOrDefault()
+            };
+
+            return depositDetailsVm;
+        }
+
+        #endregion
+
+        #region Money Inmate Clear
+        // Money -> Inmate -> Clear
+        //Load The Inmate Clear Grid Details
+        public List<MoneyInmateClearVm> MoneyInmateClear(int bankId, int inmateId)
+        {
+            List<MoneyInmateClearVm> moneyInmateClearList = _context.AccountAoTransaction
+                .Where(w => w.TransactionCheckNumber != null && !w.TransactionCleared.HasValue &&
+                            w.AccountAoFund.AccountAoBankId == bankId &&
+                            w.Inmate.AccountAoInmate.Any(a => a.InmateId == inmateId && a.AccountAoBankId == bankId))
+                .Select(s => new MoneyInmateClearVm
+                {
+                    BalanceInmate = s.BalanceInmate,
+                    AccountAoTransactionId = s.AccountAoTransactionId,
+                    TransactionDate = s.TransactionDate,
+                    TransactionAmount = s.TransactionAmount,
+                    TransactionReceipt = s.TransactionReceipt,
+                    TransactionDescription = s.TransactionDescription,
+                    TransactionCheckNumber = s.TransactionCheckNumber,
+                    TransactionVoidFlag = s.TransactionVoidFlag == 1,
+                }).OrderByDescending(o => o.AccountAoTransactionId).ToList();
+            return moneyInmateClearList;
+        }
+        public List<MoneyInmateClearVm> MoneyInmateClearHistory(int bankId, int inmateId)
+        {
+            List<MoneyInmateClearVm> moneyInmateClearHistory = _context.AccountAoTransaction
+                .Where(w => w.TransactionCheckNumber != null && w.TransactionCleared == 1
+                         && w.AccountAoFund.AccountAoBankId == bankId
+                         && w.Inmate.AccountAoInmate.Any(a => a.InmateId == inmateId && a.AccountAoBankId == bankId))
+                .Select(s => new MoneyInmateClearVm
+                {
+                    BalanceInmate = s.BalanceInmate,
+                    AccountAoTransactionId = s.AccountAoTransactionId,
+                    TransactionDate = s.TransactionDate,
+                    TransactionAmount = s.TransactionAmount,
+                    TransactionDescription = s.TransactionDescription,
+                    TransactionReceipt = s.TransactionReceipt,
+                    TransactionCheckNumber = s.TransactionCheckNumber,
+                    TransactionReturnCheckFlag = s.TransactionReturnCheckFlag == 1,
+                    TransactionVoidFlag = s.TransactionVoidFlag == 1,
+                }).OrderByDescending(o => o.AccountAoTransactionId).ToList();
+            return moneyInmateClearHistory;
+        }
+        #endregion
+
+        #region Money > inmate > fee         
+        //This method used to get details of fee history and unpaid details
+        public List<MoneyAccountTransactionVm> GetMoneyInmateFeeDetails(int bankId, int inmateId) =>
+            _context.AccountAoFee
+                .Where(w => w.InmateId == inmateId && w.AccountAoFundId == w.AccountAoFund.AccountAoFundId
+                                                   && w.Inmate.AccountAoInmate.Any(k => k.AccountAoBankId == bankId))
+                .Select(s => new MoneyAccountTransactionVm
+                {
+
+                    TransactionId = s.AccountAoFeeId,
+                    TransactionDate = s.TransactionDate,
+                    TransactionAmount = s.TransactionFee ?? 0,
+                    TransactionDescription = s.TransactionDescription,
+                    InmateId = s.InmateId ?? 0,
+                    InmateNumber = s.Inmate.InmateNumber,
+                    FundName = s.AccountAoFund.FundName,
+                    FacilityAbbr = s.Inmate.Facility.FacilityAbbr,
+                    FundId = s.AccountAoFund.AccountAoFundId,
+                    BankId = s.AccountAoFund.AccountAoBankId,
+                    TransactionType = s.TransactionType,
+                    BankAccountAbbr = s.AccountAoFund.AccountAoBank.BankAccountAbbr,
+                    TransactionNotes = s.TransactionNotes,
+                    VoidDate = s.TransactionVoidDate,
+                    ClearDate = s.TransactionClearedDate,
+                    BalanceInmate = s.BalanceInmateFee,
+                    BalanceFund = s.BalanceFundFee,
+                    BalanceAccount = s.BalanceAccountFee,
+                    ClearFlag = s.TransactionCleared == 1,
+                    VoidFlag = s.TransactionVoidFlag == 1,
+                    Person = new PersonVm
+                    {
+                        PersonLastName = s.Inmate.Person.PersonLastName,
+                        PersonFirstName = s.Inmate.Person.PersonFirstName,
+                        PersonMiddleName = s.Inmate.Person.PersonMiddleName,
+                        PersonSuffix = s.Inmate.Person.PersonSuffix,
+                        PersonId = s.Inmate.PersonId,
+                        FacilityId = s.Inmate.FacilityId,
+                    },
+                    HousingUnit = s.Inmate.HousingUnitId > 0 ? new HousingDetail
+                    {
+                        HousingUnitId = s.Inmate.HousingUnit.HousingUnitId,
+                        HousingUnitLocation = s.Inmate.HousingUnit.HousingUnitLocation,
+                        HousingUnitNumber = s.Inmate.HousingUnit.HousingUnitNumber,
+                        HousingUnitBedNumber = s.Inmate.HousingUnit.HousingUnitBedNumber,
+                        HousingUnitBedLocation = s.Inmate.HousingUnit.HousingUnitBedLocation,
+                    } : new HousingDetail(),
+                    ClearBy = new PersonnelVm
+                    {
+                        PersonFirstName = s.TransactionClearedByNavigation.PersonNavigation.PersonFirstName,
+                        PersonLastName = s.TransactionClearedByNavigation.PersonNavigation.PersonLastName,
+                        OfficerBadgeNumber = s.TransactionClearedByNavigation.OfficerBadgeNum
+                    },
+                    VoidBy = new PersonnelVm
+                    {
+                        PersonFirstName = s.TransactionVoidByNavigation.PersonNavigation.PersonFirstName,
+                        PersonLastName = s.TransactionVoidByNavigation.PersonNavigation.PersonLastName,
+                        OfficerBadgeNumber = s.TransactionVoidByNavigation.OfficerBadgeNum
+                    },
+                    PersonnelBy = new PersonnelVm
+                    {
+                        PersonFirstName = s.CreatedByNavigation.PersonNavigation.PersonFirstName,
+                        PersonLastName = s.CreatedByNavigation.PersonNavigation.PersonLastName,
+                        OfficerBadgeNumber = s.CreatedByNavigation.OfficerBadgeNum
+                    },
+                })
+                .OrderByDescending(o => o.TransactionId).ToList();
+        #endregion
+
+        #region Money > inmate > reference
+        //This method is used to get inmate reference details
+        public MoneyAccountTransactionDetailVm GetMoneyInmateReference(int? bankId, int? inmateId)
+        {
+            MoneyAccountTransactionDetailVm objInmateReference = new MoneyAccountTransactionDetailVm();
+
+            List<MoneyAccountTransactionVm> inmateLedgerAmount = _context.AccountAoTransaction
+             .Where(w => w.AccountAoFund.AccountAoBankId == bankId
+           && (w.AccountAoFund.FundInmateOnlyFlag ?? 0) == 0
+           && w.Inmate.AccountAoInmate.Any(t => t.AccountAoBankId == bankId
+           && w.Inmate.AccountAoInmate.Any(a => a.InmateId == inmateId)))
+           .Select(s => new MoneyAccountTransactionVm
+           {
+               BalanceInmate = s.Inmate.AccountAoInmate.FirstOrDefault().BalanceInmate,
+               AccountAoTransactionId = s.AccountAoTransactionId
+           }).OrderByDescending(o => o.AccountAoTransactionId).ToList();
+
+            List<MoneyAccountTransactionVm> lstMoneyInmateReferenceTrans = new List<MoneyAccountTransactionVm>();
+            List<MoneyAccountTransactionVm> lstMoneyTransactions = new List<MoneyAccountTransactionVm>();
+            var moneyInmateReferenceTrans = _context.AccountAoTransaction.Where(w =>
+            w.AccountAoFund.AccountAoBankId == bankId)
+                .Select(s => new
+                {
+                    TransactionDate = s.TransactionDate,
+                    TransactionAmount = s.TransactionAmount,
+                    TransactionDescription = s.TransactionDescription,
+                    TransactionReceipt = s.TransactionReceipt,
+                    TransactionCheckNumber = s.TransactionCheckNumber,
+                    FundName = s.AccountAoFund.FundName,
+                    VoidFlag = s.TransactionVoidFlag == 1,
+                    InmateId = s.InmateId ?? 0,
+                    AccountAoFeeId = s.AccountAoFeeId ?? 0,
+                    AccountAoTransactionId = s.AccountAoTransactionId,
+                    TransactionFromId = s.AccountAoTransactionFromId ?? 0,
+                    TransactionToId = s.AccountAoTransactionToId ?? 0,
+                    Person = s.InmateId > 0 ? new PersonVm
+                    {
+                        PersonLastName = s.Inmate.Person.PersonLastName,
+                        PersonFirstName = s.Inmate.Person.PersonFirstName,
+                        PersonMiddleName = s.Inmate.Person.PersonMiddleName,
+                        PersonSuffix = s.Inmate.Person.PersonSuffix,
+                        PersonId = s.Inmate.PersonId,
+                        FacilityId = s.Inmate.FacilityId
+                    } : new PersonVm(),
+                    HousingUnit = s.Inmate.HousingUnitId > 0 ? new HousingDetail
+                    {
+                        HousingUnitId = s.Inmate.HousingUnit.HousingUnitId,
+                        HousingUnitLocation = s.Inmate.HousingUnit.HousingUnitLocation,
+                        HousingUnitNumber = s.Inmate.HousingUnit.HousingUnitNumber,
+                        HousingUnitBedNumber = s.Inmate.HousingUnit.HousingUnitBedNumber,
+                        HousingUnitBedLocation = s.Inmate.HousingUnit.HousingUnitBedLocation
+                    } : new HousingDetail(),
+                    FacilityAbbr = s.Inmate.Facility.FacilityAbbr,
+                    FundId = s.AccountAoFund.AccountAoFundId,
+                    BankId = s.AccountAoFund.AccountAoBankId,
+                    BalanceAccount = s.BalanceAccount,
+                    TransactionId = s.AccountAoTransactionId,
+                    DepositoryName = s.AccountAoReceive.AccountAoDepository.DepositoryName,
+                    TransactionType = s.TransactionType,
+                    BankAccountAbbr = s.AccountAoFund.AccountAoBank.BankAccountAbbr,
+                    TransactionNotes = s.TransactionNotes,
+                    VoidDate = s.TransactionVoidDate,
+                    ClearDate = s.TransactionClearedDate,
+                    BalanceInmate = s.BalanceInmate,
+                    BalanceFund = s.BalanceFund,
+                    ClearFlag = s.TransactionCleared == 1,
+                    ReturnCashFlag = s.TransactionReturnCashFlag == 1,
+                    ReceiveFrom = s.TransactionReceiveFrom,
+                    TransactionPayToTheOrderOf = s.TransactionPayToTheOrderOf,
+                    ReceiveNumber = s.TransactionReceiveNumber,
+                    TransactionDebitMemo = s.TransactionDebitMemo,
+                    TransactionClearedBy = s.TransactionClearedBy,
+                    TransactionVoidBy = s.TransactionVoidBy,
+                    CreatedBy = s.CreatedBy,
+                    ClearBy =
+                        new PersonnelVm
+                        {
+                            PersonFirstName = s.TransactionClearedByNavigation.PersonNavigation.PersonFirstName,
+                            PersonLastName = s.TransactionClearedByNavigation.PersonNavigation.PersonLastName,
+                            OfficerBadgeNumber = s.TransactionClearedByNavigation.OfficerBadgeNum
+                        },
+
+                    VoidBy = new PersonnelVm
+                    {
+                        PersonFirstName = s.TransactionVoidByNavigation.PersonNavigation.PersonFirstName,
+                        PersonLastName = s.TransactionVoidByNavigation.PersonNavigation.PersonLastName,
+                        OfficerBadgeNumber = s.TransactionVoidByNavigation.OfficerBadgeNum
+                    },
+                    PersonnelBy = new PersonnelVm
+                    {
+                        PersonFirstName = s.CreatedByNavigation.PersonNavigation.PersonFirstName,
+                        PersonLastName = s.CreatedByNavigation.PersonNavigation.PersonLastName,
+                        OfficerBadgeNumber = s.CreatedByNavigation.OfficerBadgeNum
+                    },
+                    FundInmateOnlyFlag = s.AccountAoFund.FundInmateOnlyFlag == 1
+                }).Distinct().OrderByDescending(a => a.TransactionId);
+            lstMoneyTransactions = moneyInmateReferenceTrans.Select(s => new MoneyAccountTransactionVm
+            {
+                TransactionDate = s.TransactionDate,
+                TransactionAmount = s.TransactionAmount,
+                TransactionDescription = s.TransactionDescription,
+                TransactionReceipt = s.TransactionReceipt,
+                TransactionCheckNumber = s.TransactionCheckNumber,
+                FundName = s.FundName,
+                VoidFlag = s.VoidFlag,
+                InmateId = s.InmateId,
+                AccountAoFeeId = s.AccountAoFeeId,
+                AccountAoTransactionId = s.AccountAoTransactionId,
+                TransactionFromId = s.TransactionFromId,
+                TransactionToId = s.TransactionToId,
+                Person = s.Person,
+                HousingUnit = s.HousingUnit,
+                FacilityAbbr = s.FacilityAbbr,
+                FundId = s.FundId,
+                BankId = s.BankId,
+                BalanceAccount = s.BalanceAccount,
+                TransactionId = s.AccountAoTransactionId,
+                DepositoryName = s.DepositoryName,
+                TransactionType = s.TransactionType,
+                BankAccountAbbr = s.BankAccountAbbr,
+                TransactionNotes = s.TransactionNotes,
+                VoidDate = s.VoidDate,
+                ClearDate = s.ClearDate,
+                BalanceInmate = s.BalanceInmate,
+                BalanceFund = s.BalanceFund,
+                ClearFlag = s.ClearFlag,
+                ReturnCashFlag = s.ReturnCashFlag,
+                ReceiveFrom = s.ReceiveFrom,
+                TransactionPayToTheOrderOf = s.TransactionPayToTheOrderOf,
+                ReceiveNumber = s.ReceiveNumber,
+                TransactionDebitMemo = s.TransactionDebitMemo,
+                TransactionClearedBy = s.TransactionClearedBy,
+                TransactionVoidBy = s.TransactionVoidBy,
+                CreatedBy = s.CreatedBy,
+                ClearBy = s.ClearBy,
+
+                VoidBy = s.VoidBy,
+                PersonnelBy = s.PersonnelBy,
+                FundInmateOnlyFlag = s.FundInmateOnlyFlag,
+            }).ToList();
+            // var moneycount=moneyInmateReferenceTrans.Count();
+            List<MoneyAccountTransactionVm> lstMoneyInmateReference = lstMoneyTransactions.Where(w => w.FundInmateOnlyFlag == false
+              && w.InmateId == inmateId).ToList();
+            lstMoneyInmateReference.ForEach(f =>
+            {
+                if (f.AccountAoFeeId > 0)
+                {
+                    lstMoneyInmateReferenceTrans.AddRange(lstMoneyTransactions.Where(w => w.AccountAoFeeId == f.AccountAoFeeId
+                    && w.AccountAoTransactionId != f.AccountAoTransactionId));
+                }
+                else
+                {
+                    lstMoneyInmateReferenceTrans.AddRange(lstMoneyTransactions.Where(w => (w.TransactionToId == f.AccountAoTransactionId
+                    || w.TransactionFromId == f.AccountAoTransactionId)));
+                }
+            });
+            lstMoneyInmateReferenceTrans.AddRange(lstMoneyInmateReference);
+
+            if (inmateLedgerAmount.Count > 0)
+            {
+                objInmateReference.AccountLedgerBalanceAmount = inmateLedgerAmount.FirstOrDefault().BalanceInmate;
+            }
+            objInmateReference.AccountLedgerDetails = lstMoneyInmateReferenceTrans.Distinct().ToList();
+
+            return objInmateReference;
+        }
+
+        #endregion
+
+    }
+}

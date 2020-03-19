@@ -1,0 +1,10 @@
+using System;
+using System.Collections.Generic;
+using GenerateTables.Models;
+using ScheduleWidget.Common;
+namespace ServerAPI.ViewModels
+{
+    public class ProgramAttendanceCourseVm : ScheduleVm
+    {
+    }
+}

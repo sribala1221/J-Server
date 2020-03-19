@@ -1,0 +1,756 @@
+﻿using System;
+using System.Collections.Generic;
+using Microsoft.AspNetCore.Http;
+using System.Linq;
+using GenerateTables.Models;
+using ServerAPI.ViewModels;
+
+// ReSharper disable once CheckNamespace
+namespace ServerAPI.Services
+{
+    public class MoneyCashService : IMoneyCashService
+    {
+        private readonly AAtims _context;
+        private readonly int _personnelId;
+        private readonly IMoneyBalanceDebitCheck _moneyBalanceDebitCheck;
+        private readonly IMoneyService _moneyService;
+        private int _statusCode;
+        public MoneyCashService(AAtims context, IHttpContextAccessor httpContextAccessor,
+            IMoneyBalanceDebitCheck moneyBalanceDebitCheck,IMoneyService moneyService)
+        {
+            _context = context;
+            _personnelId = Convert.ToInt32(httpContextAccessor.HttpContext.User
+                .FindFirst("personnelId")?.Value);
+            _moneyBalanceDebitCheck = moneyBalanceDebitCheck;
+            _moneyService = moneyService;
+        }
+        // Money->Cash->Ledger
+        #region GetCashDrawerHistory
+        public MoneyCashDrawerDetailVm GetCashDetails(MoneyCashDetailVm searchValue)
+        {
+            MoneyBankVm bankVm = _moneyService.GetBankDetails();
+            List<MoneyCashDetailVm> moneyCashDetail = _context.AccountAoCashDrawer
+                .Where(w => w.AccountAoCashBalance.FacilityId == searchValue.FacilityId &&
+                            w.CashBalanceId == searchValue.DrawerId &&
+                            (searchValue.FromDate != null && searchValue.ToDate != null &&
+                             searchValue.FromDate < w.TransactionDate && searchValue.ToDate > w.TransactionDate))
+                .Select(s =>
+                    new MoneyCashDetailVm
+                    {
+                        DrawerId = s.AccountAoCashDrawerId,
+                        DrawerName = s.AccountAoCashBalance.Name,
+                        FromDrawerId = s.AccountAoCashDrawerFromId ?? 0,
+                        ToDrawerId = s.AccountAoCashDrawerToId ?? 0,
+                        Receipt = s.AccountAoTransactionId ?? 0,
+                        FromDate = s.TransactionDate,
+                        Amount = s.TransactionAmount,
+                        InmateId = s.InmateId ?? 0,
+                        Description = s.TransactionDescription,
+                        Balance = s.BalanceCashDrawer,
+                        PersonnelId = s.TransactionOfficerId,
+                        VoidFlag = s.TransactionVoidFlag == 1,
+                        TransactionFromId = s.AccountAoTransaction.AccountAoTransactionFromId ?? 0,
+                        TransactionToId = s.AccountAoTransaction.AccountAoTransactionToId ?? 0,
+                        Personnel = new PersonnelVm
+                        {
+                            PersonFirstName = s.TransactionOfficer.PersonNavigation.PersonFirstName,
+                            PersonLastName = s.TransactionOfficer.PersonNavigation.PersonLastName,
+                            OfficerBadgeNumber = s.TransactionOfficer.OfficerBadgeNumber,
+                            PersonId = s.TransactionOfficer.PersonId
+                        },
+                        VoidPersonnel= new PersonnelVm
+                        {
+                            PersonFirstName = s.TransactionVoidByNavigation.PersonNavigation.PersonFirstName,
+                            PersonLastName = s.TransactionVoidByNavigation.PersonNavigation.PersonLastName,
+                            OfficerBadgeNumber = s.TransactionVoidByNavigation.OfficerBadgeNumber
+                        },
+                        BankId = bankVm.BankId,
+                        BankName = bankVm.BankName,
+                        TransactionType = s.TransactionType,
+                        TransactionNotes=s.TransactionNotes
+                    }).ToList();
+            int[] inmateId = moneyCashDetail.Select(s => s.InmateId).ToArray();
+            List<PersonInfoVm> lstInmate = _context.Inmate.Where(s => inmateId.Any(a => a == s.InmateId)).Select(s => new PersonInfoVm
+            {
+                PersonId = s.PersonId,
+                InmateId = s.InmateId,
+                InmateNumber = s.InmateNumber,
+                PersonFirstName = s.Person.PersonFirstName,
+                PersonLastName = s.Person.PersonLastName,
+                PersonMiddleName = s.Person.PersonMiddleName
+            }).ToList();
+            moneyCashDetail.ForEach(item =>
+            {
+                item.Inmate = lstInmate.FirstOrDefault(s => s.InmateId == item.InmateId);
+            });
+            MoneyCashDrawerDetailVm moneyCashDrawer = new MoneyCashDrawerDetailVm
+            {
+                MoneyCashDetail = moneyCashDetail,
+                CashDrawerDetail = MoneyGetCashDrawer(searchValue.FacilityId)
+            };
+            return moneyCashDrawer;
+        }
+
+        #endregion
+
+        #region GetCashDrawers
+        public List<MoneyCashBalanceVm> MoneyGetCashDrawer(int facilityId)
+        {
+            List<MoneyCashBalanceVm> cashDrawerList = _context.AccountAoCashBalance.Where(w =>
+                w.FacilityId == facilityId && !w.InactiveFlag).Select(s => new MoneyCashBalanceVm
+            {
+                MoneyCashBalanceId = s.AccountAoCashBalanceId,
+                CashDrawerName = s.Name,
+                BalanceAmount = s.CurrentBalance ?? default,
+                MinimumBalance = s.MinimumBalance ?? default,
+                IsVault = s.VaultFlag
+            }).ToList();
+            return cashDrawerList;
+        }
+
+
+        #endregion
+
+        #region GetWelfareFund
+        public MoneyAccountDetailVm GetAccountDetail(int facilityId)
+        {
+            MoneyAccountDetailVm moneyAccountDetail = new MoneyAccountDetailVm();
+            MoneyBankVm accountDetail = _moneyService.GetBankDetails();
+            List<MoneyCashBalanceVm> cashDrawer = MoneyGetCashDrawer(facilityId);
+            if (accountDetail != null)
+            {
+                MoneyAccountFundVm accountAoFund = _context.AccountAoFund.Where(s =>
+                    s.AccountAoBankId == accountDetail.BankId && s.FundWelfareOnlyFlag == 1 &&
+                    (!s.Inactive.HasValue || s.Inactive == 0)).Select(
+                    s => new MoneyAccountFundVm
+                    {
+                        AccountAoFundId = s.AccountAoFundId,
+                        FundName = s.FundName,
+                        BalanceFund = s.BalanceFund ?? default,
+                        BalanceFundPending = s.BalanceFundPending ?? default,
+                        BalanceFundFee = s.BalanceFundFee ?? default
+                    }).FirstOrDefault();
+                moneyAccountDetail = new MoneyAccountDetailVm
+                {
+                    MoneyBankDetail = accountDetail,
+                    CashDrawerDetail = cashDrawer,
+                    AccountAoFundDetail = accountAoFund
+                };
+            }
+
+            return moneyAccountDetail;
+        }
+        #endregion
+
+        #region Deposit
+
+        public int DepositTransaction(CashTransactionDetailVm detail)
+        {
+            AccountAoCashBalance aoCashBalance = UpdateBalance(detail.DrawerId, detail.FacilityId, detail.Amount);
+            AccountAoCashDrawer drawer = new AccountAoCashDrawer
+            {
+                BalanceCashDrawer = aoCashBalance.CurrentBalance ?? default,
+                TransactionAmount = detail.Amount,
+                TransactionDate = DateTime.Now,
+                TransactionDescription = detail.Description,
+                TransactionNotes = detail.Notes,
+                TransactionOfficerId = _personnelId,
+                CashBalanceId = detail.DrawerId,
+                TransactionType = MoneyTransactionType.CREDIT.ToString(),
+                Currency01Count = detail.Currency.Currency01Count,
+                Currency05Count = detail.Currency.Currency05Count,
+                Currency10Count = detail.Currency.Currency10Count,
+                Currency25Count = detail.Currency.Currency25Count,
+                Currency50Count = detail.Currency.Currency50Count,
+                Currency100Count = detail.Currency.Currency100Count,
+                Currency200Count = detail.Currency.Currency200Count,
+                Currency500Count = detail.Currency.Currency500Count,
+                Currency1000Count = detail.Currency.Currency1000Count,
+                Currency2000Count = detail.Currency.Currency2000Count,
+                Currency5000Count = detail.Currency.Currency5000Count,
+                Currency10000Count = detail.Currency.Currency10000Count,
+                CreateDate = DateTime.Now,
+                CreatedBy = _personnelId,
+                UpdateDate = DateTime.Now,
+                UpdatedBy = _personnelId
+            };
+            _context.AccountAoCashDrawer.Add(drawer);
+            _context.SaveChanges();
+            if (drawer.AccountAoCashDrawerId > 0)
+            {
+                _statusCode = 1;
+            }
+            return _statusCode;
+        }
+
+        #endregion
+
+        #region Withdraw
+
+        public int WithdrawTransaction(CashTransactionDetailVm detail)
+        {
+            _statusCode = CheckBalance(detail.DrawerId, detail.FacilityId, detail.Amount);
+            if (_statusCode == 0) return _statusCode;
+            AccountAoCashBalance aoCashBalance =
+                _context.AccountAoCashBalance.First(s =>
+                    s.AccountAoCashBalanceId == detail.DrawerId && s.FacilityId == detail.FacilityId);
+            AccountAoCashDrawer drawer = new AccountAoCashDrawer
+            {
+                BalanceCashDrawer = aoCashBalance.CurrentBalance ?? default,
+                TransactionAmount = -1 * Math.Abs(detail.Amount),
+                TransactionDate = DateTime.Now,
+                TransactionDescription = detail.Description,
+                TransactionNotes = detail.Notes,
+                TransactionOfficerId = _personnelId,
+                TransactionType = MoneyTransactionType.DEBIT.ToString(),
+                CashBalanceId = detail.DrawerId,
+                CreateDate = DateTime.Now,
+                CreatedBy = _personnelId,
+                UpdateDate = DateTime.Now,
+                UpdatedBy = _personnelId,
+            };
+            _context.AccountAoCashDrawer.Add(drawer);
+            _context.SaveChanges();
+            int id = drawer.AccountAoCashDrawerId;
+            if (id > 0)
+            {
+                _statusCode = 1;
+            }
+
+            return _statusCode;
+        }
+
+        #endregion
+
+        #region TransferBankToCash
+
+        public int BankToCashTransaction(CashTransactionDetailVm detail)
+        {
+            MoneyTransactionCalculateVm balanceParam = new MoneyTransactionCalculateVm
+            {
+                TransactionAmount = detail.Amount,
+                BankId = detail.BankId,
+                FundId = detail.FundId,
+                TransactionType = MoneyTransactionType.DEBIT,
+                Table = MoneyTransactionTable.ACCOUNTAO_TRANSACTION
+            };
+            MoneyBalanceVm balanceDetails =
+                _moneyBalanceDebitCheck.MoneyTransactionCalculateBalance(balanceParam);
+            balanceDetails.Table = MoneyTransactionTable.ACCOUNTAO_TRANSACTION;
+            balanceDetails.BankId = detail.BankId;
+            balanceDetails.FundId = detail.FundId;
+            _moneyBalanceDebitCheck.MoneyUpdateBalance(balanceDetails);
+            AccountAoTransaction aoTransaction = new AccountAoTransaction
+            {
+                AccountAoFundId = detail.FundId,
+                TransactionType = MoneyTransactionType.DEBIT.ToString(),
+                TransactionDescription = detail.Description,
+                TransactionAmount = -1 * Math.Abs(detail.Amount),
+                BalanceFund = balanceDetails.FundBalance,
+                BalanceAccount = balanceDetails.BankBalance,
+                CreateDate = DateTime.Now,
+                CreatedBy = _personnelId,
+                TransactionDate = DateTime.Now,
+                TransactionOfficerId = _personnelId,
+                UpdateDate = DateTime.Now,
+                UpdatedBy = _personnelId,
+                TransactionNotes = detail.Notes
+            };
+            _context.AccountAoTransaction.Add(aoTransaction);
+            _context.SaveChanges();
+
+            AccountAoCashBalance aoCashBalance= UpdateBalance(detail.DrawerId, detail.FacilityId, detail.Amount);
+
+            AccountAoCashDrawer drawer = new AccountAoCashDrawer
+            {
+                BalanceCashDrawer = aoCashBalance.CurrentBalance ?? default,
+                TransactionAmount = detail.Amount,
+                TransactionDate = DateTime.Now,
+                TransactionDescription = detail.Description,
+                TransactionNotes = detail.Notes,
+                TransactionOfficerId = _personnelId,
+                AccountAoTransactionId = aoTransaction.AccountAoTransactionId,
+                TransactionType = MoneyTransactionType.CREDIT.ToString(),
+                CashBalanceId = detail.DrawerId,
+                CreateDate = DateTime.Now,
+                CreatedBy = _personnelId,
+                UpdateDate = DateTime.Now,
+                UpdatedBy = _personnelId
+            };
+            _context.AccountAoCashDrawer.Add(drawer);
+            _context.SaveChanges();
+            if (drawer.AccountAoCashDrawerId > 0 && aoCashBalance.AccountAoCashBalanceId > 0 
+              && aoTransaction.AccountAoTransactionId > 0)
+            {
+                _statusCode = 1;
+            }
+
+            return _statusCode;
+        }
+
+        #endregion
+
+        #region TransferCashToBank
+
+        public int CashToBankTransaction(CashTransactionDetailVm detail)
+        {
+            MoneyTransactionCalculateVm balanceParam = new MoneyTransactionCalculateVm
+            {
+                TransactionAmount = detail.Amount,
+                BankId = detail.BankId,
+                FundId = detail.FundId,
+                TransactionType = MoneyTransactionType.CREDIT,
+                Table = MoneyTransactionTable.ACCOUNTAO_TRANSACTION
+            };
+            MoneyBalanceVm balanceDetails =
+                _moneyBalanceDebitCheck.MoneyTransactionCalculateBalance(balanceParam);
+            balanceDetails.Table = MoneyTransactionTable.ACCOUNTAO_TRANSACTION;
+            balanceDetails.BankId = detail.BankId;
+            balanceDetails.FundId = detail.FundId;
+            _moneyBalanceDebitCheck.MoneyUpdateBalance(balanceDetails);
+
+            AccountAoTransaction aoTransaction = new AccountAoTransaction
+            {
+                AccountAoFundId = detail.FundId,
+                TransactionType = MoneyTransactionType.CREDIT.ToString(),
+                TransactionDescription = detail.Description,
+                TransactionAmount = detail.Amount,
+                BalanceFund = balanceDetails.FundBalance,
+                BalanceAccount = balanceDetails.BankBalance,
+                CreateDate = DateTime.Now,
+                CreatedBy = _personnelId,
+                TransactionDate = DateTime.Now,
+                TransactionOfficerId = _personnelId,
+                UpdateDate = DateTime.Now,
+                UpdatedBy = _personnelId,
+                TransactionNotes = detail.Notes
+            };
+            _context.AccountAoTransaction.Add(aoTransaction);
+            _context.SaveChanges();
+            
+            _statusCode = CheckBalance(detail.DrawerId, detail.FacilityId, detail.Amount);
+            if (_statusCode == 0) return _statusCode;
+            AccountAoCashBalance aoCashBalance =
+                _context.AccountAoCashBalance.First(s =>
+                    s.AccountAoCashBalanceId == detail.DrawerId && s.FacilityId == detail.FacilityId);
+            AccountAoCashDrawer drawer = new AccountAoCashDrawer
+            {
+                BalanceCashDrawer = aoCashBalance.CurrentBalance ?? default,
+                TransactionAmount = -1 * Math.Abs(detail.Amount),
+                TransactionDate = DateTime.Now,
+                TransactionDescription = detail.Description,
+                TransactionNotes = detail.Notes,
+                TransactionOfficerId = _personnelId,
+                TransactionType = MoneyTransactionType.DEBIT.ToString(),
+                AccountAoTransactionId = aoTransaction.AccountAoTransactionId,
+                CashBalanceId = detail.DrawerId,
+                CreateDate = DateTime.Now,
+                CreatedBy = _personnelId,
+                UpdateDate = DateTime.Now,
+                UpdatedBy = _personnelId
+            };
+            _context.AccountAoCashDrawer.Add(drawer);
+            _context.SaveChanges();
+            if (drawer.AccountAoCashDrawerId > 0 && aoCashBalance.AccountAoCashBalanceId > 0 &&
+                aoTransaction.AccountAoTransactionId > 0)
+            {
+                _statusCode = 1;
+            }
+            return _statusCode;
+        }
+
+        #endregion
+
+        #region TransferVaultToCash
+
+        public int VaultToCashTransaction(CashTransactionDetailVm detail)
+        {
+            //debit vault
+            _statusCode = CheckBalance(detail.VaultId, detail.FacilityId, detail.Amount);
+            if (_statusCode == 0) return _statusCode;
+            AccountAoCashBalance aoCashBalance =
+                _context.AccountAoCashBalance.First(s =>
+                    s.AccountAoCashBalanceId == detail.VaultId && s.FacilityId == detail.FacilityId);
+            AccountAoCashDrawer vault = new AccountAoCashDrawer
+            {
+                BalanceCashDrawer = aoCashBalance.CurrentBalance ?? default,
+                TransactionAmount = -1 * Math.Abs(detail.Amount),
+                TransactionDate = DateTime.Now,
+                TransactionDescription = detail.Description,
+                TransactionNotes = detail.Notes,
+                TransactionOfficerId = _personnelId,
+                TransactionType = MoneyTransactionType.DEBIT.ToString(),
+                CashBalanceId = aoCashBalance.AccountAoCashBalanceId,
+                CreateDate = DateTime.Now,
+                CreatedBy = _personnelId,
+                UpdateDate = DateTime.Now,
+                UpdatedBy = _personnelId
+            };
+            _context.AccountAoCashDrawer.Add(vault);
+            _context.SaveChanges();
+
+            //credit cash
+          
+            AccountAoCashBalance drawerBalance = UpdateBalance(detail.DrawerId, detail.FacilityId, detail.Amount);
+
+            AccountAoCashDrawer drawer = new AccountAoCashDrawer
+            {
+                BalanceCashDrawer = drawerBalance.CurrentBalance ?? default,
+                TransactionAmount = detail.Amount,
+                TransactionDate = DateTime.Now,
+                TransactionDescription = detail.Description,
+                TransactionNotes = detail.Notes,
+                TransactionOfficerId = _personnelId,
+                TransactionType = MoneyTransactionType.CREDIT.ToString(),
+                AccountAoCashDrawerFromId = vault.AccountAoCashDrawerId,
+                CashBalanceId = drawerBalance.AccountAoCashBalanceId,
+                CreateDate = DateTime.Now,
+                CreatedBy = _personnelId,
+                UpdateDate = DateTime.Now,
+                UpdatedBy = _personnelId
+            };
+            _context.AccountAoCashDrawer.Add(drawer);
+            _context.SaveChanges();
+            vault.AccountAoCashDrawerToId = drawer.AccountAoCashDrawerId;
+            _context.SaveChanges();
+            if (vault.AccountAoCashDrawerId > 0 && aoCashBalance.AccountAoCashBalanceId > 0 &&
+                drawer.AccountAoCashDrawerId > 0)
+            {
+                _statusCode = 1;
+            }
+
+            return _statusCode;
+        }
+
+        #endregion
+
+        #region TransferCashToVault
+
+        public int CashToVaultTransaction(CashTransactionDetailVm detail)
+        {
+            //debit cash
+            _statusCode = CheckBalance(detail.VaultId, detail.FacilityId, detail.Amount);
+            if (_statusCode == 0) return _statusCode;
+            AccountAoCashBalance aoCashBalance =
+                _context.AccountAoCashBalance.First(s =>
+                    s.AccountAoCashBalanceId == detail.VaultId && s.FacilityId == detail.FacilityId);
+            AccountAoCashDrawer vault = new AccountAoCashDrawer
+            {
+                BalanceCashDrawer = aoCashBalance.CurrentBalance ?? default,
+                TransactionAmount = -1 * Math.Abs(detail.Amount),
+                TransactionDate = DateTime.Now,
+                TransactionDescription = detail.Description,
+                TransactionNotes = detail.Notes,
+                TransactionOfficerId = _personnelId,
+                TransactionType = MoneyTransactionType.DEBIT.ToString(),
+                CashBalanceId = aoCashBalance.AccountAoCashBalanceId,
+                AccountAoCashDrawerToId = detail.DrawerId,
+                CreateDate = DateTime.Now,
+                CreatedBy = _personnelId,
+                UpdateDate = DateTime.Now,
+                UpdatedBy = _personnelId
+            };
+            _context.AccountAoCashDrawer.Add(vault);
+            _context.SaveChanges();
+
+            //credit vault
+          
+            AccountAoCashBalance drawerBalance = UpdateBalance(detail.DrawerId, detail.FacilityId, detail.Amount);
+
+            AccountAoCashDrawer drawer = new AccountAoCashDrawer
+            {
+                BalanceCashDrawer = drawerBalance.CurrentBalance ?? default,
+                TransactionAmount = detail.Amount,
+                TransactionDate = DateTime.Now,
+                TransactionDescription = detail.Description,
+                TransactionNotes = detail.Notes,
+                TransactionOfficerId = _personnelId,
+                TransactionType = MoneyTransactionType.CREDIT.ToString(),
+                CashBalanceId = drawerBalance.AccountAoCashBalanceId,
+                AccountAoCashDrawerFromId = vault.AccountAoCashDrawerId,
+                CreateDate = DateTime.Now,
+                CreatedBy = _personnelId,
+                UpdateDate = DateTime.Now,
+                UpdatedBy = _personnelId
+            };
+            _context.AccountAoCashDrawer.Add(drawer);
+            _context.SaveChanges();
+            vault.AccountAoCashDrawerToId = drawer.AccountAoCashDrawerId;
+            _context.SaveChanges();
+            if (vault.AccountAoCashDrawerId > 0 && aoCashBalance.AccountAoCashBalanceId > 0 &&
+                drawer.AccountAoCashDrawerId > 0)
+            {
+                _statusCode = 1;
+            }
+
+            return _statusCode;
+        }
+
+        #endregion
+
+        #region TransferCashToCash
+
+        public int CashToCashTransaction(CashTransactionDetailVm detail)
+        {
+            //debit cash
+            _statusCode = CheckBalance(detail.VaultId, detail.FacilityId, detail.Amount);
+            if (_statusCode == 0) return _statusCode;
+            AccountAoCashBalance aoCashBalance =
+                _context.AccountAoCashBalance.First(s =>
+                    s.AccountAoCashBalanceId == detail.VaultId && s.FacilityId == detail.FacilityId);
+            AccountAoCashDrawer vault = new AccountAoCashDrawer
+            {
+                BalanceCashDrawer = aoCashBalance.CurrentBalance ?? default,
+                TransactionAmount = -1 * Math.Abs(detail.Amount),
+                TransactionDate = DateTime.Now,
+                TransactionDescription = detail.Description,
+                TransactionNotes = detail.Notes,
+                TransactionOfficerId = _personnelId,
+                TransactionType = MoneyTransactionType.DEBIT.ToString(),
+                CashBalanceId = aoCashBalance.AccountAoCashBalanceId,
+                AccountAoCashDrawerToId = detail.DrawerId,
+                CreateDate = DateTime.Now,
+                CreatedBy = _personnelId,
+                UpdateDate = DateTime.Now,
+                UpdatedBy = _personnelId
+            };
+            _context.AccountAoCashDrawer.Add(vault);
+            _context.SaveChanges();
+
+            //credit cash
+            AccountAoCashBalance drawerBalance = UpdateBalance(detail.DrawerId, detail.FacilityId, detail.Amount);
+
+            AccountAoCashDrawer drawer = new AccountAoCashDrawer
+            {
+                BalanceCashDrawer = drawerBalance.CurrentBalance ?? default,
+                TransactionAmount = detail.Amount,
+                TransactionDate = DateTime.Now,
+                TransactionDescription = detail.Description,
+                TransactionNotes = detail.Notes,
+                TransactionOfficerId = _personnelId,
+                TransactionType = MoneyTransactionType.CREDIT.ToString(),
+                AccountAoCashDrawerFromId = vault.AccountAoCashDrawerId,
+                CashBalanceId = drawerBalance.AccountAoCashBalanceId,
+                CreateDate = DateTime.Now,
+                CreatedBy = _personnelId,
+                UpdateDate = DateTime.Now,
+                UpdatedBy = _personnelId
+            };
+            _context.AccountAoCashDrawer.Add(drawer);
+            _context.SaveChanges();
+            vault.AccountAoCashDrawerToId = drawer.AccountAoCashDrawerId;
+            _context.SaveChanges();
+            if (vault.AccountAoCashDrawerId > 0 && aoCashBalance.AccountAoCashBalanceId > 0 &&
+                drawer.AccountAoCashDrawerId > 0)
+            {
+                _statusCode = 1;
+            }
+
+            return _statusCode;
+        }
+
+        #endregion
+
+        #region Journal
+        public int Journal(CashTransactionDetailVm detail)
+        {
+            //debit or credit cash
+            AccountAoCashBalance aoCashBalance = UpdateBalance(detail.DrawerId, detail.FacilityId, detail.Amount);
+            AccountAoCashDrawer drawer = new AccountAoCashDrawer
+            {
+                BalanceCashDrawer = aoCashBalance.CurrentBalance ?? default,
+                TransactionAmount = detail.Amount,
+                TransactionDate = DateTime.Now,
+                TransactionDescription = detail.Description,
+                TransactionNotes = detail.Notes,
+                TransactionOfficerId = _personnelId,
+                TransactionType = detail.Amount > 0 ? MoneyTransactionType.CREDIT.ToString() :
+                    MoneyTransactionType.DEBIT.ToString(),
+                CashBalanceId = aoCashBalance.AccountAoCashBalanceId,
+                CreateDate = DateTime.Now,
+                CreatedBy = _personnelId,
+                UpdateDate = DateTime.Now,
+                UpdatedBy = _personnelId
+            };
+            _context.AccountAoCashDrawer.Add(drawer);
+            _context.SaveChanges();
+            if (drawer.AccountAoCashDrawerId > 0 && aoCashBalance.AccountAoCashBalanceId > 0)
+            {
+                return _statusCode = 1;
+            }
+
+            return _statusCode;
+        }
+        #endregion
+
+        #region Get Transaction Detail
+        public MoneyAccountTransactionVm GetTransactionDetail(int transId)
+        {
+            MoneyAccountTransactionVm moneyAccountDetail = _context.AccountAoTransaction
+                .Where(s => s.AccountAoTransactionId == transId).Select(s => new MoneyAccountTransactionVm
+                {
+                    AccountAoReceiveId = s.AccountAoReceiveId ?? 0,
+                    TransactionReceiveCashFlag = s.TransactionReceiveCashFlag == 1,
+                    TransactionReceipt = s.TransactionReceipt,
+                    FundName = s.AccountAoFund.FundName,
+                    VoidBy = new PersonnelVm
+                    {
+                        PersonFirstName = s.TransactionVoidByNavigation.PersonNavigation.PersonFirstName,
+                        PersonLastName = s.TransactionVoidByNavigation.PersonNavigation.PersonLastName,
+                        OfficerBadgeNumber = s.TransactionVoidByNavigation.OfficerBadgeNum
+                    },
+                    ClearBy = new PersonnelVm
+                    {
+                        PersonFirstName = s.TransactionClearedByNavigation.PersonNavigation.PersonFirstName,
+                        PersonLastName = s.TransactionClearedByNavigation.PersonNavigation.PersonLastName,
+                        OfficerBadgeNumber = s.TransactionClearedByNavigation.OfficerBadgeNum
+                    },
+                    Person = s.InmateId > 0 ? new PersonVm
+                    {
+                        PersonLastName = s.Inmate.Person.PersonLastName,
+                        PersonFirstName = s.Inmate.Person.PersonFirstName,
+                        PersonMiddleName = s.Inmate.Person.PersonMiddleName,
+                        PersonSuffix = s.Inmate.Person.PersonSuffix,
+                        PersonId = s.Inmate.PersonId,
+                        FacilityId = s.Inmate.FacilityId,
+
+                    } : new PersonVm(),
+                    BalanceAccount = s.BalanceAccount,
+                    ClearDate = s.TransactionClearedDate,
+                    ClearedFlag = s.TransactionCleared == 1,
+                    TransactionPayToTheOrderOf = s.TransactionPayToTheOrderOf,
+                    TransactionNotes = s.TransactionNotes,
+                    TransactionCheckNumber = s.TransactionCheckNumber,
+                    DepositoryName = s.AccountAoReceive.AccountAoDepository.DepositoryName,
+                    DMemo = s.TransactionDebitMemo,
+                    InmateId = s.InmateId ?? 0,
+                    BalInmate = s.BalanceInmate,
+                    BalFund = s.BalanceFund,
+                    ReceiveFrom = s.TransactionReceiveFrom,
+                    ReceiveNo = s.TransactionReceiveNumber,
+                    FacilityAbbr = s.InmateId > 0 && s.Inmate.HousingUnitId > 0 ?
+                        s.Inmate.Facility.FacilityAbbr : default
+                }).FirstOrDefault();
+            return moneyAccountDetail;
+        }
+
+        #endregion
+        private int CheckBalance(int id,int facilityId,decimal amount)
+        {
+            _statusCode = 1;
+            AccountAoCashBalance aoCashBalance =
+                _context.AccountAoCashBalance.First(s =>
+                    s.AccountAoCashBalanceId == id && s.FacilityId == facilityId);
+            if (!aoCashBalance.CurrentBalance.HasValue || aoCashBalance.CurrentBalance == 0 ||
+                aoCashBalance.CurrentBalance < amount)
+            {
+                return _statusCode = 0;
+            }
+            aoCashBalance.CurrentBalance = aoCashBalance.CurrentBalance != null
+                ? aoCashBalance.CurrentBalance - amount
+                : amount;
+            aoCashBalance.UpdateDate = DateTime.Now;
+            aoCashBalance.UpdateBy = _personnelId;
+            _context.SaveChanges();
+            return _statusCode;
+        }
+        private AccountAoCashBalance UpdateBalance(int id, int facilityId, decimal amount)
+        {
+            AccountAoCashBalance aoCashBalance = _context.AccountAoCashBalance.First(s =>
+                s.AccountAoCashBalanceId == id && s.FacilityId == facilityId);
+            aoCashBalance.CurrentBalance = aoCashBalance.CurrentBalance != null
+                ? aoCashBalance.CurrentBalance + amount
+                : amount;
+            aoCashBalance.UpdateDate = DateTime.Now;
+            aoCashBalance.UpdateBy = _personnelId;
+            _context.SaveChanges();
+            return aoCashBalance;
+        }
+        // Money->Cash->Verify
+        #region  Cash verify insert
+        public int MoneyCashInsert(MoneyCashInsertVm param)
+        {
+            AccountAoCashVerify obj = new AccountAoCashVerify();
+            if(param.VerifyId > 0)
+            {
+                obj = _context.AccountAoCashVerify.Find(param.VerifyId);
+            }
+                obj._1c = param.Cent1;
+                obj._5c = param.Cent5;
+                obj._10c = param.Cent10;
+                obj._25c = param.Cent25;
+                obj._50c = param.Cent50;
+                obj._1Coin = param.Dollar1Coin;
+                obj._1Bill = param.Dollar1Bill;
+                obj._2 = param.Dollar2;
+                obj._5 = param.Dollar5;
+                obj._10 = param.Dollar10;
+                obj._20 = param.Dollar20;
+                obj._50 = param.Dollar50;
+                obj._100 = param.Dollar100;
+                obj._500 = param.Dollar500;
+                obj._1000 = param.Dollar1000;
+                obj.UpdateDate = DateTime.Now;
+                obj.UpdatedBy = _personnelId;
+                obj.CashCount = param.CashCount;
+                obj.CashBalance = param.CashBalance;
+                obj.AccountAoBankId = param.BankId;
+                obj.CashBalanceId = param.CashBalanceId;
+                obj.FacilityId = param.FacilityId;
+            if(param.VerifyId == 0)
+            {
+                obj.CreateDate = DateTime.Now;
+                obj.CreatedBy = _personnelId;
+                _context.AccountAoCashVerify.Add(obj);
+            }
+            return _context.SaveChanges();
+        }
+        #endregion
+
+        #region Cash verify grid
+        public List<MoneyCashInsertVm> MoneyCashVerify(int bankId, int cashBalanceId)
+        {
+            List<MoneyCashInsertVm> response = _context.AccountAoCashVerify
+            .Where(w=> w.AccountAoBankId == bankId && w.CashBalanceId == cashBalanceId)
+            .Select(s=> new MoneyCashInsertVm{
+                VerifyId = s.AccountAoCashVerifyId,
+                BankId = s.AccountAoBankId,
+                FacilityId = s.FacilityId,
+                CashBalanceName = s.AccountAoCashBalance.Name,
+                CashBalanceId = s.CashBalanceId,
+                CreateDateTime = s.CreateDate,
+                CashCount = s.CashCount ?? 0,
+                CashBalance = s.CashBalance ?? 0,
+                Difference = s.CashCount - s.CashBalance,
+                Cent1 = s._1c ?? 0,
+                Cent5 = s._5c ?? 0,
+                Cent10 = s._10c ?? 0,
+                Cent25 = s._25c ?? 0,
+                Cent50 = s._50c ?? 0,
+                Dollar1Coin = s._1Coin ?? 0,
+                Dollar1Bill = s._1Bill ?? 0,
+                Dollar2 = s._2 ?? 0,
+                Dollar5 = s._5 ?? 0,
+                Dollar10 = s._10 ?? 0,
+                Dollar20  = s._20 ?? 0,
+                Dollar50 = s._50 ?? 0,
+                Dollar100 = s._100 ?? 0,
+                Dollar500 = s._500 ?? 0,
+                Dollar1000 = s._1000 ?? 0,
+                Personnel = new PersonnelVm{
+                    PersonLastName = s.CreatedByNavigation.PersonNavigation.PersonLastName,
+                    PersonFirstName = s.CreatedByNavigation.PersonNavigation.PersonFirstName,
+                    PersonMiddleName = s.CreatedByNavigation.PersonNavigation.PersonMiddleName,
+                    OfficerBadgeNumber = s.CreatedByNavigation.OfficerBadgeNum,
+                    PersonId = s.CreatedByNavigation.PersonNavigation.PersonId
+                }
+            }).OrderByDescending(o=>o.VerifyId).ToList();
+            return response;
+        }
+        #endregion
+        public decimal MoneyCashBalance(int cashBalanceId)
+        {
+            return _context.AccountAoCashBalance.Find(cashBalanceId).CurrentBalance ?? 0;
+        }
+    }
+}

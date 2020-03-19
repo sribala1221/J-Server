@@ -1,0 +1,412 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using GenerateTables.Models;
+using ServerAPI.ViewModels;
+using ServerAPI.Utilities;
+using Microsoft.AspNetCore.Http;
+
+// ReSharper disable once CheckNamespace
+namespace ServerAPI.Services
+{
+    public class InmateTrackingService : IInmateTrackingService
+    {
+        private readonly AAtims _context;
+        private readonly ICommonService _commonService;
+        private readonly IPersonService _personService;
+        private readonly IFacilityPrivilegeService _facilityPrivilegeService;
+        private InmateTrackingVm InmateTrackingDetails { get; set; }
+        private readonly int _personnelId;
+        private readonly IPhotosService _photos;
+        private readonly IInterfaceEngineService _interfaceEngineService;
+
+        public InmateTrackingService(AAtims context, ICommonService commonService,
+            IHttpContextAccessor httpContextAccessor, IPersonService personService,
+            IFacilityPrivilegeService facilityPrivilegeService, IPhotosService photosService,
+            IInterfaceEngineService interfaceEngineService)
+        {
+            _context = context;
+            _commonService = commonService;
+            _personnelId = Convert.ToInt32(httpContextAccessor.HttpContext.User
+                .FindFirst("personnelId")?.Value);
+            _personService = personService;
+            _facilityPrivilegeService = facilityPrivilegeService;
+            _photos = photosService;
+            _interfaceEngineService = interfaceEngineService;
+        }
+
+        public InmateTrackingVm GetInmateTrackingDetails(int inmateId)
+        {
+            InmateTrackingDetails =
+                (from i in _context.Inmate
+                    where i.InmateId == inmateId
+                    select new InmateTrackingVm
+                    {
+                        InmateNumber = i.InmateNumber,
+                        InmateCurrentTrackId = i.InmateCurrentTrackId,
+                        CreateDate = i.CreateDate,
+                        FacilityId = i.FacilityId,
+                        InmateCurrentTrack = i.InmateCurrentTrack,
+                        HousingUnit = new HousingDetail()
+                        {
+                            HousingUnitLocation = i.HousingUnit.HousingUnitLocation,
+                            HousingUnitNumber = i.HousingUnit.HousingUnitNumber,
+                            HousingUnitBedLocation = i.HousingUnit.HousingUnitBedLocation,
+                            HousingUnitBedNumber = i.HousingUnit.HousingUnitBedNumber,
+                        },
+                        PhotoPath = _photos.GetPhotoByPerson(i.Person)
+                    }).Single();
+
+            //To Get Person Info,Location (To load dropdown list) and Refusal Reason List
+            InmateTrackingDetails.InmateTrackDetailsVm =
+                GetInmateTracking(InmateTrackingDetails.FacilityId ?? 0, inmateId);
+
+            //To Get Enroute related details
+            List<InmateTrak> lstInmateTrak = _context.InmateTrak
+                .Where(w => w.InmateId == inmateId 
+                    && !w.InmateTrakDateIn.HasValue)
+                .OrderByDescending(o => o.InmateTrakId).ToList();
+
+            if (lstInmateTrak.Count > 0)
+            {
+                if (lstInmateTrak.First().EnrouteFinalLocationId > 0)
+                {
+                    InmateTrackingDetails.Destination = _context.Privileges.SingleOrDefault(s =>
+                        s.PrivilegeId == lstInmateTrak.First().EnrouteFinalLocationId)?.PrivilegeDescription;
+                    InmateTrackingDetails.DestinationId = lstInmateTrak.First().EnrouteFinalLocationId;
+                    InmateTrackingDetails.EnrouteOutDate = lstInmateTrak.First().InmateTrakDateOut;
+                    InmateTrackingDetails.InmateTrakDateOut = lstInmateTrak.LastOrDefault(w =>
+                        w.EnrouteFinalLocationId == lstInmateTrak.First().EnrouteFinalLocationId)?.InmateTrakDateOut;
+                    InmateTrackingDetails.InmateTrackDetailsVm.InmateTrackDateOut =
+                        InmateTrackingDetails.InmateTrakDateOut;
+                }
+
+                InmateTrackingDetails.EnrouteStartOut = lstInmateTrak.First().EnrouteStartOut;
+                InmateTrackingDetails.InmateTrackDetailsVm.EnrouteStartOut = lstInmateTrak.First().EnrouteStartOut;
+            }
+
+            //To Get Incareceration Details 
+            InmateTrackingDetails.IncarcerationDetails = GetIncarcerationDetails(inmateId);
+            InmateTrackingDetails.IsVisitRefused = GetVisitRefusedFlag();
+
+            // InmateTrackingDetails.TrackCount= _context.InmateTrak.Count(i => i.InmateId == inmateId);
+            return InmateTrackingDetails;
+        }
+
+        private bool GetVisitRefusedFlag()
+        {
+            List<Lookup> lookup = _context.Lookup.Where(s =>
+                s.LookupType == LookupConstants.VISITCOMPLETE && s.LookupFlag7 == 1).ToList();
+
+            return lookup.Any();
+        }
+
+        public List<InmateTrackingHistroyVm> GetTrackingHistory(int inmateId, DateTime? dateIn, DateTime? dateOut)
+        {
+            dateOut = dateOut.HasValue 
+                ? dateOut 
+                : DateTime.Now;
+            List<InmateTrackingHistroyVm> trackingHistroy =
+                (from it in _context.InmateTrak
+                    where it.InmateId == inmateId && (!dateIn.HasValue || it.InmateTrakDateOut >= dateIn)
+                                                  && (!dateOut.HasValue || it.InmateTrakDateOut <= dateOut)
+                    select new InmateTrackingHistroyVm
+                    {
+                        InmateId = it.InmateId,
+                        InmateNumber = it.Inmate.InmateNumber,
+                        InmateRefused = it.InmateRefused,
+                        InmateRefusedNote = it.InmateRefusedNote,
+                        InmateRefusedReason = it.InmateRefusedReason,
+                        InmateTrakLocation = it.InmateTrakLocation,
+                        InmateTrakLocationId = it.InmateTrakLocationId,
+                        InmateTrakConflictNote = it.InmateTrakConflictNote,
+                        InmateTrackNote = it.InmateTrakNote,
+                        InmateTrakDateOut = it.InmateTrakDateOut,
+                        InmateTrakDateIn = it.InmateTrakDateIn,
+                        OutPersonnelId = it.OutPersonnelId,
+                        InPersonnelId = it.InPersonnelId,
+                        InPersonLastName = it.InPersonnel.PersonNavigation.PersonLastName,
+                        InOfficerBadgeNumber = it.InPersonnel.OfficerBadgeNum,
+                        OutPersonLastName = it.OutPersonnel.PersonNavigation.PersonLastName,
+                        OutOfficerBadgeNumber = it.OutPersonnel.OfficerBadgeNum,
+                        FromHousingUnitLocation = it.InmateTrakFromHousingUnit.HousingUnitLocation,
+                        FromHousingUnitNumber = it.InmateTrakFromHousingUnit.HousingUnitNumber,
+                        FromLocation = it.InmateTrakFromLocation.PrivilegeDescription,
+                        FinalDestination = it.EnrouteFinalLocation.PrivilegeDescription,
+                        InmateTrackId = it.InmateTrakId
+                    }).ToList();
+            return trackingHistroy;
+        }
+
+        private List<IncarcerationDetail> GetIncarcerationDetails(int inmateId)
+        {
+            List<IncarcerationDetail> incarcerationDetails =
+                _context.Incarceration.Where(inc => inc.InmateId == inmateId)
+                    .Select(inc => new IncarcerationDetail
+                    {
+                        IncarcerationId = inc.IncarcerationId,
+                        ReleaseOut = inc.ReleaseOut,
+                        DateIn = inc.DateIn,
+                        OrigBookNumber = !string.IsNullOrEmpty(inc.BookingNo) ? inc.BookingNo : string.Empty,
+                        InmateId = inc.InmateId ?? 0
+                        // For ActiveString, we can do it in Client Side using ReleaseOut Date
+                    }).OrderByDescending(inc => inc.DateIn).ToList();
+
+
+            return incarcerationDetails;
+        }
+
+        public async Task<InmateTrackingVm> InsertInmateTracking(InmateTrackingVm obInsertTrackingVm)
+        {
+            int inmateTrackId = _context.InmateTrak.LastOrDefault(i =>
+                                        i.InmateId == obInsertTrackingVm.InmateId && !i.InmateTrakDateIn.HasValue)
+                                    ?.InmateTrakId ?? 0;
+
+            int scheduleId = 0;
+            int eventInmateTrackId = 0;
+            DateTime enrouteStartOut = DateTime.Now;
+            if (TrackingFlag.Checkout != obInsertTrackingVm.TrackingStatus)
+            {
+                if (inmateTrackId > 0)
+                {
+                    InmateTrak objInmTrak =
+                        _context.InmateTrak.Single(i => i.InmateTrakId == inmateTrackId);
+
+                    InmateAppointmentTrack objInmAppointmentTrack =
+                        _context.InmateAppointmentTrack.SingleOrDefault(i => i.InmateTrakId == inmateTrackId);
+                    if (objInmAppointmentTrack != null)
+                    {
+                        scheduleId = objInmAppointmentTrack.ScheduleId;
+                    }
+
+                    if (!obInsertTrackingVm.InmateRefused)
+                    {
+                        objInmTrak.InmateTrakDateIn = DateTime.Now;
+                        objInmTrak.InPersonnelId = _personnelId;
+                    }        
+                    if(TrackingFlag.Checkin == obInsertTrackingVm.TrackingStatus)
+                    {
+                        objInmTrak.InmateTrakNote = obInsertTrackingVm.InmateTrackNote;
+                    }
+                    int inmateDestinationId = objInmTrak.EnrouteFinalLocationId ?? 0;
+                    
+                    enrouteStartOut = obInsertTrackingVm.InmateRefused 
+                        ? objInmTrak.EnrouteStartOut ?? DateTime.Now
+                        : obInsertTrackingVm.EnrouteFinalLocationId > 0
+                            ? obInsertTrackingVm.EnrouteFinalLocationId > 0 && inmateDestinationId > 0
+                                ? obInsertTrackingVm.EnrouteFinalLocationId == inmateDestinationId
+                                    ? objInmTrak.EnrouteStartOut ?? DateTime.Now
+                                    : DateTime.Now
+                                : inmateDestinationId > 0 && obInsertTrackingVm.TrackingStatus == TrackingFlag.Move
+                                    ? objInmTrak.EnrouteStartOut ?? DateTime.Now
+                                    : DateTime.Now
+                            : DateTime.Now;
+                }
+            }
+            else
+            {
+                enrouteStartOut = DateTime.Now;
+            }
+
+            if ((TrackingFlag.Move == obInsertTrackingVm.TrackingStatus &&
+                 obInsertTrackingVm.EnrouteFinalLocationId.HasValue && obInsertTrackingVm.SelectedLocationId.HasValue &&
+                 obInsertTrackingVm.EnrouteFinalLocationId == obInsertTrackingVm.SelectedLocationId)
+                || (TrackingFlag.Move == obInsertTrackingVm.TrackingStatus &&
+                    !obInsertTrackingVm.EnrouteFinalLocationId.HasValue))
+            {
+                if (obInsertTrackingVm.ScheduleId > 0)
+                {
+                    Visit schedule = _context.Visit.Single(s => s.ScheduleId == obInsertTrackingVm.ScheduleId);
+                    schedule.InmateTrackingStart = DateTime.Now;
+                }
+            }
+            else if ((TrackingFlag.Checkout == obInsertTrackingVm.TrackingStatus &&
+                      obInsertTrackingVm.EnrouteFinalLocationId.HasValue &&
+                      obInsertTrackingVm.SelectedLocationId.HasValue &&
+                      obInsertTrackingVm.EnrouteFinalLocationId == obInsertTrackingVm.SelectedLocationId)
+                     || (TrackingFlag.Checkout == obInsertTrackingVm.TrackingStatus &&
+                         !obInsertTrackingVm.EnrouteFinalLocationId.HasValue))
+            {
+                if (obInsertTrackingVm.ScheduleId > 0)
+                {
+                    Visit schedule = _context.Visit.Single(s => s.ScheduleId == obInsertTrackingVm.ScheduleId);
+                    schedule.InmateTrackingStart = DateTime.Now;
+                }
+            }
+
+            Inmate obInmate =
+                _context.Inmate.Single(it => it.InmateId == obInsertTrackingVm.InmateId);
+            if (TrackingFlag.Checkin == obInsertTrackingVm.TrackingStatus)
+            {
+                if(inmateTrackId > 0)
+                {
+                    obInmate.InmateTrak.Last().InmateTrakNote =
+                        obInsertTrackingVm.InmateTrackNote;
+                }
+                obInmate.InmateCurrentTrack = null;
+                obInmate.InmateCurrentTrackId = null;
+            }
+            else
+            {
+                if (obInsertTrackingVm.ConflictDetails.Count > 0 && !obInsertTrackingVm.InmateRefused)
+                {
+                    _commonService.InsertConflict(obInsertTrackingVm.ConflictDetails, obInsertTrackingVm.InmateId,  obInsertTrackingVm.InmateTrakConflictNote );
+
+                    obInsertTrackingVm.InmateTrakConflictNote =
+                        FloorNotesConflictConstants.CONFLICTNOTE + " " + obInsertTrackingVm.InmateTrakConflictNote;
+
+                    foreach (TrackingConflictVm ob in obInsertTrackingVm.ConflictDetails)
+                    {
+                        obInsertTrackingVm.InmateTrakConflictNote +=
+                            FloorNotesConflictConstants.CONFLICTS +" "+ FloorNotesConflictConstants.TYPE +
+                            ob.ConflictType +" "+ FloorNotesConflictConstants.DESCRIPTION +
+                            ob.ConflictDescription;
+                    }
+                }
+
+                InmateTrak objTrack = new InmateTrak();
+                if (scheduleId > 0)
+                {
+                    objTrack = new InmateAppointmentTrack();
+                }
+
+                objTrack.InmateId = obInsertTrackingVm.InmateId;
+                objTrack.InmateTrakLocation = obInsertTrackingVm.SelectedLocation;
+                objTrack.InmateTrakLocationId = obInsertTrackingVm.SelectedLocationId;
+                objTrack.OutPersonnelId = _personnelId;
+                objTrack.InmateTrakDateOut = DateTime.Now;
+                objTrack.FacilityId = obInsertTrackingVm.FacilityId;
+                objTrack.InmateTrakNote = obInsertTrackingVm.InmateTrackNote;
+                objTrack.InmateTrakConflictNote = obInsertTrackingVm.InmateTrakConflictNote;
+                objTrack.InmateTrakFromHousingUnitId = obInmate.HousingUnitId;
+                objTrack.InmateTrakFromLocationId = obInmate.InmateCurrentTrackId;
+                objTrack.EnrouteStartOut = enrouteStartOut;
+
+                //Enroute checkout
+                if (obInsertTrackingVm.EnrouteFinalLocationId > 0)
+                {
+                    bool enrouteInFlag = false, enrouteFinalFlag = false;
+
+                    objTrack.EnrouteFinalLocationId = obInsertTrackingVm.EnrouteFinalLocationId;
+
+                    if (inmateTrackId > 0 && objTrack.EnrouteFinalLocationId != objTrack.InmateTrakLocationId)
+                    {
+                        InmateTrak inmateTrack = _context.InmateTrak.Single(i => i.InmateTrakId == inmateTrackId);
+                        enrouteInFlag = inmateTrack.EnrouteInFlag;
+                        enrouteFinalFlag = inmateTrack.EnrouteFinalFlag;
+                    }
+
+                    if (objTrack.EnrouteFinalLocationId == objTrack.InmateTrakLocationId)
+                    {
+                        objTrack.EnrouteFinalFlag = true;
+                    }
+                    else if (enrouteInFlag || enrouteFinalFlag)
+                    {
+                        objTrack.EnrouteInFlag = true;
+                        objTrack.EnrouteOutFlag = false;
+                    }
+                    else
+                    {
+                        objTrack.EnrouteOutFlag = true;
+                        objTrack.EnrouteInFlag = false;
+                    }
+                }
+
+                if (!obInsertTrackingVm.InmateRefused)
+                {
+                    obInmate.InmateCurrentTrack = obInsertTrackingVm.SelectedLocation;
+                    obInmate.InmateCurrentTrackId = obInsertTrackingVm.SelectedLocationId;
+                    objTrack.InmateTrakDateOut = DateTime.Now;
+                }
+                else
+                {
+                    objTrack.InmateRefusedReason = obInsertTrackingVm.InmateRefusedReason;
+                    objTrack.InmateRefusedNote = obInsertTrackingVm.InmateRefusedNote;
+                    objTrack.InmateRefused = obInsertTrackingVm.InmateRefused;
+                    objTrack.InmateTrakDateIn = DateTime.Now;
+                    objTrack.InPersonnelId = _personnelId;
+                }
+
+                if (scheduleId > 0)
+                {
+                    InmateAppointmentTrack obInmateAppointmentTrack = (InmateAppointmentTrack) objTrack;
+                    obInmateAppointmentTrack.ScheduleId = scheduleId;
+                    obInmateAppointmentTrack.OccurenceDate = DateTime.Now;
+                    _context.InmateAppointmentTrack.Add(obInmateAppointmentTrack);
+                    _context.SaveChanges();
+                    eventInmateTrackId = obInmateAppointmentTrack.InmateTrakId;
+                }
+                else
+                {
+                    _context.InmateTrak.Add(objTrack);
+                    _context.SaveChanges();
+                    eventInmateTrackId = objTrack.InmateTrakId;
+                }
+
+                int count =
+                    _context.InmateTrak.Count(
+                        i => i.InmateTrakLocationId == obInsertTrackingVm.SelectedLocationId
+                             && !i.InmateTrakDateIn.HasValue);
+                if (count == 0)
+                {
+                    Privileges priv =
+                        _context.Privileges.Single(it => it.PrivilegeId == obInsertTrackingVm.SelectedLocationId);
+
+                    priv.SafetyCheckLastEntry = DateTime.Now;
+                    priv.SafetyCheckLastEntryBy = _personnelId;
+                }
+            }
+
+            _interfaceEngineService.Export(new ExportRequestVm
+            {
+                EventName = EventNameConstants.LOCATIONTRACKING,
+                PersonnelId = _personnelId,
+                Param1 = obInsertTrackingVm.Person.PersonId.ToString(),
+                Param2 = eventInmateTrackId.ToString()
+            });
+
+            await _context.SaveChangesAsync();
+
+            List<InmateTrak> lstInmateTrak = _context.InmateTrak
+                .Where(w => w.InmateId == obInsertTrackingVm.InmateId)
+                .OrderByDescending(o => o.InmateTrakId).ToList();
+            obInsertTrackingVm.TrackCount = lstInmateTrak.Count;
+            obInsertTrackingVm.InmateCurrentTrackId = obInmate.InmateCurrentTrackId;
+            obInsertTrackingVm.InmateCurrentTrack = obInmate.InmateCurrentTrack;
+            obInsertTrackingVm.DestinationId = lstInmateTrak
+                .Where(a => !a.InmateTrakDateIn.HasValue).FirstOrDefault()?.EnrouteFinalLocationId;
+            obInsertTrackingVm.EnrouteOutDate = lstInmateTrak
+                .Where(a => !a.InmateTrakDateIn.HasValue).FirstOrDefault(w =>
+                w.EnrouteFinalLocationId == obInsertTrackingVm.DestinationId)?.InmateTrakDateOut;
+            obInsertTrackingVm.EnrouteStartOut = lstInmateTrak
+                .Where(a => !a.InmateTrakDateIn.HasValue).FirstOrDefault()?.EnrouteStartOut;
+            return obInsertTrackingVm;
+        }
+
+        //To Get Inmate Tracking details
+        public InmateTrackDetailsVm GetInmateTracking(int facilityId, int inmateId)
+        {
+            InmateTrackDetailsVm inmateTrackVm = new InmateTrackDetailsVm
+            {
+                //To get Person info from service
+                PersonInfo =
+                    _personService.GetInmateDetails(inmateId),
+
+                //To get Location list
+                LocationList =
+                    _facilityPrivilegeService.GetTrackingLocationList(facilityId),
+
+                //To get Refusal Reason list
+                RefusalReasonList = _commonService.GetLookupKeyValuePairs(LookupConstants.TRACKREFUSALREAS),
+
+                InmateTrackDateOut = _context.InmateTrak.FirstOrDefault(it => it.InmateId == inmateId
+                        && it.FacilityId == facilityId && !it.InmateTrakDateIn.HasValue)?.InmateTrakDateOut,
+
+                EnrouteStartOut = _context.InmateTrak.FirstOrDefault(it => it.InmateId == inmateId
+                        && it.FacilityId == facilityId && !it.InmateTrakDateIn.HasValue)?.EnrouteStartOut
+            };
+            return inmateTrackVm;
+        }
+    }
+}

@@ -1,0 +1,74 @@
+﻿using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
+using ServerAPI.Authorization;
+using ServerAPI.Services;
+using ServerAPI.ViewModels;
+
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    public class InventoryLostFoundController : Controller
+    {
+        private readonly IInventoryLostFoundService _inventoryLostFoundService;
+        public InventoryLostFoundController(IInventoryLostFoundService inventoryLostFoundService)
+        {
+            _inventoryLostFoundService = inventoryLostFoundService;
+        }
+
+        [HttpGet("GetInventoryLostDetails")]
+        public IActionResult GetInventoryLostDetails([FromQuery]  SearchOptionsView searchOptions)
+        {
+            return Ok(_inventoryLostFoundService.GetLostFoundInventory(searchOptions));
+        }
+        [HttpGet("IdentityGet")]
+        public IActionResult IdentityGet(int groupId)
+        {
+            return Ok(_inventoryLostFoundService.ItemList(groupId));
+        }
+      
+        [HttpPost("IdentitySave")]
+        public async Task<IActionResult> IdentitySave([FromBody] IdentitySave value)
+        {
+            return Ok(await _inventoryLostFoundService.InsertInventory(value));
+        }
+        [FuncPermission(7011, FuncPermissionType.Delete)]
+        [HttpPost("DeleteLostFound")]
+        public async Task<IActionResult> DeleteLostFound([FromBody]InventoryDetails inventoryDetails)
+        {
+            return Ok(await _inventoryLostFoundService.DeleteOrUndoLostFound(inventoryDetails));
+        }
+        [HttpGet("GeneratePdf")]
+        public  IActionResult GeneratePdf(int groupId)
+        {
+            return Ok(_inventoryLostFoundService.InventoryPdfGet(groupId));
+        }
+        [HttpGet("GetHousingUnitNumberDetails")]
+        public IActionResult GetHousingUnitNumberDetails(int facilityId, string housingUnitLocation)
+        {
+            return Ok(_inventoryLostFoundService.GetHousingUnitNumberDetails(facilityId, housingUnitLocation));
+        }
+
+        [HttpGet("getBinType")]
+        public IActionResult GetBinType(int facilityId)
+        {
+            return Ok(_inventoryLostFoundService.GetBinType(facilityId));
+        }
+
+        [HttpGet("HistoryDetails")]
+        public IActionResult HistoryDetails(HistorySearch value)
+        {
+            return Ok(_inventoryLostFoundService.HistoryDetails(value));
+        }
+        [HttpPost("insertDisposition")]
+        public async Task<IActionResult> InsertDisposition([FromBody]InventoryDetails inventoryDetails)
+        {
+            return Ok(await _inventoryLostFoundService.Disposition(inventoryDetails));
+        }
+
+        [FuncPermission(7014,FuncPermissionType.Edit)]
+        [HttpGet("DamageFound")]
+        public IActionResult DamageFound(){
+            return Ok();
+        }
+    }
+}

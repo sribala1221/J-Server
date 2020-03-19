@@ -1,0 +1,13 @@
+version: 0.0
+os: windows
+files:
+  - source: \
+    destination: C:\Deployments\ServerAPISource
+hooks:
+  BeforeInstall:
+    - location: Scripts\deleteOldDeployment.bat
+      timeout: 100
+  AfterInstall:
+    - location: Scripts\chooseFolder.bat
+      timeout: 200
+

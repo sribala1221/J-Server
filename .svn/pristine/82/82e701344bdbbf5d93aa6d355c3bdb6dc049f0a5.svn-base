@@ -1,0 +1,154 @@
+﻿using System.Linq;
+using System.Collections.Generic;
+using JwtDb.Models;
+using Microsoft.AspNetCore.Identity;
+using System.Threading.Tasks;
+using System.Security.Claims;
+using Newtonsoft.Json;
+using GenerateTables.Models;
+using ServerAPI.ViewModels;
+
+namespace ServerAPI.Services
+{
+    public class UserSettingsService : IUserSettingsService
+    {
+        private readonly UserManager<AppUser> _userManager;
+        private readonly AAtims _context;
+
+
+        public UserSettingsService(AAtims context, UserManager<AppUser> userManager)
+        {
+            _context = context;
+            _userManager = userManager;
+        }
+
+        public async Task<object> GetUserSettings(string settingsId, ClaimsPrincipal userPrincipal)
+        {
+            AppUser user = await GetCurrentUser(userPrincipal);
+            IList<Claim> claims = await _userManager.GetClaimsAsync(user);
+            Claim settings = claims.FirstOrDefault(x => x.Type.Equals("UserSettings" + settingsId));
+            return settings == null ? null : JsonConvert.DeserializeObject(settings.Value);
+        }
+
+        public async Task<object> GetUserSettingsFromAppUser(string settingsId, AppUser user)
+        {
+            IList<Claim> claims = await _userManager.GetClaimsAsync(user);
+            Claim settings = claims.FirstOrDefault(x => x.Type.Equals("UserSettings" + settingsId));
+            return settings == null ? null : JsonConvert.DeserializeObject(settings.Value);
+        }
+
+        public async Task<IdentityResult> SaveUserSettings(string settingsId, string settings, ClaimsPrincipal userPrincipal)
+        {
+            AppUser user = await GetCurrentUser(userPrincipal);
+            IList<Claim> claims = await _userManager.GetClaimsAsync(user);
+            Claim currentClaim = claims.FirstOrDefault(x => x.Type.Equals("UserSettings" + settingsId));
+            Claim newSettings = new Claim("UserSettings" + settingsId, settings);
+
+            return currentClaim == null ?
+                await _userManager.AddClaimAsync(user, newSettings) :
+                await _userManager.ReplaceClaimAsync(user, currentClaim, newSettings);
+        }
+
+        private async Task<AppUser> GetCurrentUser(ClaimsPrincipal userPrincipal)
+        {
+            string userName = userPrincipal.Claims.Single(s => s.Type == ClaimTypes.NameIdentifier).Value;
+            return await _userManager.FindByNameAsync(userName);
+        }
+
+        public WorkStationSettings GetWorkstationSettings(string workStationName) =>
+            _context.PrintWorkstationMaster
+                .Where(w => w.WorkStationName == workStationName)
+                .Select(s => new WorkStationSettings
+                {
+                    WorkStationId = s.WorkStationId,
+                    HousingGroupId = s.WorkStationDefaultHousingGroupId,
+                    HousingUnitListId = s.HousingUnitListId,
+                    WorkstationName = s.WorkStationName,
+                    WorkstationDescription = s.WorkStationDescription,
+                    FacilityId = s.WorkStationDefaultFacilityId,
+                    HousingLocation = s.WorkStationDefaultHousingLocation,
+                    HousingNumber = s.WorkStationDefaultHousingNumber,
+                    WorkstationIp = s.WorkStationIp,
+                    IntakeFlag = s.WorkStationFlagIntake == 1,
+                    BookingFlag = s.WorkStationFlagBooking == 1,
+                    ClassificationFlag = s.WorkStationFlagClassification == 1,
+                    RecordsFlag = s.WorkStationFlagRecords == 1,
+                    FacilityFlag = s.WorkStationFlagFacility == 1,
+                    OffsiteFlag = s.WorkStationFlagOffSite == 1,
+                    BankId = s.WorkStationDefaultBankId,
+                    DepositoryId = s.WorkStationDefaultDepositoryId,
+                    CashDrawerId = s.WorkStationDefaultCashDrawerId 
+                }).SingleOrDefault();
+
+
+        public async Task<int> InsertWorkstationSettings(WorkStationSettings workStationSettings)
+        {
+            PrintWorkstationMaster workStation = new PrintWorkstationMaster
+            {
+                WorkStationDefaultHousingGroupId = workStationSettings.HousingGroupId,
+                HousingUnitListId = workStationSettings.HousingUnitListId,
+                WorkStationName = workStationSettings.WorkstationName,
+                WorkStationDescription = workStationSettings.WorkstationDescription,
+                WorkStationDefaultFacilityId = workStationSettings.FacilityId,
+                WorkStationDefaultHousingLocation = workStationSettings.HousingLocation,
+                WorkStationDefaultHousingNumber = workStationSettings.HousingNumber,
+                WorkStationIp = workStationSettings.WorkstationIp,
+                WorkStationFlagIntake = workStationSettings.IntakeFlag ? 1 : 0,
+                WorkStationFlagBooking = workStationSettings.BookingFlag ? 1 : 0,
+                WorkStationFlagClassification = workStationSettings.ClassificationFlag ? 1 : 0,
+                WorkStationFlagRecords = workStationSettings.RecordsFlag ? 1 : 0,
+                WorkStationFlagOffSite = workStationSettings.OffsiteFlag ? 1 : 0,
+                WorkStationFlagFacility = workStationSettings.FacilityFlag ? 1 : 0,
+                WorkStationDefaultBankId = workStationSettings.BankId,
+                WorkStationDefaultDepositoryId = workStationSettings.DepositoryId,
+                WorkStationDefaultCashDrawerId = workStationSettings.CashDrawerId
+            };
+            _context.PrintWorkstationMaster.Add(workStation);
+            return await _context.SaveChangesAsync();
+        }
+
+        public async Task<int> UpdateWorkstationSettings(WorkStationSettings workStationSettings)
+        {
+            PrintWorkstationMaster workStation = _context.PrintWorkstationMaster
+                .Single(w => w.WorkStationId == workStationSettings.WorkStationId);
+
+            workStation.WorkStationDefaultHousingGroupId = workStationSettings.HousingGroupId;
+            workStation.HousingUnitListId = workStationSettings.HousingUnitListId;
+            workStation.WorkStationName = workStationSettings.WorkstationName;
+            workStation.WorkStationDescription = workStationSettings.WorkstationDescription;
+            workStation.WorkStationDefaultFacilityId = workStationSettings.FacilityId;
+            workStation.WorkStationDefaultHousingLocation = workStationSettings.HousingLocation;
+            workStation.WorkStationDefaultHousingNumber = workStationSettings.HousingNumber;
+            workStation.WorkStationIp = workStationSettings.WorkstationIp;
+            workStation.WorkStationFlagIntake = workStationSettings.IntakeFlag ? 1 : 0;
+            workStation.WorkStationFlagBooking = workStationSettings.BookingFlag ? 1 : 0;
+            workStation.WorkStationFlagClassification = workStationSettings.ClassificationFlag ? 1 : 0;
+            workStation.WorkStationFlagRecords = workStationSettings.RecordsFlag ? 1 : 0;
+            workStation.WorkStationFlagOffSite = workStationSettings.OffsiteFlag ? 1 : 0;
+            workStation.WorkStationFlagFacility = workStationSettings.FacilityFlag ? 1 : 0;
+            workStation.WorkStationDefaultBankId = workStationSettings.BankId;
+            workStation.WorkStationDefaultDepositoryId = workStationSettings.DepositoryId;
+            workStation.WorkStationDefaultCashDrawerId = workStationSettings.CashDrawerId;
+            return await _context.SaveChangesAsync();
+        }
+
+        public async Task<string> UpdateChangePassword(UserVm value, ClaimsPrincipal userPrincipal)
+        {
+            string response;
+            AppUser appUser = await GetCurrentUser(userPrincipal);
+
+            if (!await _userManager.CheckPasswordAsync(appUser, value.OldPassword))
+            {
+                response = "Invalid old password";
+            }
+            else
+            {
+                await _userManager.RemovePasswordAsync(appUser);
+                await _userManager.AddPasswordAsync(appUser, value.Password);
+                await _userManager.UpdateAsync(appUser);
+                response = null;
+            }
+            return response;
+        }
+    }
+}

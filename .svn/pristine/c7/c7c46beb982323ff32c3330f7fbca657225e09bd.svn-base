@@ -1,0 +1,13 @@
+﻿Why?
+our current issue is, we have used multiple queries to create the viewmodel data during services, which has cause the Entity Framework to 
+evaluate the queries in the client application. This causes the application to fetch all the data (most of the time) from the table to 
+client side and then filter the data. This uses lots of computation power on the application level, for a task which can be easily done on database level.
+This has also stopped us from updating the application from .net framework 2.2 to 3.1 because Microsoft has taken care that we don't do this in asp.net core
+application 3.0.
+
+Solution
+The solution is to create the expression function for conversion of db models to api view models. This will ensure the code quality in future. also, this will
+allow us to reduce the conversion code from services (approx 10% code reduction) and view the logic in services in an organized way. This will also allow 
+developers to convert the data to view model in single line at multiple places, hence there will be no more repetative code.
+
+This will also allow us to maintain code standards and we won't get in to the same issue of sql queries being executed on client side in future.

@@ -1,0 +1,823 @@
+﻿using System;
+using System.Collections.Generic;
+using GenerateTables.Models;
+
+namespace ServerAPI.ViewModels
+{
+    public class VisitDetails
+    {
+        // public List<VisitDetails> lstVisitDetails{get;set;}
+        public int VisitToVisitorId { get; set; }
+        public int ScheduleId { get; set; }
+        public int PersonId { get; set; }
+        public int FacilityId { get; set; }
+        public PersonInfoVm PrimaryVisitor { get; set; }
+        public PersonInfoVm InmateInfo { get; set; }
+        public bool FrontDeskFlag { get; set; }
+        public string Relationship { get; set; }
+        public string PersonOtherIdNumber { get; set; }
+        public string PersonOtherIdType { get; set; }
+        public string PersonOtherIdState { get; set; }
+        public int? ProfessionalType { get; set; }
+        public string VisitorIdType { get; set; }
+        public string VisitorIdNumber { get; set; }
+        public string VisitorIdState { get; set; }
+        public DateTime? ProfVisitorIdExpDate { get; set; }
+        public string VisitorNotes { get; set; }
+        public string Location { get; set; }
+        public string CompleteVisitReason { get; set; }
+        public bool VisitDenyFlag { get; set; }
+        public string VisitDenyReason { get; set; }
+        public string VisitDenyNote { get; set; }
+        public DateTime ScheduleDateTime { get; set; }
+        public bool VisitorNotAllowedFlag { get; set; }
+        public bool PersonOfInterestFlag { get; set; }
+        public string PersonOfInterestReason { get; set; }
+        public string PersonOfInterestNote { get; set; }
+        public DateTime? PersonOfInterestExpire { get; set; }
+        public int CountAsVisit { get; set; }
+        public int AdultVisitorsCount { get; set; }
+        public int ChildVisitorsCount { get; set; }
+        public AoWizardProgressVm RegistrationProgress { get; set; }
+        public int VisitorType { get; set; }
+        public bool VisitorBefore { get; set; }
+        public bool CompleteRegistration { get; set; }
+        public DateTime? InmateTrackingStart { get; set; }
+        public DateTime StartDate { get; set; }
+        public TimeSpan Time { get; set; }
+        public TimeSpan Duration { get; set; }
+        public DateTime? EndDate { get; set; }
+        public int? LocationId { get; set; }
+        public string InmateCurrentTrack { get; set; }
+        public HousingDetail HousingDetails { get; set; }
+        public string Destination { get; set; }
+        public int? DestinationId { get; set; }
+        public bool VisitOpenScheduleFlag { get; set; }
+        public bool VisitBoothManageFlag { get; set; }
+        public int? VisitBoothId { get; set; }
+        public string VisitBooth { get; set; }
+        public bool CompleteVisitFlag { get; set; }
+        public DateTime? CreateDate { get; set; }
+        public string PrimaryName { get; set; }
+        public string ScheduleTime { get; set; }
+        public string ScheduleDate { get; set; }
+        public string PersonName { get; set; }
+        public string HousingUnit { get; set; }
+        public List<CompleteVisitReason> LstCompleteVisitReason { get; set; }
+        public int? ReasonId { get; set; }
+        public string Reason { get; set; }
+        public int? TypeId { get; set; }
+        public string Type { get; set; }
+        public bool DeleteFlag { get; set; }
+        public bool AssignedBooth { get; set; }
+        public bool VisitBoothAssignRoomFlag { get; set; }
+        public bool EnrouteInFlag { get; set; }
+        public bool EnrouteFinalFlag { get; set; }
+        public bool EnrouteOutFlag { get; set; }
+        public bool VisitChildFlag { get; set; }
+        public List<VisitToChild> VisitChildDetail { get; set; } 
+        public List<VisitToAdultDetail> VisitToAdultDetails{get;set;}       
+        public List<VisitorIdentityAndRelationship> VisitorIdentity { get; set; }
+        public int? MaxRule { get; set; }
+        public int PrimaryVisitorId { get; set; }
+        public bool VisitOcurance { get; set; }
+        public int InmateId { get; set; }
+        public int? RelationshipId { get; set; }
+        public string Notes { get; set; }
+        public int? ProfVisitorType { get; set; }
+        public string ProfessionalRelation { get; set; }
+        public int HousingCount { get; set; }
+        public PersonVm VisitorDetails{get;set;}
+    }
+
+
+    public class VisitParam
+    {
+        public int? FacilityId { get; set; }
+        public int VisitorType { get; set; }
+        public int? PersonId { get; set; }
+        public int? ScheduleId { get; set; }
+        public bool PendingVisit { get; set; }
+        public bool ProfVisitHistory { get; set; }
+        public bool VisitsInProgress { get; set; }
+        public bool CompleteRegistration { get; set; }
+        public bool AllActiveSchedule { get; set; }
+
+    }
+    public class IdentifyVisitorVm
+    {
+        public PersonIdentity PersonBasicDetails { get; set; }
+        public VisitDetails VisitorIdDetails { get; set; }
+        public List<VisitDetails> LstVisitHistory { get; set; }
+        public VisitorFlagDetails VisitorFlagDetails { get; set; }
+        public VisitDenyDetails VisitDenyDetails { get; set; }
+        public List<VisitToChild> VisitChildDetail { get; set; }
+        public List<VisitToAdultDetail> VisitAdultDetail { get; set; }
+        public bool IsVisitDeny { get; set; }
+    }
+
+    public class VisitToAdultDetail
+    {
+        public PersonIdentity PersonBasicDetails { get; set; }
+        public List<KeyValuePair<int, string>> LstIdType { get; set; }
+        public List<LookupVm> LstIdState { get; set; }
+        public List<KeyValuePair<int, string>> LstProfessionalType { get; set; }
+        public VisitDetails VisitorIdDetails { get; set; }
+        public List<VisitDetails> LstVisitHistory { get; set; }
+        public VisitorFlagDetails VisitorFlagDetails { get; set; }
+        public List<KeyValuePair<int, string>> LstFlagReason { get; set; }
+        public List<KeyValuePair<int, string>> LstDenyReason { get; set; }
+        public VisitDenyDetails VisitDenyDetails { get; set; }
+        public bool IsVisitDeny { get; set; }
+    }
+
+    public class ProfessionalDropdown
+    {
+        public List<KeyValuePair<int, string>> LstIdType { get; set; }
+        public List<LookupVm> LstIdState { get; set; }
+        public List<KeyValuePair<int, string>> LstProfessionalType { get; set; }
+    }
+
+    public class VisitorFlagDetails
+    {
+        public bool VisitorNotAllowedFlag { get; set; }
+        public string VisitorNotAllowedReason { get; set; }
+        public DateTime? VisitorNotAllowedExpire { get; set; }
+        public string VisitorNotAllowedNote { get; set; }
+        public bool PersonOfInterestFlag { get; set; }
+        public string PersonOfInterestReason { get; set; }
+        public DateTime? PersonOfInterestExpire { get; set; }
+        public string PersonOfInterestNote { get; set; }
+    }
+
+    public class ProfessionalSearchDetails
+    {
+        public int PersonId { get; set; }
+        public string PersonLastName { get; set; }
+        public string PersonFirstName { get; set; }
+        public int? ProfessionalType { get; set; }
+        public string VisitorIdType { get; set; }
+        public string VisitorIdNumber { get; set; }
+        public string VisitorIdState { get; set; }
+
+        public string Description { get; set; }
+    }
+
+    public class VisitorBasedInmates
+    {
+        public int InmateId { get; set; }
+        public string InmateNumber { get; set; }
+        public string PersonFirstName { get; set; }
+        public string PersonLastName { get; set; }
+        public int? VisitorRelationshipId { get; set; }
+        public string VisitorRelationship { get; set; }
+        public string VisitorNote { get; set; }
+        public string VisitorNotAllowedReason { get; set; }
+        public DateTime? VisitorNotAllowedExpire { get; set; }
+        public int? VisitorNotAllowedFlag { get; set; }
+        public string VisitorNotAllowedNote { get; set; }
+        public int VisitorToInmateId { get; set; }
+        public int? VisitorId { get; set; }
+
+    }
+
+    public class InmateVisitationInfo
+    {
+        public HousingDetail HousingDetail { get; set; }
+        public string InmateClassificationReason { get; set; }
+        public int? VisitPerWeek { get; set; }
+        public int? TotalVisitPerWeekCount { get; set; }
+    }
+
+    public class VisitorToInmateDetails
+    {
+        public int VisitorToInmateId { get; set; }
+        public int? VisitorId { get; set; }
+        public int InmateId { get; set; }
+        public DateTime? VisitorNotAllowedExpire { get; set; }
+        public int? VisitorNotAllowedFlag { get; set; }
+        public string VisitorNotAllowedNote { get; set; }
+        public string VisitorNotAllowedReason { get; set; }
+        public string VisitorNote { get; set; }
+        public int? VisitorRelationshipId { get; set; }
+        public bool IsPrimary { get; set; }
+
+        public List<TrackingConflictVm> TrackingConflict { get; set; }
+    }
+
+    public class VisitDenyDetails
+    {
+        public bool VisitDenyFlag { get; set; }
+        public string VisitDenyReason { get; set; }
+        public string VisitDenyNote { get; set; }
+    }
+
+    public class SavedVisitorDetailsVm
+    {
+        public List<VisitorIdentityAndRelationship> LstVisitorDetails { get; set; }
+        public List<LookupVm> LstRelationship { get; set; }
+        public List<KeyValuePair<int, string>> LstFlagReason { get; set; }
+        public List<KeyValuePair<int, string>> LstDenyReason { get; set; }
+        public List<VisitToChild> LstVisitChild { get; set; }
+        public bool IsVisitDeny { get; set; }
+    }
+
+    public class SelectInmateVm
+    {
+        public InmateVisitationInfo InmateVisitationInfo { get; set; }
+        public List<VisitorToInmateDetails> LstVisitorToInmateDetail { get; set; }
+        public VisitDenyDetails VisitDenyDetails { get; set; }
+    }
+
+    public class PrimaryVisitorVm
+    {
+        public int ScheduleId { get; set; }
+        public int PersonId { get; set; }
+        public int InmateId { get; set; }
+        public bool FrontDeskFlag { get; set; }
+        public bool VisitType { get; set; }
+        public DateTime? VisitDate { get; set; }
+        public InmateDetail InmateDetail { get; set; }
+        public VisitScheduledDetail VisitScheduledDetail { get; set; }
+        public List<VisitorIdentityAndRelationship> VisitorIdentityAndRelationships { get; set; }
+        public VisitSchedule VisitSchedule { get; set; }
+        public List<VisitToChild> VisitChild { get; set; }
+    }
+
+    public class VisitScheduledVm
+    {
+        public bool FrontDeskFlag { get; set; }
+        public bool VisitType { get; set; }
+        public int InmateId { get; set; }
+        public int FacilityId { get; set; }
+        public int HousingUnitId { get; set; }
+        public int HousingUnitListId { get; set; }
+        public string LocationIdList { get; set; }
+        public int PrivilegeId { get; set; }
+        public DateTime? VisitDate { get; set; }
+        public bool VisitOpenScheduleFlag { get; set; }
+        public string VisitationRoom { get; set; }
+        public DateTime? FromTime { get; set; }
+        public DateTime? ToTime { get; set; }
+        public bool IsSlotProf { get; set; }
+        public int VisitsPending { get; set; }
+        public int VisitsInProgress { get; set; }
+        public int? RoomCapacity { get; set; }
+        public HousingUnitList HousingUnitList { get; set; }
+        public VisitScheduleVm SlotSchedule { get; set; }
+        public VisitScheduleVm OpenSchedule { get; set; }
+        public List<VisitClassRule> Rules { get; set; }
+        public bool VisitAllowProfOnlyFlag { get; set; }
+        public bool VisitAllowPersonalOnlyFlag { get; set; }
+        public string HousingUnitLocation { get; set; }
+        public string HousingUnitNumber { get; set; }
+    }
+    public class VisitScheduledDetail
+    {
+        public bool NoRoom { get; set; }
+        public bool IsVisitDeny { get; set; }
+        public int VisitRuleMaxLengthMin { get; set; }
+        public List<VisitScheduledVm> VisitationRoomInfo { get; set; }
+        public List<VisitScheduledVm> SlotProfRoomInfo { get; set; }
+    }
+
+    public class VisitClassRule
+    {
+        public int ClassRule { get; set; }
+        public int InmateId { get; set; }
+        public DateTime? StartDate { get; set; }
+        public bool IsPending { get; set; }
+    }
+    public class VisitScheduledBoothDetail
+    {
+        public bool VisitBoothManageFlag { get; set; }
+        public bool VisitBoothAssignRoomFlag { get; set; }
+        public List<VisitScheduledBoothVm> VisitationBoothInfo { get; set; }
+    }
+    public class VisitScheduledBoothVm
+    {
+        public string RoomName { get; set; }
+        public DateTime? VisitDate { get; set; }
+        public DateTime? InmateTrackingStart { get; set; }
+        public string Booth { get; set; }
+        public int BoothId { get; set; }
+        public bool AvailableFlag { get; set; }
+        public DateTime? FromDateTime { get; set; }
+        public DateTime? ToDateTime { get; set; }
+        public int InmateId { get; set; }
+        public InmateDetail InmateDetail { get; set; }
+        public bool OpenScheduleFlag { get; set; }
+    }
+    public class ConfirmVisitorIdVm
+    {
+        public InmateDetail InmateDetail { get; set; }
+        public VisitSchedule VisitSchedule { get; set; }
+        public List<VisitorIdentityAndRelationship> LstVisitorIdentityAndRelationship { get; set; }
+        public string SiteOption { get; set; }
+        public int RequestActionLookupId { get; set; }
+        public List<KeyValuePair<int, string>> LstDenyReason { get; set; }
+        public bool IsVisitDeny { get; set; }
+    }
+
+    public class VisitSchedule
+    {
+        public int PersonId { get; set; }
+        public int InmateId { get; set; }
+        public int ScheduleId { get; set; }
+        public string RoomLocation { get; set; }
+        public int? RoomLocationId { get; set; }
+        public DateTime StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
+        public int? ReasonId { get; set; }
+        public string Reason { get; set; }
+        public int? TypeId { get; set; }
+        public string Type { get; set; }
+        public int? VisitBoothId { get; set; }
+        public int? VisitLocker { get; set; }
+        public string Notes { get; set; }
+        public string VisitBooth { get; set; }
+        public int VisitTypeLookupFlag6 { get; set; }
+        public int VisitTypeLookupFlag7 { get; set; }
+        public int VisitTypeLookupFlag8 { get; set; }
+        public int VisitTypeLookupFlag9 { get; set; }
+        public bool VisitorPassCombineFlag { get; set; }
+        public bool ConfirmIdFlag { get; set; }
+        public bool AckBackgroundFlag { get; set; }
+        public bool VisitOpenScheduleFlag { get; set; }
+        public bool FrontDeskFlag { get; set; }
+        public bool VisitType { get; set; }
+        public List<TrackingConflictVm> TrackingConflict { get; set; }
+        public bool Flag { get; set; }
+
+        public bool isBumpQueue {get;set;}
+    }
+    public enum Gender
+    {
+        Male = 1,
+        Female = 2
+    }
+    public class VisitorIdentityAndRelationship
+    {
+        public int PersonId { get; set; }
+        public int? InmateId { get; set; }
+        public int VisitorType { get; set; }
+        public string Relationship { get; set; }
+        public string ProfessionalType { get; set; }
+        public string VisitorIdType { get; set; }
+        public string VisitorIdNumber { get; set; }
+        public string VisitorIdState { get; set; }
+        public PersonIdentity PersonIdentity { get; set; }
+        public List<VisitorBasedInmates> LstVisitorBasedInmates { get; set; }
+        public VisitorBasedInmates VisitorToInmateDetails { get; set; }
+        public bool FrontDeskFlag { get; set; }
+        public bool? VisitorBefore { get; set; }
+        public int? PrimaryVisitorId  { get; set; }
+        public int VisitToVisitorId  { get; set; }
+        public int ScheduleId { get; set; }
+    } 
+
+    public class ScheduledVisits
+    {
+
+        public int ScheduleId { get; set; }
+        public int CountAsVisits { get; set; }
+        public string ReasonNote { get; set; }
+        public string Reason { get; set; }
+        public bool IsCheckInmate { get; set; }
+        public int InmateId { get; set; }
+    }
+
+    #region Old Code
+
+    public class RegisterDetails
+    {
+        public int VisitorId { get; set; }
+        public int PersonId { get; set; }
+        public int? VisitSecondaryFlag { get; set; }
+        public int? VisitorLocationId { get; set; }
+        public int? VisitorListId { get; set; }
+        public string InmateLocation { get; set; }
+        public string VisitorLocation { get; set; }
+        public string Relationship { get; set; }
+        public string VisitorReason { get; set; }
+        public string VisitorType { get; set; }
+        public string VisitorIdType { get; set; }
+        public string VisitorNumber { get; set; }
+        public string VisitorState { get; set; }
+        public string VisitorNotes { get; set; }
+        public string VisitorBooth { get; set; }
+        public string VisitorBadgenumber { get; set; }
+        public string VisitorLocker { get; set; }
+        public string VisitorSystemAlerts { get; set; }
+        public string VisitorTimeIn { get; set; }
+        public string VisitorTimeOut { get; set; }
+        public string ProfType { get; set; }
+        public int? PersonnelOutId { get; set; }
+        public int? PersonnelInId { get; set; }
+        public int? VisitorProfessionalFlag { get; set; }
+        public int? HousingUnitListId { get; set; }
+        public DateTime? ExceedMaxTime { get; set; }
+        public DateTime? VisitorDateOut { get; set; }
+        public DateTime? VisitorDateIn { get; set; }
+        public DateTime? TrackOut { get; set; }
+        public DateTime? TrackIn { get; set; }
+        public PersonInfo VisitorInfo { get; set; }
+        public PersonInfo InmateInfo { get; set; }
+        public PersonInfo PersonnelOut { get; set; }
+        public PersonInfo PersonnelIn { get; set; }
+        public HousingDetail HousingInfo { get; set; }
+        public VisitorStatus VisitorStatus { get; set; }
+    }
+
+    //public class VisitBoothDetailsVm {
+    //	public int VisitBooth { get; set; }
+    //	public int LookupIndex { get; set; }
+    //	public string InmateNumber { get; set; }
+    //	public string LookupDescription { get; set; }
+    //	public string LookupName { get; set; }
+    //	public string PersonFirstName { get; set; }
+    //	public string PersonLastName { get; set; }
+    //}
+
+    //public class InmateScheduleDetails
+    //   {
+    //       public HousingDetail HousingDetail { get; set; }
+    //       public List<ScheduleInfo> ScheduleList { get; set; }
+    //   }
+
+    //   public class ScheduleInfo
+    //   {
+    //       public string Visitday { get; set; }
+    //       public string VisitTimeFrom { get; set; }
+    //       public string VisitTimeTo { get; set; }
+    //       public string RegistrationTimeFrom { get; set; }
+    //       public string RegistrationTimeTo { get; set; }
+    //   }
+
+    public class SearchRegisterDetails
+    {
+        public int FacilityId { get; set; }
+        public int InmateId { get; set; }
+        public string HousingLocation { get; set; }
+        public string HousingNumber { get; set; }
+        public string VisitorLastName { get; set; }
+        public string VisitorFirstName { get; set; }
+        public string VisitorIdNumber { get; set; }
+        public string VisitorType { get; set; }
+        public string VisitorReason { get; set; }
+    }
+
+    public enum VisitorStatus
+    {
+        InProgress,
+        Registered
+    }
+
+    public class DailyVisitationDetailsVm
+    {
+        public DateTime? VisitationFrom { get; set; }
+        public DateTime? VisitationTo { get; set; }
+        public string Location { get; set; }
+        public string LastNameChar { get; set; }
+        public int FacilityId { get; set; }
+        public string HousingUnitLocation { get; set; }
+        public string HousingUnitNumber { get; set; }
+        public int Type { get; set; }
+        public string BedNumber { get; set; }
+        public string BedLocation { get; set; }
+        public string FacilityAbbr { get; set; }
+        public string VisitationDay { get; set; }
+    }
+
+    public class VisitScheduleVm
+    {
+        public List<DailyVisitationDetailsVm> DailyVisitationDetails { get; set; }
+        public List<PrivilegeDetailsVm> PrivilegeList { get; set; }
+        public List<AoAppointmentVm> VisitationApptList { get; set; }
+    }
+
+    //   public class ExistingVisitDetails
+    //   {
+    //       public List<RegisterDetails> VisitationList { get; set; }
+    //       public List<RegisterDetails> ScheduledRegistration { get; set; }
+    //       public PersonalVisitationRule PersonalVisitationRule { get; set; }
+    //       public HousingDetail HousingDetail { get; set; }
+    //       public int? VisitAllowFlag { get; set; }
+    //       public string ClassLevel { get; set; }
+    //       public int RevokedVisitation { get; set; }
+    //       public int VisitPerWeek { get; set; }
+    //       public DateTime CurrentDate { get; set; }
+    //   }
+
+    //   public class PersonalVisitationRule
+    //   {
+    //       public int Count { get; set; }
+    //       public int? VisitRulePerWeek { get; set; }
+    //       public int? MaxLength { get; set; }
+    //   }
+
+    //   public class VisitLocationList
+    //   {
+    //       public string PrivilegeDescription { get; set; }
+    //       public int PrivilegeId { get; set; }
+    //       public int PersonalCount { get; set; }
+    //       public int ProfessionalCount { get; set; }
+    //       public int? CapacityCount { get; set; }
+    //       public string LocationlistId { get; set; }
+    //   }
+
+    //   public class TodayScheduleList : VisitLocationList
+    //   {
+    //       public string DayOfWeek { get; set; }
+    //       public DateTime VisitationFrom { get; set; }
+    //       public DateTime VisitationTo { get; set; }
+    //       public string ExcludeClass { get; set; }
+    //   }
+
+    //   public class FutureVisitDetails
+    //   {
+    //       public List<KeyValuePair<int, string>> LocationList { get; set; }
+    //       public List<TodayScheduleList> InmateScheduleList { get; set; }
+    //       public List<VisitLocationList> VisitLocationList { get; set; }
+    //       public List<KeyValuePair<DateTime, string>> FutureDateList { get; set; }
+    //       public string ExcludeClassify { get; set; }
+    //   }
+
+    //   public class VisitorPersonList
+    //   {
+    //       public int VisitorListId { get; set; }
+    //       public string VisitorFirstName { get; set; }
+    //       public string VisitorLastName { get; set; }
+    //       public string VisitorMiddleName { get; set; }
+    //       public string VisitorRelationship { get; set; }
+    //   }
+
+    //   public class VisitorPersonDetails : VisitorPersonList
+    //   {
+    //       public int PersonId { get; set; }
+    //       public string VisitorType { get; set; }
+    //       public string VisitorNumber { get; set; }
+    //       public string VisitorState { get; set; }
+    //       public int? RejectAllFlag { get; set; }
+    //       public int? RejectInmateFlag { get; set; }
+    //       public int? PersonOfInterestFlag { get; set; }
+    //	public bool GangKeepSep { get; set; }
+    //       public int CustodyFlag { get; set; }
+    //	public string VisitorNote { get; set; }
+    //       public string VisitorAssignNote { get; set; }
+    //       public string RejectAllReason { get; set; }
+    //       public string RejectAllNote { get; set; }
+    //       public string RejectForInmateReason { get; set; }
+    //       public string RejectForInmateNote { get; set; }
+    //       public string PersonOfInterestReason { get; set; }
+    //       public string PersonOfInteresteNote { get; set; }
+    //       public bool VictimContact { get; set; }
+    //       public DateTime? ProfVisitorExpDate { get; set; }
+    //       public DateTime? RejectExpDate { get; set; }
+    //       public DateTime? PersonOfInterestExpDate { get; set; }
+    //       public DateTime? RejectSpecificExpDate { get; set; }
+    //       public List<HistoricalVisitorInfo> HistoricalVisitorList { get; set; }
+    //   }
+
+    //   public class HistoricalVisitorInfo
+    //   {
+    //       public string VisitorTimeIn { get; set; }
+    //       public string VisitorHistoricalNote { get; set; }
+    //       public DateTime? VisitorHistoricalDate { get; set; }
+    //   }
+
+    //   public class RecordsVisitationVm
+    //   {
+    //       public int VisitorId { get; set; }
+    //       public int PersonId { get; set; }
+    //       public int InmateId { get; set; }
+    //       public int VisitorListId { get; set; }
+    //       public int VisitorLocationId { get; set; }
+    //       public int? VisitorProfessionalFlag { get; set; }
+    //       public int VisitorBadgenumber { get; set; }		
+    //	public int VisitorLocker { get; set; }
+    //       public int VisitSecondaryFlag { get; set; }
+    //       public int VisitorDenyFlag { get; set; }
+    //       public DateTime VisitorDate { get; set; }
+    //       public List<string> VisitorSystemFlagList { get; set; }
+    //       public string VisitorReason { get; set; }
+    //       public string VisitorSystemFlagString { get; set; }
+    //       public string VisitorNotes { get; set; }
+    //       public string VisitorType { get; set; }
+    //       public string VisitorRelationShip { get; set; }
+    //       public string VisitorIdType { get; set; }
+    //       public string VisitorIdNumber { get; set; }
+    //       public string VisitorIdState { get; set; }
+    //       public string ProfVisitorIdType { get; set; }
+    //       public string ProfVisitorIdNumber { get; set; }
+    //       public string ProfVisitorIdState { get; set; }
+    //       public string VisitorHistoryValue { get; set; }
+    //       public string VisitorDenyReason { get; set; }
+    //       public string VisitorDenyNote { get; set; }
+    //       public DateTime? ExceedTime { get; set; }
+    //       public int? BoothIndex { get; set; }
+    //       public bool isBooth { get; set; }
+    //}
+
+    public enum VisitorTypeFlag
+    {
+        All,
+        Personal,
+        Professional
+    }
+
+    public class SearchVisitHistoryVm
+    {
+        public string VisitorLast { get; set; }
+        public string VisitorFirst { get; set; }
+        public string VisitorIdType { get; set; }
+        public string VisitorIdState { get; set; }
+        public string VisitorIdNumber { get; set; }
+        public string InmateNumber { get; set; }
+        public string InmateLastName { get; set; }
+        public string InmateFirstName { get; set; }
+        public string Classification { get; set; }
+        public DateTime? DateFrom { get; set; }
+        public DateTime? DateTo { get; set; }
+        public int? LocationId { get; set; }
+        public int? BoothId { get; set; }
+        public bool IsDeleted { get; set; }
+        public bool PrimaryVisitorOnly { get; set; }
+        public bool IsDenied { get; set; }
+        public bool IsRefused { get; set; }
+        public bool IsComplete { get; set; }
+        public string DenyReason { get; set; }
+        public string RefusedReason { get; set; }
+        public string CompleteReason { get; set; }
+        public string VisitorNote { get; set; }
+        public bool CountAsVisit { get; set; }
+        public int? FacilityId { get; set; }
+
+    }
+
+    public class VisitHistoryDetail
+    {
+        public int VisitToVisitorId { get; set; }
+        public int ScheduleId { get; set; }
+        public int PersonId { get; set; }
+        public int? InmateId { get; set; }
+        public int VisitorType { get; set; }
+        public string VisitorLast { get; set; }
+        public string VisitorFirst { get; set; }
+        public string VisitorMiddle { get; set; }
+        public string InmateNumber { get; set; }
+        public string InmateLastName { get; set; }
+        public string InmateFirstName { get; set; }
+        public string Relationship { get; set; }
+        public string Location { get; set; }
+        public DateTime? FromDate { get; set; }
+        public string CompleteReason { get; set; }
+        public int Count { get; set; }
+        public int AdultCount { get; set; }
+        public int ChildCount { get; set; }
+        public int CountAsVisit { get; set; }
+        public int? RelationshipId { get; set; }
+    }
+
+    public class VisitHistory
+    {
+        public int VisitorId { get; set; }
+        public string VisitorLastName { get; set; }
+        public string VisitorFirstName { get; set; }
+        public string VisitorMiddleName { get; set; }
+        public string VisitorSuffix { get; set; }
+        public string InmateLastName { get; set; }
+        public string InmateFirstName { get; set; }
+        public string InmateMiddleName { get; set; }
+        public string InmateSuffix { get; set; }
+        public string InmateNumber { get; set; }
+        public string OfficerLastName { get; set; }
+        public string OfficerFirstName { get; set; }
+        public string OfficerMiddleName { get; set; }
+        public string OfficerBadgeNumber { get; set; }
+        public string VisitorReason { get; set; }
+        public string VisitorNotes { get; set; }
+        public string VisitorIdType { get; set; }
+        public string VisitorIdNumber { get; set; }
+        public string VisitorIdState { get; set; }
+        public string VisitorRelationship { get; set; }
+        public int? VisitorInmateId { get; set; }
+        public int VisitorPersonId { get; set; }
+        public string VisitorLocation { get; set; }
+        public DateTime? VisitorDateIn { get; set; }
+        public DateTime? VisitorDateOut { get; set; }
+        public string VisitorTimeIn { get; set; }
+        public string VisitorTimeOut { get; set; }
+        public DateTime? CreateDate { get; set; }
+        public string VisitorType { get; set; }
+        public int VisitorNotAllowedFlag { get; set; }
+        public int? VisitorProfessionalFlag { get; set; }
+        public int InmatePersonId { get; set; }
+        public int? VisitorDeleteFlag { get; set; }
+        public int VisitorDenyFlag { get; set; }
+        public string VisitorDenyNote { get; set; }
+        public string VisitorDenyReason { get; set; }
+        public string VisitorSystemFlagString { get; set; }
+        public int VisitorTypeId { get; set; }
+    }
+    public class VisitorPassVm
+    {
+        public string ScheduleRoom { get; set; }
+        public string ScheduleDate { get; set; }
+        public string FromTime { get; set; }
+        public string Time { get; set; }
+        public string Booth { get; set; }
+        public string VisitorName { get; set; }
+        public string VistorRelationShip { get; set; }
+        public string InmateName { get; set; }
+        public string InmateNumber { get; set; }
+        public bool VisitorPassCombineFlag { get; set; }
+        public string VisitationSummary { get; set; }
+        public int VisitorType { get; set; }
+        public string ProfessionalType { get; set; }
+        public List<VisitToChild> VisitChildDetail { get;  set; }
+        public List<VisitorIdentityAndRelationship> VisitAdultDetail { get;  set; }
+    }
+    //   public class VisitationConflict
+    //   {
+    //       public int GenderConflict { get; set; }
+    //       public int KeepSepConflict { get; set; }
+    //       public int AppointmentConflict { get; set; }
+    //       public bool ExcludeClassify { get; set; }
+    //       public bool CapacityAlert { get; set; }
+    //}
+    public class VisitRoomManagementDetails
+    {
+        public List<VisitDetails> LstVisitRoomDetails{get;set;}
+        public List<BoothInfo> LstBoothInfo{get;set;}       
+        public List<PersonInfoVm> LstPersonInfo { get; set; }    
+        public List<SlotScheduleDetails> LstSlotScheduleDetails{get;set;}      
+        public int OpenAndAssignedBooth { get; set; }
+        public int NoAssignedBooth { get; set; }
+        public int AssignedBoothOnly { get; set; }
+        public int WaitingForInmate { get; set; }
+        public int StartedNoboothAssign { get; set; }
+        public int MaxTimeExceeded { get; set; }
+         public List<KeyValuePair<int, string>> BoothDataList { get; set; }
+
+
+    }
+    public class SlotScheduleDetails
+    {
+        public TimeSpan Time { get; set; }
+        public int ScheduleVisit{get;set;}
+        public int OutVisitOccurance{get;set;}
+        public int CompleteVisitOccurance{get;set;}
+
+    }
+
+    public class BoothInfo:VisitDetails
+    {
+        public int? BoothId { get; set; }        
+        public string BoothName { get; set; }
+        public PersonInfoVm Person { get; set; }        
+        public bool Expanded { get; set; }
+        public bool? BoothStatus { get; set; }
+        public int LookupIndex { get; set; }
+        public string InmateNumber { get; set; }
+        public string PersonFirstName { get; set; }
+        public string PersonLastName { get; set; }
+        public string PersonMiddleName { get; set; }
+        public int? MaxTime{get;set;}
+        public int? HousingUnitListId{get;set;}
+        public string Classification{get;set;}
+        public string HousingUnitLocation{get;set;}
+        public string PrimaryVisitorFirstName{get;set;}
+        public string PrimaryVisitorLastName{get;set;}
+        public string VisitorNote{get;set;}
+        public List<VisitToAdultDetail> VisitAdultDetails { get; set; }       
+        
+
+    }
+    public class CompleteVisitReason
+    {
+        public string LookupDescription { get; set; }
+        public int? LookupFlag8 { get; set; }
+        public int LookupIdentity { get; set; }
+        public int? LookupFlag9 { get; set; }
+        public int LookupFlag6 { get; set; }
+    }
+
+    public class Revisit
+    {
+
+        public bool FrontDeskFlag { get; set; }
+        public int FacilityId { get; set; }
+        public int? VisitorType { get; set; }
+        public int VisitAdditionAdultCount { get; set; }
+        public int VisitAdditionChildCount { get; set; }
+        public string VisitorIdType { get; set; }
+        public string VisitorIdNumber { get; set; }
+        public string VisitorIdState { get; set; }
+        public int PersonId { get; set; }
+        public int? InmateId { get; set; }
+    }
+
+
+    #endregion
+}

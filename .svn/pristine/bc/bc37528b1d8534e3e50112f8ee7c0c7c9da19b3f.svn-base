@@ -1,0 +1,186 @@
+﻿namespace ServerAPI.Utilities
+{
+    public static class LookupConstants
+    {
+        public const string DIET = "DIET";
+        public const string INMATE = "INMATE";
+        public const string PERSON = "PERSON";
+        public const string IDTYPE = "IDTYPE";
+        public const string OBSTYPE = "OBSTYPE";
+        public const string PERSONCAUTION = "PERSONCAUTION";
+        public const string TRANSCAUTION = "TRANSCAUTION";
+        public const string HAIRCOL = "HAIRCOL";
+        public const string EYECOLOR = "EYECOLOR";
+        public const string SEX = "SEX";
+        public const string RACE = "RACE";
+        public const string TRANSTYPE = "TRANSTYPE";
+        public const string LIVESCAN = "LIVESCAN";
+        public const string WEBSVCCTL = "WEBSVCCTL";
+        public const string NOTETYPEINMATE = "NOTETYPEINMATE";
+        public const string TRACKREFUSALREAS = "TRACKREFUSALREAS";
+        public const string CLASSLINKTYPE = "CLASSLINKTYPE";
+        public const string ARRTYPE = "ARRTYPE";
+        public const string INVDISP = "INVDISP";
+        public const string APPTYPE = "APPTYPE";
+        public const string CLASSGROUP = "CLASSGROUP";
+        public const string SREDQREASON = "SREDQREASON";
+        public const string DISCINTYPE = "DISCINTYPE";
+        public const string DISCTYPE = "DISCTYPE";
+        public const string CHARGEQUALIFIER = "CHARGEQUALIFIER";
+        public const string CRIMETYPE = "CRIMETYPE";
+        public const string CLASREAS = "CLASREAS";
+        public const string DLCLASS = "DLCLASS";
+        public const string POB = "POB";
+        public const string STATE = "STATE";
+        public const string OTHERIDTYPE = "OTHERIDTYPE";
+        public const string NAMESUFFIX = "NAMESUFFIX";
+        public const string CITIZENSTATUS = "CITIZENSTATUS";
+        public const string INMSTAT = "INMSTAT";
+        public const string MEDFLAG = "MEDFLAG";
+        public const string ALTSENTFLAG = "ALTSENTFLAG";
+        public const string APPTREAS = "APPTREAS";
+        public const string NCICREQTRANS = "NCICREQTRANS";
+        public const string INVDELREAS = "INVDELREAS";
+        public const string INVARTCL = "INVARTCL";
+        public const string CALLLOGTYPE = "CALLLOGTYPE";
+        public const string INVCOLOR = "INVCOLOR";
+        public const string VICTIM = "VICTIM";
+        public const string RELATIONS = "RELATIONS";
+        public const string BOOKSTAT = "BOOKSTAT";
+        public const string CRIMEGROUP = "CRIMEGROUP";
+        public const string LANGUAGE = "LANGUAGE";
+        public const string RECCHKREQTYPE = "RECCHKREQTYPE";
+        public const string CLASSREVIEWTEXT = "CLASSREVIEWTEXT";
+        public const string INCFLAG = "INCFLAG";
+        public const string INCARATTACHTYPE = "INCARATTACHTYPE";
+        public const string DNADISPO = "DNADISPO";
+        public const string DNAPROCESSEDDISPO = "DNAPROCESSEDDISPO";
+        public const string BOOKATTACHTYPE = "BOOKATTACHTYPE";
+        public const string RECCHKREQACTION = "RECCHKREQACTION";
+        public const string TRANSROUTE = "TRANSROUTE";
+        public const string TESTTYPE = "TESTTYPE";
+        public const string TESTDISPO = "TESTDISPO";
+        public const string TESTPROCESSDISPO = "TESTPROCESSDISPO";
+        public const string SENTFLAG = "SENTFLAG";
+        public const string BOOKNOTETYPE = "BOOKNOTETYPE";
+        public const string STORAGE = "STORAGE";
+        public const string ADDRDIR = "ADDRDIR";
+        public const string ADDRSUFF = "ADDRSUFF";
+        public const string ADDRUNIT = "ADDRUNIT";
+        public const string VISPERIDTYPE = "VISPERIDTYPE";
+        public const string VISPROFIDTYPE = "VISPROFIDTYPE";
+        public const string VISREJECTREAS = "VISREJECTREAS";
+        public const string VISPERSINTREAS = "VISPERSINTREAS";
+        public const string VISTYPE = "VISTYPE";
+        public const string VISITDENYREAS = "VISITDENYREAS";
+        public const string SKILLTRADES = "SKILLTRADES";
+        public const string OVERALLCONDREL = "OVERALLCONDREL";
+        public const string LAWDISPO = "LAWDISPO";
+        public const string NONCOMPL = "NONCOMPL";
+        public const string BOOKCONDCLEAR = "BOOKCONDCLEAR";
+        public const string HOLD = "HOLD";
+        public const string ARRESTTYPE = "arrest_type";
+        public const string INCARCERATIONCOMPLETE = "INCARCERATION COMPLETE";
+        public const string CASEDATACOMPLETE = "CASE DATA COMPLETE";
+        public const string INTAKE = "Intake";
+        public const string PREBOOK = "Prebook";
+        public const string BOOKING = "Booking";
+        public const string CLASSIFY = "Classify";
+        public const string CLASSFILE = "Class File";
+        public const string FILE = "File";
+        public const string NEWINTAKE = "Start New Intake";
+        public const string BOOKINGINPROGRESS = "Continue To Booking InProgress";
+        public const string CONTINUECLASSIFY = "Continue To Classify";
+        public const string CONTINUEHOUSING = "Continue To Housing";
+        public const string CONTINUEINMATEDETAIL = "Continue To Inmate Detail";
+        public const string NOTETYPECELL = "NOTETYPECELL";
+        public const string NOTETYPELOC = "NOTETYPELOC";
+        public const string NOTETYPEGEN = "NOTETYPEGEN";
+        public const string VISBOOTH = "VISBOOTH";
+        public const string VISLOCKER = "VISLOCKER";
+        public const string VISBADGE = "VISBADGE";
+        public const string VISREAS = "VISREAS";
+        public const string VISITTYPE = "VISITTYPE";
+        public const string SENTTYPE = "SENTTYPE";
+        public const string SENTFIND = "SENTFIND";
+        public const string SENTDURATION = "SENTDURATION";
+        public const string DISCDAM = "DISCDAM";
+        public const string PROGCASESTATUS = "PROGCASESTATUS";
+        public const string LIBBOOKCAT = "LIBBOOKCAT";
+        public const string LIBBOOKTYPE = "LIBBOOKTYPE";
+        public const string LIBBOOKCOND = "LIBBOOKCOND";
+        public const string SENTFINETYPE = "SENTFINETYPE";
+        public const string GRIEVTYPE = "GRIEVTYPE";
+        public const string GRVAPPEALTYPE = "GRVAPPEALTYPE";
+        public const string DISCVIOL = "DISCVIOL";
+        public const string GRIEVDISPO = "GRIEVDISPO";
+        public const string GRIEVFLAG = "GRIEVFLAG";
+        public const string MILBRANCH = "MILBRANCH";
+        public const string MILITARYSTAT = "MILITARYSTAT";
+        public const string MILITARYRANK = "MILITARYRANK";
+        public const string TEMPHOLDDISPO = "TEMPHOLDDISPO";
+        public const string TEMPHOLDTYPE = "TEMPHOLDTYPE";
+        public const string COMMITTYPE = "COMMITTYPE";
+        public const string INCAPPEALREAS = "INCAPPEALREAS";
+        public const string INCAPPEALDISPO = "INCAPPEALDISPO";
+        public const string APPTDELREAS = "APPTDELREAS";
+        public const string ASSESSMENTCOMPLETE = "ASSESSMENT COMPLETE";
+        public const string MARITAL = "MARITAL";
+        public const string WAREHOUSECAT = "WAREHOUSECAT";
+        public const string DELIVERDISPO = "DELIVERDISPO";
+        public const string NOTETYPESITE = "NOTETYPESITE";
+        public const string INTAKECURMODREAS = "INTAKECURMODREAS";
+        public const string SEALREASON = "SEALREASON";
+        public const string NOTALLOWED = "N/A";
+        public const string INCCAT = "INCCAT";
+        public const string VISITCOMPLETE = "VISITCOMPLETE";
+        public const string VERIFYID = "VERIFYID";
+        public const string MEDNOTETYPE = "MEDNOTETYPE";
+        public const string PREAFLAGS = "PREAFLAGS";
+        public const string PREANOTETYPE = "PREANOTETYPE";
+        public const string INVESTIGATIONNOTETYPE = "INVESTIGATIONNOTETYPE";
+        public const string DEPARTMENT = "DEPARTMENT";
+        public const string POSITION = "POSITION";
+        public const string MAILTYPE = "MAILTYPE";
+        public const string MAILDEST = "MAILDEST";
+        public const string MAILSENDERTYPE = "MAILSENDERTYPE";
+        public const string MAILREFUSALREAS = "MAILREFUSALREAS";
+       public const string MAILDESTOUT = "MAILDESTOUT";
+        public const string MAILSENDERTYPEOUT = "MAILSENDERTYPEOUT";
+        public const string COLLECTTYPE = "COLLECTTYPE";
+        public const string MailCover = "Mail Cover";
+        public const string MailRevoke = "Mail Revoke";
+        public const string CLASSGROUPSUB = "CLASSGROUPSUB";
+        public const string PROGRAMCATEGORY = "PROGRAMCATEGORY";
+
+    }
+
+
+    public static class LookupDescriptionConstants
+    {
+        public const string FRONT_VIEW = "FRONT_VIEW";
+        public const string SIDE_VIEW = "SIDE_VIEW";
+        public const string TATTOO = "TATTOO";
+        public const string PIERCING = "PIERCING";
+        public const string COMPOSITE = "COMPOSITE";
+        public const string IDMARK = "IDMARK";
+        public const string EVIDENCE = "EVIDENCE";
+        public const string PROPERTY = "PROPERTY";
+        public const string OTHER = "OTHER";
+
+    }
+}
+public enum LookUpType
+{
+    LIBBOOKTYPE,
+    LIBBOOKCAT,
+    LIBBOOKCOND
+}
+public enum InmateSupplyLookUp
+{
+    SHIRTS,
+    SHOES,
+    BRAS,
+    PANTS,
+    UNDERWEAR
+}

@@ -1,0 +1,471 @@
+﻿using GenerateTables.Models;
+using ServerAPI.Utilities;
+using ServerAPI.ViewModels;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
+
+namespace ServerAPI.Services
+{
+    public class ClassifyService : IClassifyService
+    {
+
+        private readonly AAtims _context;
+        private readonly ICommonService _commonService;
+        private readonly IFormsService _formsService;
+        private readonly IPersonService _personService;
+        private readonly int _personnelId;
+        private readonly IInterfaceEngineService _interfaceEngineService;
+
+        public ClassifyService(AAtims context, ICommonService commonService, IFormsService formsService,
+            IHttpContextAccessor httpContextAccessor, IPersonService personService,
+            IInterfaceEngineService interfaceEngineService)
+        {
+            _context = context;
+            _commonService = commonService;
+            _formsService = formsService;
+            _personnelId =
+                Convert.ToInt32(httpContextAccessor.HttpContext.User.FindFirst(AuthDetailConstants.PERSONNELID)?.Value);
+            _personService = personService;
+            _interfaceEngineService = interfaceEngineService;
+        }
+
+        #region Initial
+
+        //Get Inmate Classification Summary and Review History Details
+        public ClassificationVm GetInmateClassificationSummary(int inmateId)
+        {
+            //checked it is initial classification or not (it includes save draft concept too)
+            bool isExist = _context.Inmate.Any(x => x.InmateId == inmateId && x.InmateClassificationId == null
+                || x.InmateClassificationId > 0 && x.InmateId == inmateId
+                && x.FormRecordInmate.Any(a => a.InmateClassificationId == x.InmateClassificationId
+                    && a.InmateId == inmateId && !a.ValidationFlag
+                    && x.InmateClassification.InmateClassificationType == "INITIAL"));
+
+            //Get Initial and Reclassification details of this Inmate
+            List<InmateClassificationVm> inmateClassify = _context.InmateClassification
+                .Where(x => x.InmateId == inmateId)
+                .Select(a => new InmateClassificationVm
+                {
+                    InmateClassificationId = a.InmateClassificationId,
+                    DateAssigned = a.InmateDateAssigned.Value,
+                    DateUnAssigned = a.InmateDateUnassigned.Value,
+                    ClassificationReason = a.InmateClassificationReason,
+                    ClassificationType = a.InmateClassificationType,
+                    ClassificationNarration = a.InmateOverrideNarrative,
+                    ClassificationOfficer = new PersonnelVm
+                    {
+                        PersonFirstName = a.ClassificationOfficer.PersonNavigation.PersonFirstName,
+                        PersonLastName = a.ClassificationOfficer.PersonNavigation.PersonLastName,
+                        OfficerBadgeNumber = a.ClassificationOfficer.OfficerBadgeNum
+                    },
+                    ClassDate = a.InmateDateAssigned.Value
+                }).ToList();
+
+            //Get Review details of this Inmate
+            List<InmateClassificationVm> reviewlist = _context.InmateClassificationNarrative
+                .Where(x => x.InmateId == inmateId && x.ReviewFlag == 1)
+                .Select(a => new InmateClassificationVm
+                {
+                    ClassificationNarrativeId = a.InmateClassificationNarrativeId,
+                    DateAssigned = a.CreateDate.Value,
+                    ClassificationType = a.NoteType,
+                    ClassificationNarration = a.Narrative,
+                    NoteType = a.NoteType,
+                    ReviewOfficer = new PersonnelVm
+                    {
+                        PersonFirstName = a.CreatedByNavigation.PersonNavigation.PersonFirstName,
+                        PersonLastName = a.CreatedByNavigation.PersonNavigation.PersonLastName,
+                        OfficerBadgeNumber = a.CreatedByNavigation.OfficerBadgeNum
+                    },
+                    ClassDate = a.CreateDate.Value
+                }).ToList();
+
+            //combining Review details with the Initial and Re-classification details
+            inmateClassify.AddRange(reviewlist);
+
+            inmateClassify = inmateClassify.OrderByDescending(x => x.DateAssigned)
+                .ThenByDescending(y => y.ClassificationType).ToList();
+
+            return new ClassificationVm { LstInmateClassification = inmateClassify, ClassificationInitial = isExist };
+        }
+
+        //Inmate Classification Details
+        public InmateDetail GetInmateClassificationDetails(int inmateClassificationId, int inmateId)
+        {
+            int arrestId = _context.IncarcerationArrestXref.Where(i => i.Incarceration.InmateId == inmateId)
+                 .OrderByDescending(i => i.Incarceration.DateIn).FirstOrDefault()?.ArrestId ?? 0;
+
+            InmateDetail inmateDetail = _context.InmateClassification
+               .Where(x => x.InmateClassificationId == inmateClassificationId && x.InmateId == inmateId)
+               .Select(a => new InmateDetail
+               {
+                   InmateNumber = a.InmateNavigation.InmateNumber,
+                   ArrestId = arrestId,
+                   InmateClassification = new InmateClassificationVm
+                   {
+                       DateAssigned = a.InmateDateAssigned,
+                       ClassificationType = a.InmateClassificationType,
+                       ClassificationNarration = a.InmateOverrideNarrative,
+                       ClassificationReason = a.InmateClassificationReason
+                   },
+                   Person = new PersonVm
+                   {
+                       PersonFirstName = a.ClassificationOfficer.PersonNavigation.PersonFirstName,
+                       PersonLastName = a.ClassificationOfficer.PersonNavigation.PersonLastName,
+                       PersonId = a.ClassificationOfficer.PersonId,
+                       PersonMiddleName = a.ClassificationOfficer.PersonNavigation.PersonMiddleName,
+                       PersonCii = a.ClassificationOfficer.PersonNavigation.PersonCii,
+                       PersonDob = a.ClassificationOfficer.PersonNavigation.PersonDob,
+                       PersonSexLast = a.ClassificationOfficer.PersonNavigation.PersonSexLast,
+                   }
+               }).SingleOrDefault() ?? _context.Inmate.Where(inm => inm.InmateId == inmateId)
+               .Select(inm => new InmateDetail
+               {
+                   InmateNumber = inm.InmateNumber,
+                   ArrestId = arrestId,
+                   Person = new PersonVm
+                   {
+                       PersonFirstName = inm.Person.PersonFirstName,
+                       PersonLastName = inm.Person.PersonLastName,
+                       PersonId = inm.PersonId,
+                       PersonMiddleName = inm.Person.PersonMiddleName,
+                       PersonCii = inm.Person.PersonCii,
+                       PersonDob = inm.Person.PersonDob,
+                       PersonSexLast = inm.Person.PersonSexLast,
+                   }
+               }).Single();
+
+
+            inmateDetail.Lookup = _commonService.GetLookupList(LookupConstants.CLASREAS)
+                .Select(x => new LookupVm
+                {
+                    LookupDescription = x.LookupDescription,
+                    LookupName = x.LookupName,
+                    LookupIndex = x.LookupIndex,
+                    LookupFlag6 = x.LookupFlag6 ?? 0
+                }).ToList();           
+
+            inmateDetail.ValidationFlag = _context.FormRecord.FirstOrDefault(w => w.InmateId == inmateId)?.ValidationFlag??false;           
+
+            return inmateDetail;
+        }
+
+        //Inmate Initial Details
+        public InmateDetail GetInitialClassification(int inmateId)
+        {
+            PersonVm a = _personService.GetInmateDetails(inmateId);
+            InmateDetail inmateDetail = new InmateDetail
+            {
+                Person = new PersonVm
+                {
+                    PersonFirstName = a.PersonFirstName,
+                    PersonLastName = a.PersonLastName,
+                    PersonId = a.PersonId
+                },
+                InmateNumber = a.InmateNumber
+            };
+            return !_personService.IsPersonSealed(inmateDetail.Person.PersonId) ? null : inmateDetail;
+        }
+
+        //Create Classification Entry
+        public async Task<int> InsertInmateClassificationEntry(InmateDetail details)
+        {
+            if (details.IsSaveDraft)
+            {
+                return await ClassificationSaveDraft(details);
+            }
+
+            //If the selected user has prior classification record(s) with no “Inmate_Date_Unassigned” information, 
+            //update the field of that record to current date.			
+            _context.InmateClassification.OrderByDescending(x => x.InmateClassificationId)
+                .Where(x => x.InmateId == details.InmateClassification.InmateId
+                    && x.InmateDateUnassigned == null).ToList().ForEach(item =>
+                {
+                    item.InmateDateUnassigned = DateTime.Now;
+                    _context.SaveChanges();
+                });
+
+            //Inserting into Inmate Classification table
+            InmateClassification inmateClassification = new InmateClassification
+            {
+                InmateId = details.InmateClassification.InmateId,
+                InmateDateAssigned = details.InmateClassification.DateAssigned,
+                InmateClassificationType = details.InmateClassification.ClassificationType,
+                InmateClassificationReason = details.InmateClassification.ClassificationReason,
+                ClassificationOfficerId = _personnelId,
+                CreateDate = DateTime.Now,
+                CreateBy = _personnelId,
+                InmateOverrideNarrative = details.InmateClassification.ClassificationNarration
+            };
+            _context.Add(inmateClassification);
+
+            //Updating into Inmate table
+            Inmate inmate = _context.Inmate.SingleOrDefault(x => x.InmateId == details.InmateClassification.InmateId);
+
+            if (inmate == null) return -1;
+
+            inmate.InmateClassificationId = inmateClassification.InmateClassificationId;
+            inmate.LastClassReviewDate = DateTime.Now;
+            inmate.LastClassReviewBy = _personnelId;
+
+            await _context.SaveChangesAsync();
+            return inmateClassification.InmateClassificationId;
+
+        }
+
+        private async Task<int> ClassificationSaveDraft(InmateDetail details)
+        {
+            //Inserting into Inmate Classification table
+            InmateClassification inmateClassification = new InmateClassification
+            {
+                InmateId = details.InmateClassification.InmateId,
+                InmateDateAssigned = details.InmateClassification.DateAssigned,
+                InmateClassificationType = details.InmateClassification.ClassificationType,
+                InmateClassificationReason = details.InmateClassification.ClassificationReason,
+                ClassificationOfficerId = _personnelId,
+                CreateDate = DateTime.Now,
+                CreateBy = _personnelId,
+                InmateOverrideNarrative = details.InmateClassification.ClassificationNarration
+            };
+            _context.Add(inmateClassification);
+
+            //Updating into Inmate table
+            Inmate inmate = _context.Inmate.SingleOrDefault(x => x.InmateId == details.InmateClassification.InmateId);
+
+            if (inmate == null) return -1;
+
+            inmate.InmateClassificationId = inmateClassification.InmateClassificationId;
+
+            await _context.SaveChangesAsync();
+            return inmateClassification.InmateClassificationId;
+        }
+        public async Task<int> UpdateClassification(InmateClassificationVm classify)
+        {
+            InmateClassification inmateClassification = _context.InmateClassification
+                .Find(classify.InmateClassificationId);
+            inmateClassification.InmateDateAssigned = classify.DateAssigned;
+            inmateClassification.InmateClassificationReason = classify.ClassificationReason.Trim();
+            inmateClassification.UpdateDate = DateTime.Now;
+            inmateClassification.UpdateBy = _personnelId;
+            inmateClassification.InmateOverrideNarrative = classify.ClassificationNarration;
+
+            if(!classify.isSaveDraft)
+            {                
+                 //Updating into Inmate table
+                Inmate inmate = _context.Inmate.SingleOrDefault(x => x.InmateId == classify.InmateId);
+                if (inmate == null) return -1;
+                inmate.InmateClassificationId = classify.InmateClassificationId;
+                inmate.LastClassReviewDate = DateTime.Now;
+                inmate.LastClassReviewBy = _personnelId;
+            }              
+            _context.SaveChanges();
+
+            int formRecordId = await _formsService.SaveForm(classify.ClassifyFormData);
+           
+            _interfaceEngineService.Export(new ExportRequestVm
+            {
+                EventName = EventNameConstants.CLASSIFICATION,
+                PersonnelId = _personnelId,
+                Param1 = classify.ClassificationOfficer.PersonId.ToString(),
+                Param2 = classify.InmateClassificationId.ToString()
+            });
+
+            await _context.SaveChangesAsync();
+
+            return formRecordId;
+        }
+        public async Task<int> SaveClassification(InmateClassificationVm classify)
+        {
+            InmateClassification inmateClassification = _context.InmateClassification
+                .Find(classify.InmateClassificationId);
+            inmateClassification.InmateDateAssigned = classify.DateAssigned;
+            inmateClassification.InmateClassificationReason = classify.ClassificationReason.Trim();
+            inmateClassification.UpdateDate = DateTime.Now;
+            inmateClassification.UpdateBy = _personnelId;
+            inmateClassification.InmateOverrideNarrative = classify.ClassificationNarration;
+
+            if (!classify.isSaveDraft)
+            {
+                //Updating into Inmate table
+                Inmate inmate = _context.Inmate.SingleOrDefault(x => x.InmateId == classify.InmateId);
+                if (inmate == null) return -1;
+                inmate.InmateClassificationId = classify.InmateClassificationId;
+                inmate.LastClassReviewDate = DateTime.Now;
+                inmate.LastClassReviewBy = _personnelId;
+            }
+            _context.SaveChanges();
+
+            int formRecordId = await _formsService.SavePdfForm(classify.ClassifyFormData);
+
+            _interfaceEngineService.Export(new ExportRequestVm
+            {
+                EventName = EventNameConstants.CLASSIFICATION,
+                PersonnelId = _personnelId,
+                Param1 = classify.ClassificationOfficer.PersonId.ToString(),
+                Param2 = classify.InmateClassificationId.ToString()
+            });
+
+            await _context.SaveChangesAsync();
+
+            return formRecordId;
+        }
+        #endregion
+
+        //Added as Review Entry when passing Review Flag as 1
+        //Added as Classification Note Entry when passing Review Flag as 0
+        public async Task<int> InsertReviewEntry(InmateDetail details)
+        {
+            if (details.InmateClassification.IsReview)
+            {
+                Inmate inmate = _context.Inmate.Find(details.InmateId);
+                inmate.LastClassReviewDate = DateTime.Now;
+                inmate.LastClassReviewBy = _personnelId;
+                _context.Inmate.Update(inmate);
+            }
+
+            InmateClassificationNarrative inmateClassificationNarrative = new InmateClassificationNarrative
+            {
+                InmateId = details.InmateId,
+                ReviewFlag = details.InmateClassification.ReviewFlag,
+                Narrative = details.InmateClassification.ClassificationNarration,
+                NoteType = details.InmateClassification.NoteType,
+                CreateDate = DateTime.Now,
+                CreatedBy = _personnelId
+            };
+            _context.InmateClassificationNarrative.Add(inmateClassificationNarrative);
+            return await _context.SaveChangesAsync();
+        }
+
+        //Update Review Entry as well as Classification Note Entry
+        public async Task<int> UpdateClassificationReview(InmateClassificationVm classify)
+        {
+            InmateClassificationNarrative inmateClassificationNarrative = _context.InmateClassificationNarrative.Find(
+                classify.ClassificationNarrativeId);
+
+            inmateClassificationNarrative.UpdateDate = DateTime.Now;
+            inmateClassificationNarrative.UpdatedBy = _personnelId;
+            inmateClassificationNarrative.Narrative = classify.ClassificationNarration;
+            inmateClassificationNarrative.NoteType = classify.NoteType;
+
+            return await _context.SaveChangesAsync();
+        }
+
+        #region Last non-pending classification
+
+        public string GetLastNonPendingClassification(string inmateNumber)
+        {
+            int inmateId = _context.Inmate.Where(x => x.InmateNumber.Equals(inmateNumber)).Select(s => s.InmateId)
+                .First();
+            string classification = _context.InmateClassification.Where(x => x.InmateId == inmateId)
+                .OrderByDescending(o => o.InmateClassificationId).Select(s => s.InmateClassificationReason).FirstOrDefault();
+            return classification;
+        }
+
+        #endregion
+        //below condition for getting classified count
+        public int GetInmateCount(int inmateId) =>
+            _context.Inmate.Count(w => w.InmateClassificationId > 0 && w.InmateId == inmateId
+                && w.FormRecordInmate.Any(a =>
+                    a.InmateClassificationId == w.InmateClassification.InmateClassificationId
+                    && a.InmateId == inmateId && a.ValidationFlag));
+
+        public List<KeyValuePair<int, string>> GetClassifySubModules()
+        {
+            List<KeyValuePair<int, string>> classifyList = _context.AppAoDetail.Where(w => w.AppAoSubModuleId == 41500)
+                .Select(s => new KeyValuePair<int, string>
+                (s.AppAoDetailId, s.AppAoDetailName == "Booking" ? "Bookings" : s.AppAoDetailName == "Inmate" ? "Operations" : s.AppAoDetailName)
+                ).ToList();
+
+            List<KeyValuePair<int, string>> inmateFlieList = _context.AppAoDetail.Where(w =>
+                    w.AppAoSubModule.AppAoModuleId == 401
+                    && classifyList.Select(s => s.Value).Contains(w.AppAoSubModule.AppAoSubModuleName))
+                .Select(s => new KeyValuePair<int, string>
+                    (classifyList.FirstOrDefault(w => w.Value == s.AppAoSubModule.AppAoSubModuleName).Key,
+                        s.AppAoDetailName)
+                )
+                .ToList();
+
+            return inmateFlieList;
+        }
+
+        public ClassifyAlertsVm GetClassifyMessageAlerts(int faclityId)
+        {
+            string faclityName = _context.Facility.First(x => x.FacilityId == faclityId).FacilityAbbr;
+            ClassifyAlertsVm classifyAlertVm = new ClassifyAlertsVm
+            {
+                ClassifyAlerts = _context.PersonAlert.Where(w => w.ActiveAlertFlag == 1 && w.Alert != null &&
+                        w.Person.Inmate.Any(a => a.FacilityId == faclityId))
+                    .Select(s => new ClassifyAlerts
+                    {
+                        AlertId = s.PersonAlertId,
+                        PersonId = s.PersonId,
+                        PersonFirstName = s.Person.PersonFirstName,
+                        PersonMiddleName = s.Person.PersonMiddleName,
+                        PersonLastName = s.Person.PersonLastName,
+                        PersonSuffix = s.Person.PersonSuffix,
+                        InmateId = s.Person.Inmate.Single().InmateId,
+                        AlertMessage = s.Alert,
+                    }).ToList()
+            };
+
+
+            List<ClassifyAlerts> classifyAlertsVms = _context.Inmate
+                .Where(i => i.Person.PersonAlert.Any(x => x.ActiveAlertFlag == 1)
+                    && i.FacilityId == faclityId)
+                .Select(a => new ClassifyAlerts
+                {
+                    InmateId = a.InmateId,
+                    InmateNumber = a.InmateNumber,
+                    InmateClassificationId = a.InmateClassificationId ?? 0,
+                    Classification = a.InmateClassification.InmateClassificationReason,
+                    HousingUnitId = a.HousingUnitId ?? 0,
+                    Facility = a.Facility.FacilityAbbr,
+                    HousingLocation = a.HousingUnit.HousingUnitLocation,
+                    HousingUnitNumber = a.HousingUnit.HousingUnitNumber,
+                    Location = a.InmateCurrentTrack,
+                    ClassDate = a.InmateClassification.InmateDateAssigned,
+                    Personnel = new PersonnelVm
+                    {
+                        PersonLastName = a.InmateOfficer.PersonNavigation.PersonLastName,
+                        PersonFirstName = a.InmateOfficer.PersonNavigation.PersonFirstName
+                    }
+                }).ToList();
+
+            classifyAlertVm.ClassifyAlerts.ForEach(item =>
+            {
+                ClassifyAlerts classifyAlert = classifyAlertsVms.Single(p => p.InmateId == item.InmateId);
+                item.InmateNumber = classifyAlert.InmateNumber;
+                item.InmateClassificationId = classifyAlert.InmateClassificationId;
+                item.Classification = classifyAlert.Classification;
+                item.HousingUnitId = classifyAlert.HousingUnitId;
+                item.Facility = classifyAlert.Facility;
+                item.HousingLocation = classifyAlert.HousingLocation;
+                item.HousingUnitNumber = classifyAlert.HousingUnitNumber;
+                item.Location = classifyAlert.Location;
+                item.Personnel = classifyAlert.Personnel;
+            });
+            classifyAlertVm.ClassifyAlertsCount = classifyAlertVm.ClassifyAlerts
+                .GroupBy(se => se.HousingUnitId > 0 ? 1 : 0).Select(s => new ClassifyAlertsCount
+                {
+                    Id = s.Key != 0 ? faclityId : default,
+                    Title = s.Key != 0 ? faclityName : default,
+                    Count = s.Count(),
+                    ClassifyCount = classifyAlertVm.ClassifyAlerts
+                        .Where(x => s.Key != 0 ? x.HousingUnitId != 0 : x.HousingUnitId == 0)
+                        .GroupBy(w => w.Classification)
+                        .Select(se => new ClassifyAlertsCount
+                        {
+                            Id = se.Select(x => x.InmateClassificationId ?? 0).FirstOrDefault(),
+                            Title = se.Select(y => y.Classification).FirstOrDefault(),
+                            Count = se.Count()
+                        }).ToList()
+                }).ToList();
+            classifyAlertVm.ClassifyAlerts = classifyAlertVm.ClassifyAlerts.OrderBy(x => x.PersonLastName)
+                .ThenByDescending(y => y.ClassDate).ToList();
+            return classifyAlertVm;
+        }
+    }
+}

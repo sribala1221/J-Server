@@ -1,0 +1,80 @@
+﻿using Microsoft.Extensions.Configuration;
+using Moq;
+using ServerAPI.Services;
+using ServerAPI.Tests;
+using Xunit;
+using Microsoft.AspNetCore.Http;
+using JwtDb.Models;
+using Microsoft.AspNetCore.Identity;
+using ServerAPI.JMS.Tests.Helper;
+using Microsoft.Extensions.Caching.Memory;
+using ServerAPI.Policies;
+
+// ReSharper disable once CheckNamespace
+namespace ServerAPI.JMS.Tests
+{
+    [Collection("Database collection")]
+    public class InmateDetailsServiceTest
+    {
+        private readonly InmateDetailsService _inmatedetailService;
+        private readonly IConfigurationRoot _configuration = MockHelpers.GetIConfigurationRoot();
+        private readonly Mock<IMemoryCache> _memory = new Mock<IMemoryCache>();
+        public InmateDetailsServiceTest(DbInitialize fixture)
+        {
+            PhotosService photosService = new PhotosService(fixture.Db, _configuration);
+            Mock<UserManager<AppUser>> userMgr = MockHelpers.MockUserManager<AppUser>();
+            AtimsHubService atimsHubService = new AtimsHubService(fixture.HubContext.Object);
+            AppletsSavedService appletsSavedService = new AppletsSavedService(fixture.Db, _configuration);
+            HttpContextAccessor httpContext = new HttpContextAccessor { HttpContext = fixture.Context.HttpContext };
+            Mock<RoleManager<IdentityRole>> roleMgr = MockHelpers.MockRoleManager<IdentityRole>();
+            UserPermissionPolicy userPermission =
+                new UserPermissionPolicy(fixture.Db, userMgr.Object, roleMgr.Object, httpContext);
+            PersonService personService = new PersonService(fixture.Db);
+            FacilityPrivilegeService facilityPrivilegeService = new FacilityPrivilegeService(fixture.Db, httpContext,
+                personService);
+            InterfaceEngineService interfaceEngineService = new InterfaceEngineService(fixture.Db, _configuration,
+                _memory.Object);
+            CommonService commonService = new CommonService(fixture.Db, _configuration, httpContext, personService,
+                appletsSavedService, interfaceEngineService);
+            FacilityHousingService facilityHousingService = new FacilityHousingService(fixture.Db, _configuration,
+                httpContext);
+            RecordsCheckService recordsCheckService = new RecordsCheckService(fixture.Db, commonService, httpContext);
+
+            InmateService inmateService = new InmateService(fixture.Db, commonService, personService, httpContext,
+                facilityPrivilegeService, photosService);
+            SearchService searchService = new SearchService(fixture.Db, photosService);
+
+            KeepSepAlertService keepSepAlertService = new KeepSepAlertService(fixture.Db, httpContext,
+                facilityHousingService, interfaceEngineService);
+            WizardService wizardService = new WizardService(fixture.Db, atimsHubService);
+            PersonAkaService personAkaService =
+                new PersonAkaService(fixture.Db, commonService, httpContext, personService, interfaceEngineService);
+            PrebookActiveService prebookActiveService =
+                new PrebookActiveService(fixture.Db, httpContext, atimsHubService);
+            PersonCharService personCharService = new PersonCharService(fixture.Db, commonService, httpContext,
+                personService, interfaceEngineService);
+            PersonIdentityService personIdentityService = new PersonIdentityService(fixture.Db,
+                httpContext, prebookActiveService, personAkaService, personService, interfaceEngineService);
+            AppointmentViewerService appointmentViewerService =
+                new AppointmentViewerService(fixture.Db, commonService, photosService);
+
+            RegisterService registerService = new RegisterService(fixture.Db, httpContext, commonService,
+                personCharService, photosService, wizardService, personIdentityService, keepSepAlertService,
+                userPermission);
+            AppointmentService appointmentService = new AppointmentService(fixture.Db,
+                commonService, registerService, httpContext, personService, keepSepAlertService,
+                interfaceEngineService, appointmentViewerService);
+
+
+            BookingReleaseService bookingReleaseService = new BookingReleaseService(
+                fixture.Db, commonService, httpContext, personService, inmateService, recordsCheckService,
+                facilityHousingService, interfaceEngineService);
+
+            InmateBookingService inmateBookingService = new InmateBookingService(
+                fixture.Db, httpContext, bookingReleaseService, commonService, searchService, interfaceEngineService, appointmentService);
+
+            _inmatedetailService = new InmateDetailsService(fixture.Db, commonService, inmateBookingService,
+                httpContext, fixture.JwtDb, userMgr.Object, appointmentViewerService, personService, photosService);
+        }
+    }
+}

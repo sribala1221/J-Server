@@ -1,0 +1,40 @@
+﻿using System.Collections.Generic;
+
+namespace ServerAPI.ViewModels
+{
+    public class LookupVm
+    {
+        public int LookupIndex { get; set; }
+        public string LookupType { get; set; }
+        public string LookupName { get; set; }
+        public string LookupDescription { get; set; }
+        public string LookupCategory { get; set; }
+        public string LookupColor { get; set; }
+        public bool LookupInactive { get; set; }
+        public bool AlertAllowExpire { get; set; }
+        public int LookupNoAlert { get; set; }
+        public int AlertOrder { get; set; }
+        public int LookupFlag6 {get;set;}
+        public int LookupFlag7 { get; set; }
+        public int LookupFlag8 { get; set; }
+        public int LookupFlag9 { get; set; }
+        public int LookupFlag10 { get; set; }
+        public int LookupOrder { get; set; }
+        public int LookupIdentity { get; set; }
+    }
+
+    public class LookupValues
+    {
+        public string Value { get; set; }
+        public string Display { get; set; }
+    }
+
+    public class LookupDropdownListVm
+    {
+        public string Discription { get; set; }
+        public List<LookupValues> Values { get; set; }
+    }
+
+
+
+}

@@ -1,0 +1,16 @@
+﻿using System.Threading.Tasks;
+using ServerAPI.ViewModels;
+
+namespace ServerAPI.Services
+{
+    public interface IOperationViewerService
+    {
+        FacilityViewerVm GetFacilityViewerInit(int facilityId, bool isOperationViewer);
+
+        FacilityViewerVm GetFacilityViewerRefresh(ViewerParameter objViewer);
+
+        Task<int> UpdateUserSettings(ViewerFilter objFilter);
+
+        Task<int> OperationDelete(DeleteParams deleteParams);
+    }
+}

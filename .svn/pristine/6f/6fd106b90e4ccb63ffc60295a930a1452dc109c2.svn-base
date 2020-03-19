@@ -1,0 +1,60 @@
+﻿using System.Net.Http;
+using Microsoft.AspNetCore.Mvc;
+using ServerAPI.Services;
+using System.Threading.Tasks;
+using ServerAPI.ViewModels;
+using JwtDb.Models;
+using Microsoft.AspNetCore.Identity;
+
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    public class UserSettingsController : ControllerBase
+    {
+        private readonly IUserSettingsService _iUserSettingsService;
+        private readonly UserManager<AppUser> _userManager;
+
+        public UserSettingsController(IUserSettingsService iUserSettingsService, UserManager<AppUser> userManager)
+        {
+            _iUserSettingsService = iUserSettingsService;
+            _userManager = userManager;
+        }
+
+        [HttpGet("GetUserSettings")]
+        public async Task<IActionResult> GetUserSettings(string settingsId)
+        {
+            return Ok(await _iUserSettingsService.GetUserSettings(settingsId, User));
+        }
+
+        [HttpPost("SaveUserSettings")]
+        public async Task<IActionResult> SaveUserSettings([FromBody] UserSettingsSaveRequest info)
+        {
+            return Ok(await _iUserSettingsService.SaveUserSettings(info.settingsId, info.settings, User));
+        }
+
+        [HttpGet("GetWorkstationSettings")]
+        public IActionResult GetWorkstationSettings(string workStationName)
+        {
+            return Ok(_iUserSettingsService.GetWorkstationSettings(workStationName));
+        }
+
+        [HttpPost("InsertWorkstationSettings")]
+        public async Task<IActionResult> InsertWorkstationSettings([FromBody] WorkStationSettings workStationSettings)
+        {
+            return Ok(await _iUserSettingsService.InsertWorkstationSettings(workStationSettings));
+        }
+
+        [HttpPost("UpdateWorkstationSettings")]
+        public async Task<IActionResult> UpdateWorkstationSettings([FromBody] WorkStationSettings workStationSettings)
+        {
+            return Ok(await _iUserSettingsService.UpdateWorkstationSettings(workStationSettings));
+        }
+
+        [HttpPost("UpdateChangePassword")]
+        public async Task<IActionResult> UpdateChangePassword([FromBody]UserVm value)
+        {
+            return Ok(await _iUserSettingsService.UpdateChangePassword(value,User));
+            
+        }
+    }
+}

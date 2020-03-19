@@ -1,0 +1,11 @@
+﻿using ServerAPI.ViewModels;
+
+// ReSharper disable once CheckNamespace
+namespace ServerAPI.Services
+{
+    public interface IMoneyVoidCashDrawerService
+    {
+        MoneyAccountVoidDetailsVm GetCashDrawerVoidDetails(int transId,bool voidFlag, MoneyAccountTransactionFlagType pFlag);
+        int SetVoidCashDrawer(SetVoidVm setVoid);
+    }
+}

@@ -1,0 +1,57 @@
+﻿using Microsoft.AspNetCore.Mvc;
+using ServerAPI.Interfaces;
+using ServerAPI.ViewModels;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    public class ProgramController:Controller
+    {
+
+        private readonly IProgramClassService _programClassService;
+
+        public ProgramController(IProgramClassService programClassService)
+        {
+            _programClassService = programClassService;
+          
+        }
+
+        //ProgramClass Schedules
+        [HttpGet("GetProgramClassSchedules")]
+        public IActionResult GetProgramClassSchedules(int? facilityId)
+        {
+            return Ok(_programClassService.GetProgramClassSchedules(facilityId));
+        }
+
+        //Insert ProgramClass Schedules
+        [HttpPost("InsertProgramClassSchedule")]
+        public IActionResult InsertProgramClassSchedule([FromBody] ProgramClassScheduleVm pgmClassDetails)
+        {
+            return Ok(_programClassService.InsertProgramClassSchedule(pgmClassDetails));
+        }
+
+        [HttpGet("GetCurrentCourse")]
+        public IActionResult GetCurrentCourse(int facilityId, DateTime fromDate, DateTime toDate)
+        {
+            return Ok(_programClassService.GetCurrentCourse(facilityId, fromDate, toDate));
+        }
+
+        
+        [HttpGet("GetCurrentCourseList")]
+        public IActionResult GetCurrentCourseList(int facilityId, DateTime fromDate, DateTime toDate)
+        {
+            return Ok(_programClassService.GetCurrentCourseList(facilityId, fromDate, toDate));
+        }
+
+         [HttpPost("DeleteScheduleProgram")]
+        public async Task<IActionResult> DeleteScheduleProgram([FromBody] ProgramAppointmentVm ProgramRequest)
+        {
+            return Ok(await _programClassService.DeleteScheduleProgram(ProgramRequest));
+        }
+
+    }
+}

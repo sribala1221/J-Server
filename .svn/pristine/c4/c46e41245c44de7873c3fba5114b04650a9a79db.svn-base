@@ -1,0 +1,122 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using GenerateTables.Models;
+using ServerAPI.Utilities;
+
+namespace ServerAPI.ViewModels
+{
+    public class PersonDetail : PersonVm
+    {
+        public List<PersonIncarceration> PersonIncarceration { get; set; }
+        public List<AlertFlagsVm> PersonAlert { get; set; }
+        public List<IdentifierVm> PersonPhoto { get; set; }
+        public List<ObservationLogVm> LstObservationLog { get; set; }
+        public List<PersonClassificationDetails> LstAssociation { get; set; }
+        public PersonIncarceration IncarcerationDetail { get; set; }
+        public PersonInlineEditStatus PersonInlineEditStatus { get; set; }
+        public List<PrivilegeDetailsVm> LstPrivilegesAlerts { get; set; }
+        public List<KeepSeparateVm> LstKeepSep { get; set; }
+        public string PersonAkaHistoryList { get; set; }
+        public string DlClass { get; set; }
+        public List<IncarcerationDetail> PersonIncarcerationAndBooking { get; set; }
+        public string AkaFknHistoryList { get; set; }
+        public string AkaCurrentNameHistoryList { get; set; }
+        public HousingDetail HousingDetail { get; set; }
+        public string ClassifyColour { get; set; }
+        public PersonAkaHeader AkaHeader { get; set; }
+        public string PersonnelNumber { get; set; }
+        public bool PersonnelTerminationFlag { get; set; }
+        public string AgencyName { get; set; }
+        public string Department { get; set; }
+        public string Position { get; set; }
+        public DateTime? HireDate { get; set; }
+        public string UserName { get; set; }
+        public string[] GroupsAssigned { get; set; }
+        public decimal? BalanceInmate { get; set; }
+        public decimal? BalanceInmateFee { get; set; }
+        public decimal? BalanceInmatePending { get; set; }
+
+        public void LoadInmate(AAtims context)
+        {
+            var inmateInfo = (from i in context.Inmate
+                              where i.PersonId == PersonId
+                              select new
+                              {
+                                  i.InmateId,
+                                  i.InmateActive,
+                                  i.InmateNumber,
+                                  i.InmateCurrentTrack,
+                                  i.InmateClassification.InmateClassificationReason,
+                                  i.InmateClassificationId,
+                                  i.InmateCurrentTrackId,
+                                  i.FacilityId
+                              }).SingleOrDefault();
+            if (inmateInfo == null) return;
+
+            InmateId = inmateInfo.InmateId;
+            FacilityId = inmateInfo.FacilityId;
+            InmateNumber = inmateInfo.InmateNumber;
+            InmateActive = inmateInfo.InmateActive == 1;
+            InmateCurrentTrack = inmateInfo.InmateCurrentTrack;
+            InmateClassificationReason = inmateInfo.InmateClassificationReason;
+            InmateClassificationId = inmateInfo.InmateClassificationId ?? 0;
+            ClassifyColour = context.Lookup.Where(w =>
+                w.LookupDescription == inmateInfo.InmateClassificationReason
+                && w.LookupType == LookupConstants.CLASREAS).Select(s => s).FirstOrDefault()?.LookupColor;
+
+            InmateTrakDateOut = context.InmateTrak.Where(it => it.InmateId == InmateId &&
+                it.InmateTrakDateIn == null && it.InmateTrakLocationId == inmateInfo.InmateCurrentTrackId)
+                .AsEnumerable().LastOrDefault()?.InmateTrakDateOut;
+            EnrouteStartOut = context.InmateTrak.Where(it => it.InmateId == InmateId &&
+               it.InmateTrakDateIn == null && it.InmateTrakLocationId == inmateInfo.InmateCurrentTrackId)
+                .AsEnumerable().LastOrDefault()?.EnrouteStartOut;
+
+            IsConfidential = context.WhosInCustodyRemove.Any(w => 
+                w.InmateId == InmateId && w.DeleteFlag != 1);
+
+            List<InmateTrak> lstInmateTrak = context.InmateTrak
+                .Where(w => w.InmateId == inmateInfo.InmateId
+                    && !w.InmateTrakDateIn.HasValue)
+                .OrderByDescending(o => o.InmateTrakId).ToList();
+
+            if (lstInmateTrak.Count == 0) return;
+
+            if (lstInmateTrak.First().EnrouteFinalLocationId > 0)
+            {
+                EnrouteFinalLocation = context.Privileges.SingleOrDefault(s =>
+                                    s.PrivilegeId == lstInmateTrak.First().EnrouteFinalLocationId)?.PrivilegeDescription;
+                EnrouteOutFlag = lstInmateTrak.First().EnrouteOutFlag;
+                EnrouteInFlag = lstInmateTrak.First().EnrouteInFlag;
+                EnrouteFinalFlag = lstInmateTrak.First().EnrouteFinalFlag;
+                EnrouteOutDate = lstInmateTrak.First().InmateTrakDateOut;
+                InmateTrakDateOut = lstInmateTrak.Where(w => w.EnrouteFinalLocationId ==
+                            lstInmateTrak.First().EnrouteFinalLocationId).LastOrDefault()?.InmateTrakDateOut;
+                EnrouteStartOut = lstInmateTrak.First().EnrouteStartOut;
+            }
+        }
+    }
+
+    public class PersonIdentity : PersonDetail
+    {
+        public int? PersonContactId { get; set; }
+        public string PersonContactRelationship { get; set; }
+        public string PersonSiteId { get; set; }
+        public string PersonSiteBnum { get; set; }
+        public string CreateByPersonLastName { get; set; }
+        public string CreateByOfficerBadgeNumber { get; set; }
+        public string UpdateByPersonLastName { get; set; }
+        public string UpdateByOfficerBadgeNumber { get; set; }
+        public List<CustomField> customFields { get; set; }
+    }
+
+    public class InmateHeaderInfoVm
+    {
+        public int InmateId { get; set; }
+        public decimal? BalanceInmate { get; set; }
+        public decimal? BalanceInmateFee { get; set; }
+        public decimal? BalanceInmatePending { get; set; }
+        public string[] InventoryBins { get; set; }
+        public List<KeyValuePair<DateTime, DateTime>> VisitDates { get; set; }
+    }
+}

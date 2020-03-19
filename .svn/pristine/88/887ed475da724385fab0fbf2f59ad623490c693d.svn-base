@@ -1,0 +1,112 @@
+﻿using System;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using ServerAPI.Services;
+using ServerAPI.ViewModels;
+using ServerAPI.Authorization;
+
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    public class PersonSearchController : Controller
+    {
+
+        private readonly IPersonSearchService _personSearch;
+        public PersonSearchController(IPersonSearchService personSearch)
+        {
+            _personSearch = personSearch;
+        }
+
+        [HttpGet("GetPersons")]
+        public IActionResult GetPersons(string lastName, string firstName, string middleName, string suffix, DateTime? dob)
+        {
+            if (!string.IsNullOrWhiteSpace(firstName) || !string.IsNullOrWhiteSpace(lastName))
+            {
+                return Json(_personSearch.GetPersonsWeightedSearch(lastName, firstName, middleName, suffix, dob)); 
+            }
+            return BadRequest("First or Last Name Required!");
+        }
+
+        [AllowAnonymous]
+        [HttpGet("GetPersonByInmateNo")]//gets PersonSearchResult with an exact match
+        public IActionResult GetPersonByInmateNo(string inmateNo)
+        {
+            if (!string.IsNullOrWhiteSpace(inmateNo))
+                return Ok(_personSearch.GetPersonByInmateNo(inmateNo));
+            return BadRequest("InmateNo Required!");
+        }
+
+        [HttpGet("GetPersonsByInmateNo")]//gets list with contains
+        public IActionResult GetPersonsByInmateNo(string inmateNo)
+        {
+            if (!string.IsNullOrWhiteSpace(inmateNo))
+                return Ok(_personSearch.GetPersonsByInmateNo(inmateNo));
+            return BadRequest("InmateNo Required!");
+        }
+
+        [HttpGet("GetPersonsByDLN")]
+        public IActionResult GetPersonsByDln(string dln, string dlState)
+        {
+            if (!string.IsNullOrWhiteSpace(dln))
+                return Ok(_personSearch.GetPersonsByDln(dln, dlState));
+
+            return BadRequest("DLN Required!");
+        }
+      
+        [HttpGet("GetPersonsAll")]
+        public IActionResult GetPersonsAll([FromQuery]PersonSearchVm person) 
+        {
+            if (string.IsNullOrWhiteSpace(person.FirstName) || string.IsNullOrWhiteSpace(person.LastName))
+                return BadRequest("First or Last Name Required!");
+
+            if (!string.IsNullOrWhiteSpace(person.FirstName))
+            {
+                if (person.FirstName.Length < 2)
+                {
+                    return BadRequest("First Name Requires > 2 Characters!");
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(person.LastName))
+            {
+                if (person.LastName.Length < 2)
+                {
+                    return BadRequest("Last Name Requires > 2 Characters!");
+                }
+            }
+
+            return Ok(_personSearch.GetPersonsAll(person));
+        }
+
+        [HttpGet("GetPersonsByCii")]
+        public IActionResult GetPersonsByCii(string cii)
+        {
+            return Ok(_personSearch.GetPersonsByCii(cii));
+        }
+        
+        [HttpGet("GetPersonsBySsn")]
+        public IActionResult GetPersonsBySsn(string ssn)
+        {
+            return Ok(_personSearch.GetPersonsBySsn(ssn));
+        }
+
+        [HttpGet("GetPersonsByMoniker")]
+        public IActionResult GetPersonsByMoniker(string moniker)
+        {
+            return Ok(_personSearch.GetPersonsByMoniker(moniker));
+        }
+
+        [HttpGet("GetPersonStates")]
+        public IActionResult GetPersonStates()
+        {
+            return Ok(_personSearch.GetPersonStates());
+        }
+
+        [FuncPermission(601,FuncPermissionType.Access)]
+        [HttpGet("GetPersonSearchAccess")]
+        public IActionResult GetPersonSearchAccess()
+        {
+            return Ok();
+        }
+    }
+}

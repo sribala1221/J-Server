@@ -1,0 +1,45 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
+using System.Collections;
+using ServerAPI.ViewModels;
+using ServerAPI.Services;
+
+
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    public class PhoneController : ControllerBase
+    {
+        private readonly IInmatePhoneService _inmatePhoneService;
+        public PhoneController(IInmatePhoneService inmatePhoneService)
+        {
+            _inmatePhoneService = inmatePhoneService;
+        }
+
+        [HttpGet("GetCallLogHistroy")]
+        public IActionResult GetCallLogHistroy(int inmateId)
+        {
+            return Ok(_inmatePhoneService.GetCallLogHistroy(inmateId));
+        }
+
+        [HttpPost("InsertUpdateCallLog")]
+        public async Task<IActionResult> InsertUpdateCallLog([FromBody]PhoneDetailsVm objcalldetails)
+        {
+            return Ok(await _inmatePhoneService.InsertUpdateCallLog(objcalldetails));
+        }
+
+        [HttpGet("GetPinHistroy")]
+        public IActionResult GetPinHistroy(int inmateId)
+        {
+            return Ok(_inmatePhoneService.GetPinHistroy(inmateId));
+        }
+        [HttpPost("InsertDeletePhonePin")]
+        public async Task<IActionResult> InsertDeletePhonePin([FromBody] PhoneDetailsVm objPhonePin)
+        {
+            return Ok(await _inmatePhoneService.InsertDeletePhonePin(objPhonePin));
+        }
+    }
+}

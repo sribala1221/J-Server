@@ -1,0 +1,330 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using ServerAPI.ViewModels;
+using GenerateTables.Models;
+using Newtonsoft.Json;
+using Microsoft.AspNetCore.Http;
+using ServerAPI.Utilities;
+
+// ReSharper disable once CheckNamespace
+namespace ServerAPI.Services
+{
+    public class PersonCharService : IPersonCharService
+    {
+        private readonly AAtims _context;
+        private readonly ICommonService _commonService;
+        private readonly int _personnelId;
+        private readonly IPersonService _personService;
+        private readonly IInterfaceEngineService _interfaceEngine;
+
+        public PersonCharService(AAtims context, ICommonService commonService,
+            IHttpContextAccessor ihHttpContextAccessor, IPersonService personService,
+            IInterfaceEngineService interfaceEngine)
+        {
+            _context = context;
+            _commonService = commonService;
+            _personnelId = Convert.ToInt32(ihHttpContextAccessor.HttpContext.User.FindFirst("personnelId")?.Value);
+            _personService = personService;
+            _interfaceEngine = interfaceEngine;
+        }
+
+        public PersonCharVm GetCharDetails(int personId)
+        {
+            PersonCharVm personChar = (from c in _context.PersonDescription
+                                       where c.PersonId == personId
+                                       select new PersonCharVm
+                                       {
+                                           PrimaryHeight = Convert.ToInt32(c.PersonHeightPrimaryUnit),
+                                           SecondaryHeight = Convert.ToInt32(c.PersonHeightSecondaryUnit),
+                                           Weight = Convert.ToInt32(c.PersonWeight),
+                                           Sex = c.PersonSex,
+                                           Race = c.PersonRace,
+                                           HairColor = c.PersonHairColor,
+                                           EyeColor = c.PersonEyeColor,
+                                           MaritalStatus = c.PersonMaritalStatus,
+                                           Occupation = c.PersonOccupation,
+                                           Employer = c.PersonEmployer,
+                                           HairLength = c.PersonHairLength,
+                                           HairType = c.PersonHairType,
+                                           HairStyle = c.PersonHairStyle,
+                                           FacialHair = c.PersonFacialHair,
+                                           Appearance = c.PersonAppearance,
+                                           Build = c.PersonBuild,
+                                           Glasses = c.PersonGlasses,
+                                           Complexion = c.PersonComplexion,
+                                           Handed = c.PersonHanded,
+                                           Teeth = c.PersonTeeth,
+                                           Speech = c.PersonSpeech,
+                                           NeckSize = c.PersonNeckSize,
+                                           Sexuality = c.PersonSexuality,
+                                           Clothing = c.PersonClothing,
+                                           Clothes = c.PersonClothes,
+                                           Ethnicity = c.PersonEthnicity,
+                                           ResidentStatus = c.PersonResidentStatus,
+                                           PrimaryLanguage = c.PersonPrimaryLanguage,
+                                           InterpreterNeeded = c.PersonInterpreterNeeded,
+                                           DescriptionId = c.PersonDescriptionId,
+                                           CreatedBy = c.CreatedBy,
+                                           UpdatedBy = c.UpdatedBy,
+                                           CreateDate = c.CreateDate,
+                                           UpdateDate = c.UpdateDate
+
+                                       }).OrderByDescending(a => a.DescriptionId).FirstOrDefault();
+
+            if (personChar == null) return null;
+            List<int> personnelId = new List<int> { personChar.CreatedBy, personChar.UpdatedBy ?? 0 };
+            List<PersonnelVm> lstPersonDet = _personService.GetPersonNameList(personnelId);
+
+            PersonnelVm personInfo = lstPersonDet.SingleOrDefault(p => p.PersonnelId == personChar.CreatedBy);
+            personChar.CreateByOfficerBadgeNumber = personInfo?.OfficerBadgeNumber;
+            personChar.CreateByPersonLastName = personInfo?.PersonLastName;
+            personChar.CreateByPersonFirstName = personInfo?.PersonFirstName;
+            personChar.CreateByPersonMiddleName = personInfo?.PersonMiddleName;
+
+            if (!(personChar.UpdatedBy > 0)) return personChar;
+            personInfo = lstPersonDet.SingleOrDefault(p => p.PersonnelId == personChar.UpdatedBy);
+            personChar.UpdateByPersonLastName = personInfo?.PersonLastName;
+            personChar.UpdatedByOfficerBadgeNumber = personInfo?.OfficerBadgeNumber;
+            personChar.UpdateByPersonFirstName = personInfo?.PersonFirstName;
+            personChar.UpdateByPersonMiddleName = personInfo?.PersonMiddleName;
+
+            return personChar;
+        }
+
+        public Task<int> InsertUpdatePersonChar(PersonCharVm personChar)
+        {
+            PersonDescription dbPerChar = (from pd in _context.PersonDescription
+                                           where pd.PersonDescriptionId == personChar.DescriptionId
+                                           select pd).SingleOrDefault();
+            if (dbPerChar == null)
+            {
+                dbPerChar = new PersonDescription
+                {
+                    PersonId = personChar.PersonId,
+                    CreatedBy = _personnelId,
+                    CreateDate = DateTime.Now
+                };
+            }
+            else
+            {
+                dbPerChar.UpdatedBy = _personnelId;
+                dbPerChar.UpdateDate = DateTime.Now;
+            }
+            dbPerChar.PersonInterpreterNeeded = personChar.InterpreterNeeded;
+            dbPerChar.PersonEyeColor = personChar.EyeColor;
+            dbPerChar.PersonRace = personChar.Race;
+            dbPerChar.PersonSex = personChar.Sex;
+            dbPerChar.PersonHairColor = personChar.HairColor;
+            dbPerChar.PersonHairLength = personChar.HairLength;
+            dbPerChar.PersonBuild = personChar.Build;
+            dbPerChar.PersonSpeech = personChar.Speech;
+            dbPerChar.PersonEthnicity = personChar.Ethnicity;
+            dbPerChar.PersonResidentStatus = personChar.ResidentStatus;
+            dbPerChar.PersonGlasses = personChar.Glasses;
+            dbPerChar.PersonHairStyle = personChar.HairStyle;
+            dbPerChar.PersonHairType = personChar.HairType;
+            dbPerChar.PersonComplexion = personChar.Complexion;
+            dbPerChar.PersonPrimaryLanguage = personChar.PrimaryLanguage;
+            dbPerChar.PersonClothing = personChar.Clothing;
+            dbPerChar.PersonHanded = personChar.Handed;
+            dbPerChar.PersonFacialHair = personChar.FacialHair;
+            dbPerChar.PersonAppearance = personChar.Appearance;
+            dbPerChar.PersonTeeth = personChar.Teeth;
+            dbPerChar.PersonMaritalStatus = personChar.MaritalStatus;
+            dbPerChar.PersonHeightPrimaryUnit = personChar.PrimaryHeight.ToString();
+            dbPerChar.PersonHeightSecondaryUnit = personChar.SecondaryHeight.ToString();
+            dbPerChar.PersonWeight = personChar.Weight.ToString();
+            dbPerChar.PersonOccupation = personChar.Occupation;
+            dbPerChar.PersonEmployer = personChar.Employer;
+            dbPerChar.PersonNeckSize = personChar.NeckSize;
+            dbPerChar.PersonSexuality = personChar.Sexuality;
+            dbPerChar.PersonClothes = personChar.Clothes;
+            if (dbPerChar.PersonDescriptionId <= 0)
+            {
+                _context.PersonDescription.Add(dbPerChar);
+                _context.SaveChanges();
+            }
+            _interfaceEngine.Export(new ExportRequestVm
+            {
+                EventName = EventNameConstants.PERSONCHARSAVE,
+                PersonnelId = _personnelId,
+                Param1 = personChar.PersonId?.ToString(),
+                Param2 = dbPerChar.PersonDescriptionId.ToString()
+            });
+            LoadInsertCharHistory(dbPerChar.PersonDescriptionId, personChar.CharHistoryList);
+            UpdatePersonDetails(personChar);
+            return _context.SaveChangesAsync();
+        }
+
+        public List<HistoryVm> GetPersonCharHistory(int charId)
+        {
+            List<HistoryVm> lstCharHistory = (from dh in _context.PersonDescriptionHistory
+                                              where dh.PersonDescriptionId == charId
+                                              orderby dh.CreateDate descending
+                                              select new HistoryVm
+                                              {
+                                                  HistoryId = dh.PersonDescriptionHistoryId,
+                                                  CreateDate = dh.CreateDate,
+                                                  PersonId = dh.Personnel.PersonId,
+                                                  OfficerBadgeNumber = dh.Personnel.OfficerBadgeNum,
+                                                  HistoryList = dh.PersonDescriptionHistoryList
+                                              }).ToList();
+
+            if (lstCharHistory.Count <= 0) return lstCharHistory;
+            //For Improve Performance All Person Details Loaded By Single Hit Before Looping
+            int[] personIds = lstCharHistory.Select(p => p.PersonId).ToArray();
+            //get person list
+            List<Person> lstPersonDet = (from per in _context.Person
+                                         where personIds.Contains(per.PersonId)
+                                         select new Person
+                                         {
+                                             PersonId = per.PersonId,
+                                             PersonLastName = per.PersonLastName
+                                         }).ToList();
+
+            lstCharHistory.ForEach(item =>
+            {
+                item.PersonLastName = lstPersonDet.SingleOrDefault(p => p.PersonId == item.PersonId)?.PersonLastName;
+                //To GetJson Result Into Dictionary
+                if (item.HistoryList == null) return;
+                Dictionary<string, string> personHistoryList =
+                    JsonConvert.DeserializeObject<Dictionary<string, string>>(item.HistoryList);
+                item.Header =
+                    personHistoryList.Select(ph => new PersonHeader { Header = ph.Key, Detail = ph.Value }).ToList();
+            });
+            return lstCharHistory;
+        }
+
+        private void LoadInsertCharHistory(int charId, string personCharList)
+        {
+            if (charId <= 0) return;
+            PersonDescriptionHistory dbCharHisDet = new PersonDescriptionHistory
+            {
+                CreateDate = DateTime.Now,
+                PersonDescriptionId = charId,
+                PersonnelId = _personnelId,
+                PersonDescriptionHistoryList = personCharList
+            };
+            _context.PersonDescriptionHistory.Add(dbCharHisDet);
+        }
+
+        private void UpdatePersonDetails(PersonCharVm personDetail)
+        {
+            Person person = _context.Person.Single(p => p.PersonId == personDetail.PersonId);
+            person.PersonSexLast = personDetail.Sex;
+            person.PersonRaceLast = personDetail.Race;
+            person.PersonHeightPrimaryLast = personDetail.PrimaryHeight;
+            person.PersonWeightLast = personDetail.Weight;
+            person.PersonHairColorLast = personDetail.HairColor;
+            person.PersonEyeColorLast = personDetail.EyeColor;
+            person.PersonHeightSecondaryLast = personDetail.SecondaryHeight;
+        }
+
+
+        public Task<int> InsertUpdatePersonCharFromInterfaceEngineStartPrebookFromKPF(PersonCharVm personchar)
+        {
+            PersonDescription dbPerchar = _context.PersonDescription.Find(personchar.DescriptionId);
+            if (dbPerchar == null)
+            {
+                dbPerchar = new PersonDescription
+                {
+                    PersonId = personchar.PersonId,
+                    CreatedBy = 1,
+                    CreateDate = DateTime.Now
+                };
+            }
+            else
+            {
+                dbPerchar.UpdatedBy = 1;
+                dbPerchar.UpdateDate = DateTime.Now;
+            }
+            dbPerchar.PersonInterpreterNeeded = personchar.InterpreterNeeded;
+            dbPerchar.PersonEyeColor = personchar.EyeColor;
+            dbPerchar.PersonRace = personchar.Race;
+            dbPerchar.PersonSex = personchar.Sex;
+            dbPerchar.PersonHairColor = personchar.HairColor;
+            dbPerchar.PersonHairLength = personchar.HairLength;
+            dbPerchar.PersonBuild = personchar.Build;
+            dbPerchar.PersonSpeech = personchar.Speech;
+            dbPerchar.PersonEthnicity = personchar.Ethnicity;
+            dbPerchar.PersonResidentStatus = personchar.ResidentStatus;
+            dbPerchar.PersonGlasses = personchar.Glasses;
+            dbPerchar.PersonHairStyle = personchar.HairStyle;
+            dbPerchar.PersonHairType = personchar.HairType;
+            dbPerchar.PersonComplexion = personchar.Complexion;
+            dbPerchar.PersonPrimaryLanguage = personchar.PrimaryLanguage;
+            dbPerchar.PersonClothing = personchar.Clothing;
+            dbPerchar.PersonHanded = personchar.Handed;
+            dbPerchar.PersonFacialHair = personchar.FacialHair;
+            dbPerchar.PersonAppearance = personchar.Appearance;
+            dbPerchar.PersonTeeth = personchar.Teeth;
+            dbPerchar.PersonMaritalStatus = personchar.MaritalStatus;
+            dbPerchar.PersonHeightPrimaryUnit = personchar.PrimaryHeight.ToString();
+            dbPerchar.PersonHeightSecondaryUnit = personchar.SecondaryHeight.ToString();
+            dbPerchar.PersonWeight = personchar.Weight.ToString();
+            dbPerchar.PersonOccupation = personchar.Occupation;
+            dbPerchar.PersonEmployer = personchar.Employer;
+            dbPerchar.PersonNeckSize = personchar.NeckSize;
+            dbPerchar.PersonSexuality = personchar.Sexuality;
+            dbPerchar.PersonClothes = personchar.Clothes;
+            if (dbPerchar.PersonDescriptionId == 0)
+            {
+                _context.PersonDescription.Add(dbPerchar);
+                _context.SaveChanges();
+            }
+            UpdatePersonDetails(personchar);
+            if (dbPerchar.PersonDescriptionId > 0)
+            {
+                PersonDescriptionHistory dbCharHisDet = new PersonDescriptionHistory
+                {
+                    CreateDate = DateTime.Now,
+                    PersonDescriptionId = dbPerchar.PersonDescriptionId,
+                    PersonnelId = 1,
+                    PersonDescriptionHistoryList = personchar.CharHistoryList
+                };
+                _context.PersonDescriptionHistory.Add(dbCharHisDet);
+            }
+            Person person = _context.Person.Find(personchar.PersonId);
+            person.PersonSexLast = personchar.Sex;
+            person.PersonRaceLast = personchar.Race;
+            person.PersonHeightPrimaryLast = personchar.PrimaryHeight;
+            person.PersonEyeColorLast = personchar.EyeColor;
+            person.PersonHeightSecondaryLast = personchar.SecondaryHeight;
+            return _context.SaveChangesAsync();
+        }
+
+        //Get Inmate Characteristics
+        public PersonCharVm GetCharacteristics(int personId)
+        {
+            // TODO: why retrieve the whole list for a single value?! Unless we cache the lookups
+            List<KeyValuePair<int, string>> haircol = _commonService.GetLookupKeyValuePairs(LookupConstants.HAIRCOL);
+            List<KeyValuePair<int, string>> eyecol = _commonService.GetLookupKeyValuePairs(LookupConstants.EYECOLOR);
+            List<KeyValuePair<int, string>> sex = _commonService.GetLookupKeyValuePairs(LookupConstants.SEX);
+            List<KeyValuePair<int, string>> race = _commonService.GetLookupKeyValuePairs(LookupConstants.RACE);
+            
+            // Changed find() to where() due to null reference exception arise by visitor professional discriminator while quering person table.
+            PersonCharVm personChar = _context.Person.Where(inm => inm.PersonId == personId)
+                 .Select(s => new PersonCharVm
+                 {
+                     SexLast = s.PersonSexLast,
+                     RaceLast = s.PersonRaceLast,
+                     HairColorLast = s.PersonHairColorLast,
+                     EyeColorLast = s.PersonEyeColorLast,
+                     PrimaryHeight = s.PersonHeightPrimaryLast,
+                     SecondaryHeight = s.PersonHeightSecondaryLast,
+                     Weight = s.PersonWeightLast,
+                     HairColorName = s.PersonHairColorLast.HasValue ?
+                     haircol.Find(elm => elm.Key == s.PersonHairColorLast).Value : default,
+                     EyeColorName = s.PersonEyeColorLast.HasValue ?
+                     eyecol.Find(elm => elm.Key == s.PersonEyeColorLast).Value : default,
+                     SexName = s.PersonSexLast.HasValue ? sex.Find(elm => elm.Key == s.PersonSexLast).Value
+                     : default,
+                     RaceName = s.PersonRaceLast.HasValue ? race.Find(elm => elm.Key == s.PersonRaceLast).Value
+                     : default
+                 }).SingleOrDefault();
+            return personChar;
+        }
+    }
+}

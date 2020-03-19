@@ -1,0 +1,352 @@
+﻿using Microsoft.AspNetCore.Mvc;
+using ServerAPI.Authorization;
+using ServerAPI.Services;
+using ServerAPI.ViewModels;
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    public class IncidentController : Controller
+    {
+        private readonly IIncidentService _incidentService;
+        private readonly IIncidentWizardService _incidentWizardService;
+
+        public IncidentController(IIncidentService incidentService, IIncidentWizardService incidentWizardService)
+        {
+            _incidentService = incidentService;
+            _incidentWizardService = incidentWizardService;
+        }
+
+        #region Incident Calendar
+
+        // Get Hearing Location From Privileges
+        [HttpGet("GetHearingLocation")]
+        public IActionResult GetHearingLocation()
+        {
+            return Ok(_incidentService.GetHearingLocation());
+        }
+
+		//Get Incident Calendar Details Using AppointmentDate
+		[HttpGet("GetIncidentCalendarDetails")]
+        public IActionResult GetIncidentCalendarDetails(DateTime appointmentDate, int facilityId)
+        {
+            return Ok(_incidentService.GetIncidentCalendarDetails(appointmentDate, facilityId));
+        }
+
+        #endregion
+
+        //Get Incident Involved Details
+        [HttpGet("GetInvPartyDetails")]
+        public IActionResult GetInvPartyDetails(int facilityId, int filterCategory)
+        {
+            return Ok(_incidentService.GetInvPartyDetails(facilityId, filterCategory));
+        }
+
+        [HttpGet("GetIncidentWizard")]
+        public IActionResult GetIncidentWizard()
+        {
+            return Json(_incidentService.GetIncidentWizard());
+        }
+
+        #region Incident Narrative
+
+        [HttpGet("GetNarrativesList")]
+        public IActionResult GetNarrativesList(int facilityId)
+        {
+            return Ok(_incidentService.NarrativeDetails(facilityId));
+        }
+
+        [HttpGet("GetNarrativeReview")]
+        public IActionResult GetNarrativeReview(int incidentId)
+        {
+            return Ok(_incidentService.NarrativeReview(incidentId));
+        }
+
+        [HttpGet("SuperviorStatusDetails")]
+        public IActionResult SuperviorStatusDetails(int facilityId)
+        {
+            return Ok(_incidentService.GetNarrativeCommonDetail(facilityId));
+        }
+        [HttpPost("UpdateIncident")]
+        public async Task<IActionResult> UpdateIncident([FromBody] IncidentNarrativeDetailVm value)
+        {
+            return Ok(await _incidentService.UpdateIncident(value));
+        }
+
+        [HttpPost("UpdateApproveDeny")]
+        public async Task<IActionResult> UpdateApproveDeny([FromBody] IncidentNarrativeDetailVm value)
+        {
+            return Ok(await _incidentService.UpdateApproveDeny(value));
+        }
+        #endregion
+
+        #region Incident Counts
+        [HttpGet("GetIncidentCount")]
+        public IActionResult GetIncidentCount([FromQuery]IncidentLocationVm incidentLocation)
+        {
+            return Ok(_incidentService.GetIncidentLocation(incidentLocation));
+        }
+
+        #endregion
+
+        #region Wizard Complete
+        [HttpGet("GetIncidentWizardCompleteDetails")]
+        public IActionResult GetIncidentWizardCompleteDetails(int incidentId)
+        {
+            return Ok(_incidentWizardService.GetIncidentWizardCompleteDetails(incidentId));
+        }
+
+        [HttpPost("UpdateIncidentWizardComplete")]
+        public async Task<IActionResult> UpdateIncidentWizardComplete([FromBody]IncidentWizardCompleteDetails incidentDetails)
+        {
+            return Ok(await _incidentWizardService.UpdateIncidentWizardComplete(incidentDetails));
+        }
+        #endregion
+
+        [HttpGet("DisciplinaryLookUpDetails")]
+        public IActionResult DisciplinaryLookUpDetails(string code = "", string description = "")
+        {
+            return Ok(_incidentWizardService.DisciplinaryLookUpDetails(code, description));
+        }
+
+        [HttpGet("ViolationDetails")]
+        public IActionResult ViolationDetails(int diciplinaryInmateId)
+        {
+            return Ok(_incidentWizardService.ViolationDetails(diciplinaryInmateId));
+        }
+
+        [HttpPost("DisciplinaryControlInsertUpdate")]
+        public async Task<IActionResult> DisciplinaryControlInsertUpdate([FromBody]IncicentViolationSaveVm details)
+        {
+            return Ok(await _incidentWizardService.DisciplinaryControlInsertUpdate(details));
+        }
+        [FuncPermission(1138,FuncPermissionType.Add)]
+        [HttpPost("DisciplinaryInmateUpdate")]
+        public async Task<IActionResult> DisciplinaryInmateUpdate([FromBody]IncidentInmateVm value)
+        {
+            return Ok(await _incidentWizardService.DisciplinaryInmateUpdate(value));
+        }
+        [FuncPermission(1138,FuncPermissionType.Edit)]
+        [HttpPut("EditReviewComplete")]
+        public IActionResult EditReviewComplete()
+        {
+            return Ok();
+        }
+        [FuncPermission(1138,FuncPermissionType.Add)]
+        [HttpPut("AddReviewComplete")]
+        public IActionResult AddReviewComplete()
+        {
+            return Ok();
+        }
+        [FuncPermission(1140,FuncPermissionType.Edit)]
+        [HttpPut("UndoCompleteIncident")]
+        public IActionResult UndoCompleteIncident()
+        {
+            return Ok();
+        }
+
+        #region Involved Party Hearing
+
+        [HttpGet("GetScheduleHearing")]
+        public IActionResult GetScheduleHearing(int disciplinaryInmateId)
+        {
+            return Ok(_incidentWizardService.GetScheduleHearing(disciplinaryInmateId));
+        }
+        #endregion
+
+        #region Involved Party Entry
+
+        [HttpGet("GetInvPartyEntryDetails")]
+        public IActionResult GetInvPartyEntryDetails(int disciplinaryInmateId)
+        {
+            return Ok(_incidentWizardService.GetInvPartyEntryDetails(disciplinaryInmateId));
+        }
+
+        [HttpPost("InsertUpdateInvolvedParty")]
+        public async Task<IActionResult> InsertUpdateInvolvedParty([FromBody]ClassifyInvPartyDetailsVm invParty)
+        {
+            return Ok(await _incidentWizardService.InsertUpdateInvolvedParty(invParty));
+        }
+
+        [HttpPost("InsertFlagEntry")]
+        public async Task<IActionResult> InsertFlagEntry([FromBody]IncidentViewer incidentViewer)
+        {
+            return Ok(await _incidentWizardService.InsertFlagEntry(incidentViewer));
+        }
+
+        [HttpPost("InsertDisciplinaryControlXref")]
+        public async Task<IActionResult> InsertDisciplinaryControlXref([FromBody]IncicentViolationSaveVm value)
+        {
+            return Ok(await _incidentWizardService.DisciplinaryControlXrefUpdate(value));
+        }
+        [HttpPost("InsertIncidentHearing")]
+        public async Task<IActionResult> InsertIncidentHearing([FromBody]DisciplinaryHearing value)
+        {
+            return Ok(await _incidentWizardService.IncidentHearingUpdate(value));
+        }
+        #endregion
+
+        #region Schedule Hearing
+        [HttpGet("CheckIncidentComplete")]
+        public IActionResult CheckIncidentComplete(int incidentId)
+        {
+            return Ok(_incidentWizardService.CheckIncidentComplete(incidentId));
+        }
+
+        [HttpGet("GetAppointmentSchedule")]
+        public IActionResult GetAppointmentSchedule(int facilityId, int locationId, DateTime fromDate, DateTime toDate)
+        {
+            return Ok(_incidentWizardService.GetAppointmentSchedule(facilityId, locationId, fromDate, toDate));
+        }
+
+        [HttpGet("GetAppointmentRooms")]
+        public IActionResult GetAppointmentRooms(DateTime? date, int locationId)
+        {
+            return Ok(_incidentWizardService.GetAppointmentRooms(date, locationId));
+        }
+
+        [HttpGet("CheckIncidentHearing")]
+        public IActionResult CheckIncidentHearing(int incidentId)
+        {
+            return Ok(_incidentWizardService.CheckIncidentHearing(incidentId));
+        }
+
+        [HttpGet("GetDuplicateAppt")]
+        public IActionResult GetDuplicateAppointments(int inmateId, string location, DateTime fromDate, DateTime todate)
+        {
+            return Ok(_incidentWizardService.GetDuplicateAppointments(inmateId, location, fromDate, todate));
+        }
+
+        [HttpPost("UpdateScheduleHearing")]
+        public async Task<IActionResult> UpdateScheduleHearingLocation([FromBody] IncidentAppointmentVm incidentAppointment)
+        {
+            return Ok(await _incidentWizardService.UpdateScheduleHearingLocation(incidentAppointment));
+        }
+        #endregion
+
+        [HttpGet("GetAppliedBookings")]
+        public IActionResult GetAppliedBookings(int dispInmateId)
+        {
+            return Ok(_incidentWizardService.GetAppliedBookings(dispInmateId));
+        }
+        [HttpGet("GetAppliedCharges")]
+        public IActionResult GetAppliedCharges(int dispInmateId)
+        {
+            return Ok(_incidentWizardService.GetAppliedCharges(dispInmateId));
+        }
+        [FuncPermission(1136,FuncPermissionType.Edit)]
+        [HttpPost("ReviewComplete")]
+        public async Task<IActionResult> ReviewComplete([FromBody] ReviewComplete reviewComplete)
+        {
+            return Ok(await _incidentWizardService.ReviewComplete(reviewComplete));
+        }
+        [HttpGet("GetAcceptLogic")]
+        public IActionResult GetAcceptLogic(int dispInmateId)
+        {
+            return Ok(_incidentService.GetAcceptLogic(dispInmateId));
+        }
+
+        [HttpGet("CheckSanction")]
+        public IActionResult CheckSanction(int dispCtrlXrefId)
+        {
+            return Ok(_incidentService.CheckSanction(dispCtrlXrefId));
+        }
+
+        [HttpGet("GetDiscDaysHistories")]
+        public IActionResult GetDiscDaysHistories(int inmateId)
+        {
+            return Ok(_incidentService.GetDiscDaysHistories(inmateId));
+        }
+
+        [HttpGet("GetSentenceDetails")]
+        public IActionResult GetSentenceDetails(int inmateId)
+        {
+            return Ok(_incidentService.GetSentenceDetails(inmateId));
+        }
+
+        [HttpPost("SaveAppliedBookings")]
+        public async Task<ActionResult> SaveAppliedBookings([FromBody] List<AppliedCharge> applieds)
+        {
+            return Ok(await _incidentService.SaveAppliedBookings(applieds));
+        }
+
+        [HttpGet("GetSentenceCharges")]
+        public IActionResult GetSentenceCharges(int inmateId)
+        {
+            return Ok(_incidentService.GetSentenceCharges(inmateId));
+        }
+
+        [HttpPost("DeleteApplyCharges")]
+        public async Task<IActionResult> DeleteApplyCharges([FromBody] DeleteRequest deleteRequest)
+        {
+            return Ok(await _incidentService.DeleteApplyCharges(deleteRequest));
+        }
+
+        [HttpPost("UpdateDispDaySentFlag")]
+        public async Task<IActionResult> UpdateDispDaySentFlag([FromBody] ReviewComplete review)
+        {
+            return Ok(await _incidentService.UpdateDispDaySentFlag(review));
+        }
+
+        [HttpPost("DeleteApplyBookings")]
+        public async Task<ActionResult> DeleteApplyBookings([FromBody] DeleteRequest deleteRequest)
+        {
+            return Ok(await _incidentService.DeleteApplyBookings(deleteRequest));
+        }
+
+        #region Involved Party Notice
+
+        [HttpPut("UpdateDisciplinaryInmateNotice")]
+        public IActionResult UpdateDisciplinaryInmateNotice(int disciplinaryInmateId,[FromBody] DisciplinaryInmateNotice notice)
+        {
+            _incidentWizardService.UpdateDisciplinaryInmateNotice(disciplinaryInmateId, notice);
+            return NoContent();
+        }
+
+        [HttpGet("GetDisciplinaryInmateNotice")]
+        public IActionResult GetDisciplinaryInmateNotice(int disciplinaryInmateId)
+        {
+            return Ok(_incidentWizardService.GetDisciplinaryInmateNotice(disciplinaryInmateId));
+        }
+
+        #endregion
+        [HttpGet("CheckRecommendedFlag")]
+        public IActionResult CheckRecommendedFlag(int violationId, int findingId)
+        {
+            return Ok(_incidentWizardService.CheckRecommendedFlag(violationId, findingId));
+        }
+
+        [HttpGet("GetPriorCount")]
+        public IActionResult GetPriorCount(int inmateId, int findingId, int violationId, int incidentId)
+        {
+            return Ok(_incidentWizardService.GetPriorCount(inmateId, findingId, violationId, incidentId));
+        }
+
+        [HttpGet("GetSanction")]
+        public IActionResult GetSanction(int violationId, bool isRecSancOne)
+        {
+            return Ok(_incidentWizardService.GetSanction(violationId, isRecSancOne));
+        }
+
+        [HttpGet("GetHearingQueues")]
+        public IActionResult GetHearingQueues(int facilityId, int queueType)
+        {
+            return Ok(_incidentService.GetHearingQueueNarratives(facilityId, queueType));
+        }
+
+        [HttpGet("GetSupervisorAppealQueue")]
+        public IActionResult GetSupervisorAppealQueue(int facilityId)
+        {
+            return Ok(_incidentService.SupervisorAppealQueue(facilityId));
+        }
+
+        [HttpGet("IsInvolvedPartyExists")]
+        public IActionResult IsInvolvedPartyExists(int incidentId, int inmateId, int personnelId)
+        {
+            return Ok(_incidentService.IsInvolvedPartyExists(incidentId, inmateId, personnelId));
+        }
+    }
+}

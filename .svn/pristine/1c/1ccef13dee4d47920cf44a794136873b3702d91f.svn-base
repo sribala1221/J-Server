@@ -1,0 +1,132 @@
+﻿using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
+using ServerAPI.ViewModels;
+using ServerAPI.Services;
+using ServerAPI.Authorization;
+
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    public class RecordsCheckController : Controller
+    {
+        private readonly IRecordsCheckService _recordsCheckService;
+
+        public RecordsCheckController(IRecordsCheckService recordCheckService)
+        {
+            _recordsCheckService = recordCheckService;
+        }
+
+        [HttpGet("GetRecordHistroy")]
+        public IActionResult GetRecordHistroy(int personId)
+        {
+            return Ok(_recordsCheckService.GetRecordHistroy(personId));
+        }
+
+        [HttpGet("GetActionList")]
+        public IActionResult GetActionList(string lookupType)
+        {
+            return Ok(_recordsCheckService.GetActionList(lookupType));
+        }
+
+        [HttpGet("GetRecordCheck")]
+        public IActionResult GetRecordCheck(int formRecordId)
+        {
+            return Ok(_recordsCheckService.GetRecordCheck(formRecordId));
+        }
+
+        [FuncPermission(930,FuncPermissionType.Add)]
+        [HttpPost("InsertRecordsCheck")]
+        public async Task<IActionResult> InsertRecordsCheck([FromBody] RecordsCheckVm obSaveRecordsCheck)
+        {
+            return Ok(await _recordsCheckService.InsertRecordsCheck(obSaveRecordsCheck));
+        }
+        [FuncPermission(933,FuncPermissionType.Add)]
+        [HttpPost("InsertBypass")]
+        public async Task<IActionResult> InsertBypass([FromBody] RecordsCheckVm obSaveRecordsCheck)
+        {
+            return Ok(await _recordsCheckService.InsertBypass(obSaveRecordsCheck));
+        }
+        [FuncPermission(930, FuncPermissionType.Add)]
+        [HttpPost("SendCheck")]
+        public async Task<IActionResult> SendCheck([FromBody] RecordsCheckVm obSaveRecordsCheck)
+        {
+            return Ok(await _recordsCheckService.SendResponseRecordsCheck(obSaveRecordsCheck));
+        }
+      
+        [HttpPost("SendResponseRecordsCheck")]
+        public async Task<IActionResult> SendResponseRecordsCheck([FromBody] RecordsCheckVm obSaveRecordsCheck)
+        {
+            return Ok(await _recordsCheckService.SendResponseRecordsCheck(obSaveRecordsCheck));
+        }
+        [FuncPermission(930, FuncPermissionType.Add)]
+        [HttpPost("ResponseCheck")]
+        public async Task<IActionResult> ResponseCheck([FromBody] RecordsCheckVm obSaveRecordsCheck)
+        {
+            return Ok(await _recordsCheckService.SendResponseRecordsCheck(obSaveRecordsCheck));
+        }
+        [FuncPermission(930, FuncPermissionType.Add)]
+        [HttpPost("RecordsCheck")]
+        public async Task<IActionResult> RecordsCheck([FromBody] RecordsCheckVm obSaveRecordsCheck)
+        {
+            return Ok(await _recordsCheckService.SendResponseRecordsCheck(obSaveRecordsCheck));
+        }
+
+        [HttpPost("DeleteRecordsCheck")]
+        public async Task<IActionResult> DeleteRecordsCheck([FromBody] DeleteParams obj)
+        {
+            return Ok(await _recordsCheckService.DeleteRecordsCheck(obj.Id));
+        }
+        [HttpPost("InsertFormRecords")]
+        public IActionResult InsertFormRecords([FromBody] FormRecordVm obSaveRecordsCheck)
+        {
+            return Ok(_recordsCheckService.InsertFormRecords(obSaveRecordsCheck));
+        }
+
+        [HttpGet("GetFormRecordHist")]
+        public IActionResult GetFormRecordHist(int formRecordId)
+        {
+            return Ok(_recordsCheckService.FormRecordHist(formRecordId));
+        }
+
+        [FuncPermission(930, FuncPermissionType.Edit)]
+        [HttpGet("GetRecordCheckSend")]
+        public IActionResult GetRecordCheckSend(int formRecordId)
+        {
+            return Ok(_recordsCheckService.GetRecordCheck(formRecordId));
+        }
+
+        [FuncPermission(931, FuncPermissionType.Edit)]
+        [HttpGet("GetRecordCheckResponse")]
+        public IActionResult GetRecordCheckResponse(int formRecordId)
+        {
+            return Ok(_recordsCheckService.GetRecordCheck(formRecordId));
+        }
+
+        [FuncPermission(932, FuncPermissionType.Edit)]
+        [HttpGet("GetRecordCheckClear")]
+        public IActionResult GetRecordCheckClear(int formRecordId)
+        {
+            return Ok(_recordsCheckService.GetRecordCheck(formRecordId));
+        }
+
+        //Newly added for functionality Permission
+        [FuncPermission(932,FuncPermissionType.Delete)]
+        [HttpDelete("DelteRecCheck")]
+        public IActionResult DelteRecCheck()
+        {
+            return Ok();
+        }
+        [FuncPermission(930,FuncPermissionType.Delete)]
+        [HttpDelete("DelteRecCheckBeforeReq")]
+        public IActionResult DelteRecCheckBeforeReq()
+        {
+            return Ok();
+        }
+        [FuncPermission(750,FuncPermissionType.Edit)]
+        [HttpPut("EditRecordCheckSupervisor")]
+        public IActionResult EditRecordCheckSupervisor()
+        {
+            return Ok();
+        }
+    }
+}

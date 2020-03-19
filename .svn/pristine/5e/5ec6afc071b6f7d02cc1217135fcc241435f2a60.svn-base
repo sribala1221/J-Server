@@ -1,0 +1,110 @@
+using Microsoft.AspNetCore.Mvc;
+using ServerAPI.Interfaces;
+using ServerAPI.ViewModels;
+using ServerAPI.Services;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using GenerateTables.Models;
+using jsreport.Client;
+using jsreport.Types;
+using Microsoft.Extensions.Configuration;
+using Newtonsoft.Json;
+using System;
+using ServerAPI.Authorization;
+
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    public class VisitorsController : Controller
+    {
+        private readonly IVisitorsService _visitorsService;
+        private readonly IScheduleService _scheduleService;
+        private readonly IHistoryService _historyService;
+        private readonly ICommonService _commonService;
+
+        private readonly IConfiguration _configuration;
+        public VisitorsController(IVisitorsService visitorsService, IScheduleService scheduleService,
+        IHistoryService historyService, ICommonService commonService, IConfiguration configuration)
+        {
+            _visitorsService = visitorsService;
+            _scheduleService = scheduleService;
+            _historyService = historyService;
+            _commonService = commonService;
+            _configuration = configuration;
+        }
+        [HttpGet("GetVisitorsVisitDetails")]
+        public IActionResult GetVisitorsVisitDetails(VisitParam objVisitParam)
+        {
+            return Ok(_visitorsService.GetVisitorsVisitDetails(objVisitParam));
+        }
+          [HttpGet("GetInmateAssignment")]
+        public IActionResult GetInmateAssignment(int visitorId)
+        {
+            return Ok(_visitorsService.GetInmateAssignment(visitorId));
+        }
+
+         [HttpPost("InsertInmateVisitorDetails")]
+        public async Task<IActionResult> InsertInmateVisitorDetails([FromBody] InmateAssignmentDetails inmateAssignmentinput)
+        {
+            return Ok(await _visitorsService.InsertInmateVisitorDetails(inmateAssignmentinput ));
+        }
+
+        [HttpGet("GetOpenScheduleAvailability")]
+        public IActionResult GetOpenScheduleDetails(OpenScheduleDetails paramList)
+        {
+            return Ok(_visitorsService.GetOpenScheduleDetails(paramList));
+        }
+        [HttpPut("AddVisitPermission")]
+        [FuncPermission(922,FuncPermissionType.Add)]
+        public IActionResult AddVisitPermission()
+        {
+            return Ok();
+        }
+        [HttpPut("EditVisitPermission")]
+        [FuncPermission(922,FuncPermissionType.Edit)]
+        public IActionResult EditVisitPermission()
+        {
+            return Ok();
+        }
+        [HttpDelete("DeleteVisitPermission")]
+        [FuncPermission(922,FuncPermissionType.Delete)]
+        public IActionResult DeleteVisitPermission()
+        {
+            return Ok();
+        }
+        
+        [HttpGet("GetBumpedVisitList")]
+        public IActionResult GetBumpedVisitList(BumpedVisitList paramList)
+        {
+            return Ok(_visitorsService.GetBumpedVisitList(paramList));
+        }
+
+        [HttpPost("ClearBumpedVisit")]
+        public async Task<IActionResult> ClearBumpedVisit([FromBody] ClearBumpedVisit clearBumpedVisit)
+        {
+            return Ok(await _visitorsService.ClearBumpedVisit(clearBumpedVisit));
+        }       
+
+        [HttpPost("InsertRevisitVisitorDetails")]
+        public async Task<IActionResult> InsertRevisitVisitorDetails([FromBody] KeyValuePair<int, int> previousScheduleDetails)
+        {
+             return Ok(await _visitorsService.InsertRevisitVisitorDetails(previousScheduleDetails));
+           
+        }
+
+         [HttpPut("DeleteUndoVisitorInmate")]
+        public   IActionResult DeleteUndoVisitorInmate(int VisitorinmateId, bool DeleteFlag)
+        {
+            return Ok(  _visitorsService.DeleteUndoVisitorInmate(VisitorinmateId,DeleteFlag));
+        }
+
+          [HttpPut("DeleteUndoVisitors")]
+        public   IActionResult DeleteUndoVisitors( int scheduleId, Boolean deleteFlag)
+        {
+            return Ok( _visitorsService.DeleteUndoVisitors(scheduleId,deleteFlag));
+        }
+
+        
+
+    }
+    }

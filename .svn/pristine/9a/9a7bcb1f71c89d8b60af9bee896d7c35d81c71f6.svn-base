@@ -1,0 +1,746 @@
+﻿using GenerateTables.Models;
+using Microsoft.AspNetCore.Http;
+using ServerAPI.Utilities;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using Microsoft.AspNetCore.Identity;
+using Remotion.Linq.Clauses;
+using ServerAPI.Interfaces;
+using ServerAPI.ViewModels;
+
+namespace ServerAPI.Services
+{
+    public class ClassifyAlertsKeepsepService : IClassifyAlertsKeepsepService
+    {
+
+        private readonly AAtims _context;
+        private readonly ICommonService _commonService;
+        private readonly int _personnelId;
+        private List<HousingUnit> _housingUnitLst;
+        private readonly IFacilityHousingService _facilityHousingService;
+
+        public ClassifyAlertsKeepsepService(AAtims context, ICommonService commonService,
+            IHttpContextAccessor httpContextAccessor,
+            IFacilityHousingService facilityHousingService)
+        {
+            _context = context;
+            _commonService = commonService;
+            _personnelId =
+                Convert.ToInt32(httpContextAccessor.HttpContext.User.FindFirst(AuthDetailConstants.PERSONNELID)?.Value);
+
+            _facilityHousingService = facilityHousingService;
+        }
+
+
+        public HousingUnitListDetailVm GetHousingBuildingDetails(KeepSepSearchVm keepSepSearch)
+        {
+
+            HousingUnitListDetailVm HousingUnitListDetail = new HousingUnitListDetailVm();
+
+            // Housing Details
+            IQueryable<HousingUnit> housingUnit =
+                _context.HousingUnit.Where(hu => !hu.HousingUnitInactive.HasValue || hu.HousingUnitInactive == 0);
+            _housingUnitLst = keepSepSearch.FacilityId > 0
+                 ? housingUnit.Where(hu => hu.FacilityId == keepSepSearch.FacilityId).ToList()
+                 : housingUnit.ToList();
+
+            //Housing Building
+            HousingUnitListDetail.HousingBuilding = _housingUnitLst.Select(s => s.HousingUnitLocation.Trim()).OrderBy(o => o).Distinct().ToList();
+
+            //Housing Number
+
+            _housingUnitLst = _housingUnitLst.Where(hu =>
+                !string.IsNullOrWhiteSpace(hu.HousingUnitLocation)).ToList();
+
+            HousingUnitListDetail.HousingNumber = _housingUnitLst
+                .GroupBy(g => new { g.HousingUnitListId, g.HousingUnitLocation, g.HousingUnitNumber })
+                .Select(s => new HousingUnitListVm
+                {
+                    HousingUnitListId = s.Key.HousingUnitListId,
+                    HousingUnitLocation = s.Key.HousingUnitLocation,
+                    HousingUnitNumber = s.Key.HousingUnitNumber
+                }).OrderBy(o => o.HousingUnitLocation).ThenBy(t => t.HousingUnitNumber).Distinct().ToList();
+
+
+            //Housing Group
+
+            List<HousingGroup> HousingGroup = _context.HousingGroup.Where(h => h.DeleteFlag == 0 &&
+                                                              h.FacilityId == keepSepSearch.FacilityId)
+               .Select(s => new HousingGroup
+               {
+                   HousingGroupId = s.HousingGroupId,
+                   GroupName = s.GroupName
+               }
+               ).ToList();
+
+
+            return HousingUnitListDetail;
+
+        }
+
+        public KeepSeparateAlertVm GetAlertKeepInmateList(KeepSepSearchVm keepSepSearch)
+        {
+            KeepSeparateAlertVm keepSepAlertDetails = new KeepSeparateAlertVm();
+
+            keepSepAlertDetails.HousingDetails = GetHousingBuildingDetails(keepSepSearch);
+
+            //Inmate Details
+            List<Inmate> inmatelst = _context.Inmate.Where(i => i.InmateActive == 1).ToList();
+
+            ////InmateIds
+            List<int> inmateIds = inmatelst.Select(i => i.InmateId).ToList();
+
+            List<int> personIds1 = inmatelst.Select(i => i.PersonId).ToList();
+
+            //KeepSeparateInmateList
+
+            //INMATE KEEP SEPARATE To ASSOCIATION
+            keepSepAlertDetails.KeepSeparateInmateList = _context.KeepSepAssocInmate.Where(
+                k => k.DeleteFlag == 0 &&
+                     k.KeepSepInmate2.Facility.FacilityId == keepSepSearch.FacilityId
+                     && inmateIds.Contains(k.KeepSepInmate2Id)
+               ).Select(
+                ks => new KeepSeparateVm
+                {
+                    KeepSepAssocInmateId = ks.KeepSepAssocInmateId,
+                    KeepSepInmateId = ks.KeepSepInmate2Id,
+                    KeepSepLabel = KeepSepLabel.ASSOC,
+                    PersonId = ks.KeepSepInmate2.PersonId,
+                    InmateNumber = ks.KeepSepInmate2.InmateNumber,
+                    Number = ks.KeepSepInmate2.InmateNumber,
+                    KeepSepType = ks.KeepSeparateType,
+                    KeepSepReason = ks.KeepSepReason,
+                    HousingUnitId = ks.KeepSepInmate2.HousingUnitId,
+                    InmateActive = ks.KeepSepInmate2.InmateActive == 1,
+                    FacilityAbbr = ks.KeepSepInmate2.Facility.FacilityAbbr,
+                    KeepSeparateNote = ks.KeepSeparateNote,
+                    Classify = ks.KeepSepInmate2.InmateClassification.InmateClassificationReason,
+                    keepsep = ks.KeepSepAssoc1,
+                    KeepSeparateDate = ks.KeepSepDate,
+                    Deleteflag = ks.DeleteFlag,
+                    RaceId = ks.KeepSepInmate2.Person.PersonRaceLast,
+                    GenderId = ks.KeepSepInmate2.Person.PersonSexLast,
+                    AssocId = ks.KeepSepAssoc1Id,
+                    HousingUnitListId = ks.KeepSepInmate2.HousingUnit.HousingUnitListId
+                }).ToList();
+
+            //INMATE KEEP SEPARATE To SUBSET
+            keepSepAlertDetails.KeepSeparateInmateList.AddRange(_context.KeepSepSubsetInmate.Where(k =>
+               k.DeleteFlag == 0 &&
+               k.KeepSepInmate2.Facility.FacilityId == keepSepSearch.FacilityId &&
+                 inmateIds.Contains(k.KeepSepInmate2Id)).Select(
+                kss => new KeepSeparateVm
+                {
+                    KeepSepSubsetInmateId = kss.KeepSepSubsetInmateId,
+                    KeepSeparateId = kss.KeepSepSubsetInmateId,
+                    KeepSepInmateId = kss.KeepSepInmate2Id,
+                    KeepSepLabel = KeepSepLabel.SUBSET,
+                    AssocId = kss.KeepSepAssoc1Id,
+                    KeepSepAssoc1SubsetId = kss.KeepSepAssoc1SubsetId,
+                    KeepSepType = kss.KeepSeparateType,
+                    KeepSepReason = kss.KeepSepReason,
+                    PersonId = kss.KeepSepInmate2.PersonId,
+                    InmateNumber = kss.KeepSepInmate2.InmateNumber,
+                    HousingUnitId = kss.KeepSepInmate2.HousingUnitId,
+                    IsDeleted = kss.DeleteFlag == 1,
+                    InmateActive = kss.KeepSepInmate2.InmateActive == 1,
+                    FacilityAbbr = kss.KeepSepInmate2.Facility.FacilityAbbr,
+                    Classify = kss.KeepSepInmate2.InmateClassification.InmateClassificationReason,
+                    KeepSeparateNote = kss.KeepSeparateNote,
+                    keepsep = kss.KeepSepAssoc1,
+                    keepSepAssoc1Subset = kss.KeepSepAssoc1Subset,
+                    KeepSeparateDate = kss.KeepSepDate,
+                    Deleteflag = kss.DeleteFlag,
+                    RaceId = kss.KeepSepInmate2.Person.PersonRaceLast,
+                    GenderId = kss.KeepSepInmate2.Person.PersonSexLast,
+                    SubsetId = kss.KeepSepAssoc1SubsetId
+                }));
+
+
+
+            //INMATE KEEP SEPARATE To INMATE :KeepSeparateInmateId 1 
+            List<KeepSeparateVm> kepSeparateDetails = _context.KeepSeparate.Where(
+                k => inmateIds.Contains(k.KeepSeparateInmate1Id)
+                     && k.InactiveFlag == 0
+                     && k.KeepSeparateInmate1.InmateActive == 1
+                     && k.KeepSeparateInmate2.InmateActive == 1
+                     && k.KeepSeparateInmate2.FacilityId == keepSepSearch.FacilityId
+            ).Select(ks =>
+
+                new KeepSeparateVm
+                {
+                    KeepSeparateId = ks.KeepSeparateId,
+                    KeepSepInmateId = ks.KeepSeparateInmate1Id,
+                    KeepSepInmate2Id = ks.KeepSeparateInmate2Id,
+                    KeepSepLabel = KeepSepLabel.INMATE,
+                    PersonId = ks.KeepSeparateInmate2.PersonId,
+                    InmateNumber = ks.KeepSeparateInmate2.InmateNumber,
+                    KeepSepType = ks.KeepSeparateType,
+                    KeepSepReason = ks.KeepSeparateReason,
+                    HousingUnitId = ks.KeepSeparateInmate2.HousingUnitId,
+                    IsDeleted = ks.InactiveFlag == 1,
+                    InmateActive = ks.KeepSeparateInmate2.InmateActive == 1,
+                    FacilityAbbr = ks.KeepSeparateInmate2.Facility.FacilityAbbr,
+                    KeepSeparateNote = ks.KeepSeparateNote,
+                    KeepSeparateDate = ks.KeepSeparateDate,
+                    Classify = ks.KeepSeparateInmate2.InmateClassification.InmateClassificationReason,
+                    Deleteflag = ks.InactiveFlag,
+                    RaceId = ks.KeepSeparateInmate2.Person.PersonRaceLast,
+                    GenderId = ks.KeepSeparateInmate2.Person.PersonSexLast
+                }).ToList();
+
+            //INMATE KEEP SEPARATE To INMATE :KeepSeparateInmateId 2
+
+            kepSeparateDetails.AddRange(_context.KeepSeparate.Where(
+                k => inmateIds.Contains(k.KeepSeparateInmate2Id)
+                      && k.KeepSeparateInmate1.InmateActive == 1
+                      && k.KeepSeparateInmate2.InmateActive == 1
+                      && k.KeepSeparateInmate2.FacilityId == keepSepSearch.FacilityId
+                     && k.InactiveFlag == 0
+            ).Select(ks =>
+
+                new KeepSeparateVm
+                {
+                    KeepSeparateId = ks.KeepSeparateId,
+                    KeepSepInmateId = ks.KeepSeparateInmate2Id,
+                    KeepSepInmate2Id = ks.KeepSeparateInmate2Id,
+                    KeepSepLabel = KeepSepLabel.INMATE,
+                    PersonId = ks.KeepSeparateInmate2.PersonId,
+                    InmateNumber = ks.KeepSeparateInmate2.InmateNumber,
+                    KeepSepType = ks.KeepSeparateType,
+                    KeepSepReason = ks.KeepSeparateReason,
+                    HousingUnitId = ks.KeepSeparateInmate2.HousingUnitId,
+                    IsDeleted = ks.InactiveFlag == 1,
+                    InmateActive = ks.KeepSeparateInmate2.InmateActive == 1,
+                    FacilityAbbr = ks.KeepSeparateInmate2.Facility.FacilityAbbr,
+                    KeepSeparateNote = ks.KeepSeparateNote,
+                    KeepSeparateDate = ks.KeepSeparateDate,
+                    Classify = ks.KeepSeparateInmate2.InmateClassification.InmateClassificationReason,
+                    Deleteflag = ks.InactiveFlag,
+                    RaceId = ks.KeepSeparateInmate2.Person.PersonRaceLast,
+                    GenderId = ks.KeepSeparateInmate2.Person.PersonSexLast
+
+                }));
+
+            kepSeparateDetails = kepSeparateDetails.GroupBy(g => new
+            {
+                g.KeepSeparateId,
+                g.KeepSepInmateId,
+                g.PersonId,
+                g.InmateNumber,
+                g.KeepSepType,
+                g.KeepSepReason,
+                g.HousingUnitId,
+                g.FacilityAbbr,
+                g.KeepSeparateNote,
+                g.KeepSeparateDate,
+                g.Classify,
+                g.Deleteflag,
+                g.RaceId,
+                g.GenderId,
+                g.SubsetId,
+                g.AssocId,
+                g.keepsep
+            }).Select(s => new KeepSeparateVm
+            {
+                KeepSeparateId = s.Key.KeepSeparateId,
+                KeepSepInmateId = s.Key.KeepSepInmateId,
+                KeepSepLabel = KeepSepLabel.INMATE,
+                PersonId = s.Key.PersonId,
+                InmateNumber = s.Key.InmateNumber,
+                KeepSepType = s.Key.KeepSepType,
+                KeepSepReason = s.Key.KeepSepReason,
+                HousingUnitId = s.Key.HousingUnitId,
+                FacilityAbbr = s.Key.FacilityAbbr,
+                KeepSeparateNote = s.Key.KeepSeparateNote,
+                KeepSeparateDate = s.Key.KeepSeparateDate,
+                Classify = s.Key.Classify,
+                Deleteflag = s.Key.Deleteflag,
+                RaceId = s.Key.RaceId,
+                GenderId = s.Key.GenderId,
+                SubsetId = s.Key.SubsetId,
+                AssocId = s.Key.AssocId,
+                keepsep = s.Key.keepsep
+            }).ToList();
+
+
+            keepSepAlertDetails.KeepSeparateInmateList.AddRange(kepSeparateDetails);
+
+
+
+            List<HousingUnitGroupVm> housingGroupList = _context.HousingGroupAssign.Where(h => h.DeleteFlag == 0
+                                                           && (keepSepSearch.HousingGroupId > 0
+                                                               || h.HousingGroupId == keepSepSearch.HousingGroupId)
+                                                           && h.HousingGroup.FacilityId == keepSepSearch.FacilityId)
+           .Select(s => new HousingUnitGroupVm
+           {
+               HousingUnitGroupId = s.HousingGroupId,
+               HousingUnitListId = s.HousingUnitListId ?? 0,
+               GroupName = s.HousingGroup.GroupName
+           }
+           ).ToList();
+
+
+            //Search Filter
+            keepSepAlertDetails.KeepSeparateInmateList = keepSepAlertDetails.KeepSeparateInmateList.Where(
+                               k => (keepSepSearch.AssociationId == 0 || k.AssocId == keepSepSearch.AssociationId)
+                                    && (keepSepSearch.SubsetId == 0 || k.SubsetId == keepSepSearch.SubsetId)
+                                    && (keepSepSearch.GenderId == 0 || k.GenderId == keepSepSearch.GenderId)
+                                    && (keepSepSearch.RaceId == 0 || k.RaceId == keepSepSearch.RaceId)
+                                    && (keepSepSearch.InmateId == 0 || k.KeepSepInmateId == keepSepSearch.InmateId)
+                                    && (string.IsNullOrEmpty(keepSepSearch.Classify) || k.Classify == keepSepSearch.Classify)
+                                    && (keepSepSearch.HousingUnitId == 0 || k.HousingUnitId == keepSepSearch.HousingUnitId)
+                                 && (keepSepSearch.IllegalAlienOnly == false || k.IllegalAlienOnly == keepSepSearch.IllegalAlienOnly)
+                                    && (housingGroupList.Count == 0 || housingGroupList.Any(h => h.HousingUnitListId == k.HousingUnitListId))
+                           ).Select(kss => new KeepSeparateVm
+                           {
+                               KeepSeparateId = kss.KeepSeparateId,
+                               KeepSepInmateId = kss.KeepSepInmateId,
+                               KeepSepInmate2Id = kss.KeepSepInmate2Id,
+                               KeepSepLabel = kss.KeepSepLabel,
+                               HousingUnitId = kss.HousingUnitId,
+                               InmateNumber = kss.InmateNumber,
+                               PersonId = kss.PersonId,
+                               keepSepAssoc1 = kss.keepSepAssoc1,
+                               KeepSepType = kss.KeepSepType,
+                               KeepSepReason = kss.KeepSepReason,
+                               Deleteflag = kss.Deleteflag,
+                               FacilityAbbr = kss.FacilityAbbr,
+                               KeepSeparateNote = kss.KeepSeparateNote,
+                               KeepSeparateDate = kss.KeepSeparateDate,
+                               Classify = kss.Classify,
+                               AssocId = kss.AssocId,
+                               RaceId = kss.RaceId,
+                               GenderId = kss.GenderId,
+                               IllegalAlienOnly = kss.IllegalAlienOnly,
+                               HousingUnitListId = kss.HousingUnitListId,
+                               SubsetId = kss.SubsetId,
+                               keepsep = kss.keepsep
+
+                           }).ToList();
+
+            List<int> personIds = keepSepAlertDetails.KeepSeparateInmateList.Select(ks => ks.PersonId).Distinct()
+               .ToList();
+            List<PersonInfo> personDetailLst = _context.Person.Where(pr => personIds.Contains(pr.PersonId))
+                .Select(p => new PersonInfo
+                {
+                    PersonId = p.PersonId,
+                    PersonLastName = p.PersonLastName,
+                    PersonFirstName = p.PersonFirstName,
+                    PersonMiddleName = p.PersonMiddleName
+                }).ToList();
+
+            keepSepAlertDetails.KeepSeparateInmateList.ForEach(item =>
+            {
+                if (item.HousingUnitId.HasValue)
+                {
+                    item.HousingDetail = _facilityHousingService.GetHousingDetails(item.HousingUnitId.Value);
+                    item.HousingUnitListId = item.HousingDetail.HousingUnitListId;
+                }
+
+                if (item.PersonId > 0)
+                {
+                    PersonInfo person = personDetailLst.Single(p => p.PersonId == item.PersonId);
+                    item.PersonLastName = person.PersonLastName;
+                    item.PersonFirstName = person.PersonFirstName;
+                    item.PersonMiddleName = person.PersonMiddleName;
+                }
+
+            });
+
+
+            return keepSepAlertDetails;
+
+
+
+        }
+
+        public KeepSeparateAlertVm GetKeepSeparateAssocSubsetList(KeepSepSearchVm keepSepSearch)
+        {
+            KeepSeparateAlertVm keepSepAlertDetails = new KeepSeparateAlertVm();
+
+            keepSepAlertDetails.KeepSeparateAssocList = new List<KeepSeparateVm>();
+            keepSepAlertDetails.KeepSeparateSubsetList = new List<KeepSeparateVm>();
+
+            keepSepAlertDetails.HousingDetails = GetHousingBuildingDetails(keepSepSearch);
+
+            List<Inmate> inmatelst = _context.Inmate.Where(i => i.InmateActive == 1).ToList();
+            List<int> inmateIds = inmatelst.Select(i => i.InmateId).ToList();
+
+            List<int> personIds = inmatelst.Where(i => i.FacilityId == keepSepSearch.FacilityId).Select(i => i.PersonId).ToList();
+
+            // KeepSeparateAssocList
+            //Person Classificatio Details
+            DateTime dtTime = DateTime.Now;
+            keepSepAlertDetails.PersonClassificationDetails = _context.PersonClassification.Where(pc =>
+                    personIds.Contains(pc.PersonId) &&
+                                        pc.InactiveFlag == 0
+                                        && pc.PersonClassificationDateFrom < DateTime.Now &&
+                                          (pc.PersonClassificationDateThru != null ?
+                                           pc.PersonClassificationDateThru.Value.AddDays(1) >= DateTime.Now
+                                            : dtTime.AddDays(1) >= DateTime.Now)
+
+                    )
+
+                .Select(pc => new KeepSeparateVm
+                {
+                    PersonId = pc.PersonId,
+                    Assoc = pc.PersonClassificationType,
+                    AssocId = pc.PersonClassificationTypeId,
+                    SubsetId = pc.PersonClassificationSubsetId
+                }).ToList();
+
+
+            List<Lookup> lookupslist = _context.Lookup.Where(w => w.LookupType == LookupConstants.CLASSGROUP).ToList();
+            List<Lookup> lookupsSublist = _context.Lookup.Where(w => w.LookupType == LookupConstants.CLASSGROUPSUB).ToList();
+
+         //   List<Lookup> lookupClassify = _context.Lookup.Where(w => w.LookupType == LookupConstants.CLASREAS).ToList();
+
+            // KEEP SEPARATE ASSOCIATION To ASSOCIATION 1
+            List<KeepSeparateVm> AssCount = _context.KeepSepAssocAssoc
+                .SelectMany(ksaa => keepSepAlertDetails.PersonClassificationDetails.Where(pc =>
+                            pc.AssocId == ksaa.KeepSepAssoc1Id && ksaa.DeleteFlag == 0),
+
+                    (ksaa, pc) => new KeepSeparateVm
+                    {
+                        KeepSepAssocAssocId = ksaa.KeepSepAssocAssocId,
+                        KeepSepLabel = KeepSepLabel.ASSOC,
+                        keepsep = ksaa.KeepSepAssoc2,
+                        Assoc = lookupslist.SingleOrDefault(s => s.LookupIndex == pc.AssocId).LookupDescription,
+                        Deleteflag = ksaa.DeleteFlag,
+                        AssocId = ksaa.KeepSepAssoc1Id,
+                        KeepSepReason = ksaa.KeepSepReason
+
+                    }
+            ).ToList();
+
+            // KEEP SEPARATE ASSOCIATION To ASSOCIATION 2
+            AssCount.AddRange(_context.KeepSepAssocAssoc
+                  .SelectMany(ksaa => keepSepAlertDetails.PersonClassificationDetails.Where(pc =>
+                              pc.AssocId == ksaa.KeepSepAssoc2Id && ksaa.DeleteFlag == 0),
+
+                      (ksaa, pc) => new KeepSeparateVm
+                      {
+                          KeepSepAssocAssocId = ksaa.KeepSepAssocAssocId,
+                          KeepSepLabel = KeepSepLabel.ASSOC,
+                          keepsep = ksaa.KeepSepAssoc1,
+                          Assoc = lookupslist.SingleOrDefault(s => s.LookupIndex == pc.AssocId).LookupDescription,
+                          Deleteflag = ksaa.DeleteFlag,
+                          AssocId = ksaa.KeepSepAssoc2Id,
+                          KeepSepReason = ksaa.KeepSepReason
+                      }
+              ));
+
+            
+            keepSepAlertDetails.KeepSeparateAssocList.AddRange(AssCount);
+
+            // KEEP SEPARATE ASSOCIATION To INMATE
+            keepSepAlertDetails.KeepSeparateAssocList.AddRange(_context.KeepSepAssocInmate
+                    .Where(ksai => ksai.DeleteFlag == 0
+                   && ksai.KeepSepInmate2.Facility.FacilityId == keepSepSearch.FacilityId
+                   && inmateIds.Contains(ksai.KeepSepInmate2.InmateId)).Select(ksai => new KeepSeparateVm
+                   {
+                       KeepSepAssocInmateId = ksai.KeepSepAssocInmateId,
+                       AssocId = ksai.KeepSepAssoc1Id,
+                       Assoc = lookupslist.SingleOrDefault(s => s.LookupIndex == ksai.KeepSepAssoc1Id).LookupDescription,
+                       KeepSepInmateId = ksai.KeepSepInmate2.InmateId,
+                       InmateNumber = ksai.KeepSepInmate2.InmateNumber,
+                       KeepSepLabel = KeepSepLabel.INMATE,
+                       HousingUnitId = ksai.KeepSepInmate2.HousingUnitId,
+                       PersonId = ksai.KeepSepInmate2.PersonId,
+                       KeepSepType = ksai.KeepSeparateType,
+                       KeepSepReason = ksai.KeepSepReason,
+                       Deleteflag = ksai.DeleteFlag,
+                       FacilityAbbr = ksai.KeepSepInmate2.Facility.FacilityAbbr,
+                       Classify = ksai.KeepSepInmate2.InmateClassification.InmateClassificationReason,
+                       RaceId = ksai.KeepSepInmate2.Person.PersonRaceLast,
+                       GenderId = ksai.KeepSepInmate2.Person.PersonSexLast,
+                       HousingUnitListId = ksai.KeepSepInmate2.HousingUnit.HousingUnitListId,
+                       IllegalAlienOnly = ksai.KeepSepInmate2.Person.IllegalAlienFlag
+
+
+                   }));
+
+            // KEEP SEPARATE ASSOCIATION To SUBSET
+            keepSepAlertDetails.KeepSeparateAssocList.AddRange(_context.KeepSepAssocSubset.SelectMany(ksas =>
+                    keepSepAlertDetails.PersonClassificationDetails.Where(pc =>
+                        ksas.DeleteFlag == 0 && pc.AssocId == ksas.KeepSepAssoc1Id &&
+                                      pc.SubsetId != null),
+                (ksas, pc) => new KeepSeparateVm
+                {
+                    KeepSepAssocSubsetId = ksas.KeepSepAssocSubsetId,
+                    KeepSepLabel = KeepSepLabel.SUBSET,
+                    KeepSepAssoc2Subset = ksas.KeepSepAssoc2Subset,
+                    KeepSepReason = ksas.KeepSepReason,
+                    keepsep = ksas.KeepSepAssoc2,
+                    Deleteflag = ksas.DeleteFlag,
+                    Assoc = lookupslist.SingleOrDefault(s => s.LookupIndex == pc.AssocId).LookupDescription,
+                    AssocId = ksas.KeepSepAssoc1Id,
+                }));
+            List<HousingUnitGroupVm> housingGroupList = _context.HousingGroupAssign.Where(h => h.DeleteFlag == 0
+                                                                && (keepSepSearch.HousingGroupId > 0
+                                                                    || h.HousingGroupId == keepSepSearch.HousingGroupId)
+                                                                && h.HousingGroup.FacilityId == keepSepSearch.FacilityId)
+                .Select(s => new HousingUnitGroupVm
+                {
+                    HousingUnitGroupId = s.HousingGroupId,
+                    HousingUnitListId = s.HousingUnitListId ?? 0,
+                    GroupName = s.HousingGroup.GroupName
+                }
+                ).ToList();
+
+            //Search Filter
+            keepSepAlertDetails.KeepSeparateAssocList = keepSepAlertDetails.KeepSeparateAssocList.Where(
+                    k => (keepSepSearch.AssociationId == 0 || k.AssocId == keepSepSearch.AssociationId)
+                         && (keepSepSearch.SubsetId == 0 || k.SubsetId == keepSepSearch.SubsetId)
+                         && (keepSepSearch.GenderId == 0 || k.GenderId == keepSepSearch.GenderId)
+                         && (keepSepSearch.RaceId == 0 || k.RaceId == keepSepSearch.RaceId)
+                         && (keepSepSearch.InmateId == 0 || k.KeepSepInmateId == keepSepSearch.InmateId)
+                         && (string.IsNullOrEmpty(keepSepSearch.Classify) || k.Classify == keepSepSearch.Classify)
+                         && (keepSepSearch.HousingUnitId == 0 || k.HousingUnitId == keepSepSearch.HousingUnitId)
+                      && (keepSepSearch.IllegalAlienOnly == false || k.IllegalAlienOnly == keepSepSearch.IllegalAlienOnly)
+                         && (housingGroupList.Count == 0 || housingGroupList.Any(h => h.HousingUnitListId == k.HousingUnitListId))
+                ).Select(kss => new KeepSeparateVm
+                {
+                    KeepSepAssocInmateId = kss.KeepSepAssocInmateId,
+                    KeepSepInmateId = kss.KeepSepInmateId,
+                    KeepSepLabel = kss.KeepSepLabel,
+                    HousingUnitId = kss.HousingUnitId,
+                    PersonId = kss.PersonId,
+                    keepSepAssoc1 = kss.keepSepAssoc1,
+                    KeepSepType = kss.KeepSepType,
+                    KeepSepReason = kss.KeepSepReason,
+                    Deleteflag = kss.Deleteflag,
+                    FacilityAbbr = kss.FacilityAbbr,
+                    keepSepAssoc1Subset = kss.keepSepAssoc1Subset,
+                    Classify = kss.Classify,
+                    AssocId = kss.AssocId,
+                    RaceId = kss.RaceId,
+                    GenderId = kss.GenderId,
+                    KeepSepAssocAssocId = kss.KeepSepAssocAssocId,
+                    KeepSepSubsetSubsetId = kss.KeepSepSubsetSubsetId,
+                    IllegalAlienOnly = kss.IllegalAlienOnly,
+                    HousingUnitListId = kss.HousingUnitListId,
+                    KeepSepAssocSubsetId = kss.KeepSepAssocSubsetId,
+                    Assoc = kss.Assoc
+
+                }).ToList();
+            List<int> personIdss = keepSepAlertDetails.KeepSeparateAssocList.Select(ks => ks.PersonId).Distinct()
+                .ToList();
+            List<PersonInfo> personDetailLst = _context.Person.Where(pr => personIdss.Contains(pr.PersonId))
+                .Select(p => new PersonInfo
+                {
+                    PersonId = p.PersonId,
+                    PersonLastName = p.PersonLastName,
+                    PersonFirstName = p.PersonFirstName,
+                    PersonMiddleName = p.PersonMiddleName
+                }).ToList();
+
+            keepSepAlertDetails.KeepSeparateAssocList.ForEach(item =>
+            {
+                if (item.HousingUnitId.HasValue)
+                {
+                    item.HousingDetail = _facilityHousingService.GetHousingDetails(item.HousingUnitId.Value);
+                    item.HousingUnitListId = item.HousingDetail.HousingUnitListId;
+                }
+
+                if (item.PersonId > 0)
+                {
+                    PersonInfo person = personDetailLst.Single(p => p.PersonId == item.PersonId);
+                    item.PersonLastName = person.PersonLastName;
+                    item.PersonFirstName = person.PersonFirstName;
+                    item.PersonMiddleName = person.PersonMiddleName;
+                }
+
+            });
+
+
+            // KeepSeparate Association Count
+
+            keepSepAlertDetails.KeepSeparateAssocCount = keepSepAlertDetails.KeepSeparateAssocList
+                .GroupBy(g => new { g.Assoc }).Select(kss => new AssociationCount
+                {
+                    Association = kss.Key.Assoc,
+                    AssocList = kss.ToList(),
+                    Count = kss.Count()
+
+                }).ToList();
+
+
+
+
+            //KeepSeparateSubsetList
+            // KEEP SEPARATE SUBSET To SUBSET 1
+            keepSepAlertDetails.KeepSeparateSubsetList = _context.KeepSepSubsetSubset.SelectMany(ksss =>
+                keepSepAlertDetails.PersonClassificationDetails.Where(pc =>
+                        ksss.DeleteFlag == 0 && pc.SubsetId == ksss.KeepSepAssoc1SubsetId
+
+                 ), (ksss, pc) => new KeepSeparateVm
+                 {
+                     KeepSepSubsetSubsetId = ksss.KeepSepSubsetSubsetId,
+                     KeepSepLabel = KeepSepLabel.SUBSET,
+                     Assoc = ksss.KeepSepAssoc1,
+                     keepsep = ksss.KeepSepAssoc2,
+                     KeepSepAssoc2Subset = ksss.KeepSepAssoc2Subset,
+                     KeepSepReason = ksss.KeepSepReason,
+                     Deleteflag = ksss.DeleteFlag,
+                     Subset = lookupsSublist.SingleOrDefault(s => s.LookupIndex == ksss.KeepSepAssoc1SubsetId).LookupDescription,
+                     SubsetId = ksss.KeepSepAssoc1SubsetId
+
+                 }).ToList();
+
+            // KEEP SEPARATE SUBSET To SUBSET 2
+            keepSepAlertDetails.KeepSeparateSubsetList.AddRange(_context.KeepSepSubsetSubset.SelectMany(ksss =>
+                    keepSepAlertDetails.PersonClassificationDetails.Where(pc =>
+                        ksss.DeleteFlag == 0 && pc.SubsetId == ksss.KeepSepAssoc2SubsetId),
+                (ksss, pc) => new KeepSeparateVm
+                {
+                    KeepSepSubsetSubsetId = ksss.KeepSepSubsetSubsetId,
+                    KeepSepLabel = KeepSepLabel.SUBSET,
+                    Assoc = ksss.KeepSepAssoc2,
+                    keepsep = ksss.KeepSepAssoc1,
+                    keepSepAssoc1Subset = ksss.KeepSepAssoc1Subset,
+                    Subset = lookupsSublist.SingleOrDefault(s => s.LookupIndex == ksss.KeepSepAssoc2SubsetId).LookupDescription,
+                    KeepSepReason = ksss.KeepSepReason,
+                    Deleteflag = ksss.DeleteFlag,
+                    SubsetId = ksss.KeepSepAssoc2SubsetId,
+                }));
+
+            // KEEP SEPARATE SUBSET To ASSOC
+            keepSepAlertDetails.KeepSeparateSubsetList.AddRange(_context.KeepSepAssocSubset
+                .SelectMany(ksas => keepSepAlertDetails.PersonClassificationDetails.Where(pc =>
+                        pc.SubsetId == ksas.KeepSepAssoc2SubsetId && ksas.DeleteFlag == 0),
+                    (ksas, pc) => new KeepSeparateVm
+                    {
+                        KeepSepAssocAssocId = ksas.KeepSepAssocSubsetId,
+                        KeepSepLabel = KeepSepLabel.ASSOC,
+                        Assoc = ksas.KeepSepAssoc2,
+                        keepsep = ksas.KeepSepAssoc1,
+                        KeepSepReason = ksas.KeepSepReason,
+                        Subset = lookupsSublist.SingleOrDefault(s => s.LookupIndex == ksas.KeepSepAssoc2SubsetId).LookupDescription,
+                        Deleteflag = ksas.DeleteFlag,
+                        SubsetId = ksas.KeepSepAssoc2SubsetId
+
+                    }
+                    ));
+
+            // KEEP SEPARATE SUBSET To INMATE
+
+            keepSepAlertDetails.KeepSeparateSubsetList.AddRange(_context.KeepSepSubsetInmate
+                .SelectMany(kssi => keepSepAlertDetails.PersonClassificationDetails.Where(pc => pc.AssocId == kssi.KeepSepAssoc1Id
+                  && kssi.DeleteFlag == 0
+              && kssi.KeepSepInmate2.Facility.FacilityId == keepSepSearch.FacilityId &&
+
+              inmateIds.Contains(kssi.KeepSepInmate2Id)),
+                    (kssi, pc) => new KeepSeparateVm
+                    {
+                        KeepSepAssocInmateId = kssi.KeepSepSubsetInmateId,
+                        KeepSepInmateId = kssi.KeepSepInmate2.InmateId,
+                        KeepSepLabel = KeepSepLabel.INMATE,
+                        HousingUnitId = kssi.KeepSepInmate2.HousingUnitId,
+                        PersonId = kssi.KeepSepInmate2.PersonId,
+                        keepsep = kssi.KeepSepAssoc1,
+                        KeepSepType = kssi.KeepSeparateType,
+                        Subset = lookupsSublist.SingleOrDefault(s => s.LookupIndex == kssi.KeepSepAssoc1SubsetId).LookupDescription,
+                        KeepSepReason = kssi.KeepSepReason,
+                        Deleteflag = kssi.DeleteFlag,
+                        FacilityAbbr = kssi.KeepSepInmate2.Facility.FacilityAbbr,
+                        AssocId = kssi.KeepSepAssoc1Id,
+                        Classify = kssi.KeepSepInmate2.InmateClassification.InmateClassificationReason,
+                        RaceId = kssi.KeepSepInmate2.Person.PersonRaceLast,
+                        GenderId = kssi.KeepSepInmate2.Person.PersonSexLast,
+                        HousingUnitListId = kssi.KeepSepInmate2.HousingUnit.HousingUnitListId
+                    }));
+
+
+
+
+            //Search Filter
+
+            keepSepAlertDetails.KeepSeparateSubsetList = keepSepAlertDetails.KeepSeparateSubsetList.Where(
+                k => (keepSepSearch.AssociationId == 0 || k.AssocId == keepSepSearch.AssociationId)
+                     && (keepSepSearch.SubsetId == 0 || k.SubsetId == keepSepSearch.SubsetId)
+                     && (keepSepSearch.GenderId == 0 || k.GenderId == keepSepSearch.GenderId)
+                     && (keepSepSearch.RaceId == 0 || k.RaceId == keepSepSearch.RaceId)
+                     && (keepSepSearch.InmateId == 0 || k.KeepSepInmateId == keepSepSearch.InmateId)
+                     && (string.IsNullOrEmpty(keepSepSearch.Classify) || k.Classify == keepSepSearch.Classify)
+                     && (keepSepSearch.HousingUnitId == 0 || k.HousingUnitListId == keepSepSearch.HousingUnitId)
+                     && (keepSepSearch.IllegalAlienOnly == false || k.IllegalAlienOnly == keepSepSearch.IllegalAlienOnly)
+                     && (housingGroupList.Count == 0 || housingGroupList.Any(h => h.HousingUnitListId == k.HousingUnitListId))
+
+            ).Select(kss => new KeepSeparateVm
+            {
+                Assoc = kss.Assoc,
+                Subset = kss.Subset,
+                KeepSepAssocInmateId = kss.KeepSepSubsetInmateId,
+                KeepSepInmateId = kss.KeepSepInmateId,
+                KeepSepLabel = kss.KeepSepLabel,
+                HousingUnitId = kss.HousingUnitId,
+                PersonId = kss.PersonId,
+                keepsep = kss.keepsep,
+                KeepSepType = kss.KeepSepType,
+                KeepSepReason = kss.KeepSepReason,
+                Deleteflag = kss.Deleteflag,
+                FacilityAbbr = kss.FacilityAbbr,
+                keepSepAssoc1Subset = kss.keepSepAssoc1Subset,
+                KeepSepAssoc2Subset = kss.KeepSepAssoc2Subset,
+                AssocId = kss.AssocId,
+                RaceId = kss.RaceId,
+                Classify = kss.Classify,
+                GenderId = kss.GenderId,
+                KeepSepAssocAssocId = kss.KeepSepAssocAssocId,
+                KeepSepSubsetSubsetId = kss.KeepSepSubsetSubsetId,
+                IllegalAlienOnly = kss.IllegalAlienOnly,
+                HousingUnitListId = kss.HousingUnitListId
+            }).ToList();
+
+            personIds = keepSepAlertDetails.KeepSeparateSubsetList.Select(ks => ks.PersonId).Distinct()
+                .ToList();
+            personDetailLst = _context.Person.Where(pr => personIds.Contains(pr.PersonId))
+                .Select(p => new PersonInfo
+                {
+                    PersonId = p.PersonId,
+                    PersonLastName = p.PersonLastName,
+                    PersonFirstName = p.PersonFirstName,
+                    PersonMiddleName = p.PersonMiddleName
+                }).ToList();
+
+            keepSepAlertDetails.KeepSeparateSubsetList.ForEach(item =>
+            {
+                if (item.HousingUnitId.HasValue)
+                {
+                    item.HousingDetail = _facilityHousingService.GetHousingDetails(item.HousingUnitId.Value);
+                    item.HousingUnitListId = item.HousingDetail.HousingUnitListId;
+                }
+
+                if (item.PersonId > 0)
+                {
+                    PersonInfo person = personDetailLst.Single(p => p.PersonId == item.PersonId);
+                    item.PersonLastName = person.PersonLastName;
+                    item.PersonFirstName = person.PersonFirstName;
+                    item.PersonMiddleName = person.PersonMiddleName;
+                }
+
+            });
+
+            //KeepSeparate Subset Count
+
+            keepSepAlertDetails.KeepSeparateSubsetCount = keepSepAlertDetails.KeepSeparateSubsetList
+                .GroupBy(g => new { g.Assoc, g.Subset }).Select(kss => new SubsetCount
+                {
+                    Association = kss.Key.Assoc,
+                    Subset = kss.Key.Subset,
+                    Count = kss.Count(),
+                    SubsetList = kss.ToList()
+
+                }).ToList();
+
+            return keepSepAlertDetails;
+        }
+
+
+    }
+}
+
+

@@ -1,0 +1,214 @@
+﻿using System;
+using System.Collections.Generic;
+
+namespace ServerAPI.ViewModels
+{
+    public class ClassLog
+    {
+        public int Id { get; set; }
+        public int InmateId { get; set; }
+        public int? PersonId { get; set; }
+        public string ClassType { get; set; }
+        public DateTime? ClassDate { get; set; }
+        public string ClassNarrative { get; set; }
+        public PersonnelVm OfficerDetails { get; set; }
+        public int OfficerId { get; set; }
+        public string PathName { get; set; }
+        public bool DeleteFlag { get; set; }
+        public PersonInfo PersonDetails { get; set; }
+        public string Type { get; set; }
+        public string Note { get; set; }
+        public string ReviewNote { get; set; }
+        public HousingDetail HousingDetails { get; set; }
+        public string Reason { get; set; }
+        public AssocNarrative AssocNarrative { get; set; }
+        public PrivilegesNarrative PrivilegesNarrative { get; set; }
+        public int ReviewFlag { get; set; }
+        public IncidentNarrative IncidentNarrative { get; set; }
+        public int? HousingUnitId { get; set; }
+        public ArrestIntake ArrestDetails { get; set; }
+        public int IncarcerationId { get; set; }
+        public KeepSeperateNarrative KeepSeperateNarrative { get; set; }
+        public DateTime? ReleaseOut { get; set; }
+        public int Count { get; set; }
+        public int PersonFlagIndex { get; set; }
+        public int InmateFlagIndex { get; set; }
+        public int DietFlagIndex { get; set; }
+        public int TemplateId { set; get; }
+        public int CatogeryId { set; get; }
+        public int? LinkType {set;get;}
+        public DateTime? ReportDate { get; set; }
+        public DateTime? ScheduleHearingDate { get; set; }
+        public DateTime? DisciplinaryHearingDate { get; set; }
+        public DateTime? ReviewDate { get; set; }
+        public string Sanction { get; set; }
+        public int? HearingComplete { get; set; }
+
+        public int? ByPassHearing { get; set; }
+
+        public PersonVm PersonInfo { get; set; }
+        public DateTime? HousingDateThru { get; set; }
+
+        public int? MoveThruBy { get; set; }
+
+        public DateTime? DateUnassigned { get; set; }
+
+        public InmateIncarcerationDetails InmateIncDetails { get; set; }
+
+        public List<BookingSearchSubData> ChargesDetails { get; set; }
+
+        public bool ValidationFlag {get;set;}
+    }
+
+    public class AssocNarrative
+    {
+        public string PersonClassificationType { get; set; }
+        public string PersonClassificationSubset { get; set; }
+        public string PersonClassificationStatus { get; set; }
+        public DateTime? PersonClassificationDateThru { get; set; }
+        public string PersonClassificationNotes { get; set; }
+        public int? PersonClassificationTypeId { get; set; }
+        public int? PersonClassificationSubsetId { get; set; }
+
+    }
+
+    public class PrivilegesNarrative
+    {
+        public int? PrivilegeRemoveOfficerId { get; set; }
+        public string PrivilegeNote { get; set; }
+        public DateTime? PrivilegeExpires { get; set; }
+        public DateTime? PrivilegeDate { get; set; }
+        public string PrivilegeDescription { get; set; }
+        public int PrivilegeId { get; set; }
+        public string PrivilegeType { get; set; }
+
+    }
+
+    public class IncidentNarrative
+    {
+        public string DisciplinarySynopsis { get; set; }
+        public string DisciplinaryNumber { get; set; }
+        public string InmatelookupDescription { get; set; }
+        public string IncidentlookupDescription { get; set; }
+        public int DisciplinaryInmateType { get; set; }
+        public int DisciplinaryType { get; set; }
+        public string DisciplinaryInmateTypeValue { get; set; }
+        public string DisciplinaryTypeValue { get; set; }
+        public string DisciplinaryLocation { get; set; }
+    }
+
+    public class ClassLogInputs
+    {
+        public int FacilityId { get; set; }
+        public int? InmateId { get; set; }
+        public int? PersonnelId { get; set; }
+        public bool Active { get; set; }
+        public int Hours { get; set; }
+        public DateTime Fromdate { get; set; }
+        public DateTime Todate { get; set; }
+        public string ClassType { get; set; }
+        public LogParameters LogParameters { get; set; }
+        public bool DeleteFlag { get; set; }
+        public int? HousingUnitListId { get; set; }
+        public bool Flag { get; set; }
+    }
+
+    public class LogParameters
+    {
+        public bool Initial { get; set; }
+        public bool ReClassify { get; set; }
+        public bool Review { get; set; }
+        public bool ClassNote { get; set; }
+        public bool Form { get; set; }
+        public bool Attach { get; set; }
+        public bool Link { get; set; }
+        public bool Release { get; set; }
+        public bool Housing { get; set; }
+        public bool Incident { get; set; }
+        public bool Message { get; set; }
+        public bool Assoc { get; set; }
+        public bool Privileges { get; set; }
+        public bool Flag { get; set; }
+        public bool KeepSep { get; set; }
+        public bool Note { get; set; }
+        public bool Intake { get; set; }
+    }
+
+    public class ArrestIntake
+    {
+        public string Description { get; set; }
+        public string BookingNumber { get; set; }
+        public int Count { get; set; }
+        public int IncarcerationId { get; set; }
+        public string ArrestType { get; set; }
+        public string ReleaseReason { get; set; }
+    }
+
+    public class ClassifyCount
+    {
+        public int Initial { get; set; }
+        public int ReClassify { get; set; }
+        public int Review { get; set; }
+        public int ClassNote { get; set; }
+        public int Form { get; set; }
+        public int Attach { get; set; }
+        public int Link { get; set; }
+        public int Release { get; set; }
+        public int Housing { get; set; }
+        public int Incident { get; set; }
+        public int Message { get; set; }
+        public int Assoc { get; set; }
+        public int Privileges { get; set; }
+        public int Flag { get; set; }
+        public int KeepSep { get; set; }
+        public int Note { get; set; }
+        public int Intake { get; set; }
+    }
+
+    public class ClassLogDetails
+    {
+        public List<ClassLog> ClassLog { get; set; }
+        public ClassifyCount ClassifyCount { get; set; }
+        public LogParameters GetClassifySettings { get; set; }
+        public List<KeyValuePair<int, string>> GetClassify { get; set; }
+        public List<HousingDetail> GetHousing { get; set; }
+    }
+
+    public class KeepSeperateNarrative
+    {
+        public bool InmateActive { get; set; }
+        public int KeepSepInmate2Id { get; set; }
+        public string KeepSepType { get; set; }
+        public string KeepSepAssoc { get; set; }
+        public string KeepSepReason { get; set; }
+        public string KeepSepAssocSubset { get; set; }
+        public string KeepSepNote { get; set; }
+        public int? KeepSepAssoc1Id { get; set; }
+        public int? KeepSepAssoc1SubsetId { get; set; }
+    }
+
+    public class ClassDaysInChildVm
+    {
+        public int Count { get; set; }
+        public object Review { get; set; }
+        public string Days { get; set; }
+        public string Housing { get; set; }
+    }
+    public class ClassDaysInParentVm : ClassDaysInChildVm
+    {
+        public List<ClassDaysInChildVm> ClassDaysInChild { get; set; }
+    }
+
+    public class ClassDaysHousingVm
+    {
+        public string Housing { get; set; }
+        public string ClassType { get; set; }
+        public PersonInfoVm InmateDetails { get; set; }
+        public DateTime? ClassDays { get; set; }
+        public string Narrative { get; set; }
+        public int InmateClassificationId { get; set; }
+        public int Review { get; set; }
+        public int PersonId { get; set; }
+        public DateTime? LastClassReviewDate { get; set; }
+    }
+}

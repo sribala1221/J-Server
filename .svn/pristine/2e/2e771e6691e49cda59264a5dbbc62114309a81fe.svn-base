@@ -1,0 +1,38 @@
+using Microsoft.AspNetCore.Mvc;
+using ServerAPI.ViewModels;
+using ServerAPI.Services;
+using System.Collections.Generic;
+
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    public class MoneyClearController:Controller
+    {
+        private readonly IMoneyClearService _moneyClearService;
+        public MoneyClearController(IMoneyClearService moneyClearService)
+        {
+            _moneyClearService=moneyClearService;
+        }
+
+        //To get the Money-Clear-Clear-List Details
+        [HttpGet("GetMoneyClearClearDetails")]
+        public IActionResult GetMoneyClearClearDetails(MoneyClearVm searchValue)
+        {
+            return Ok(_moneyClearService.GetMoneyClearClearDetails(searchValue));
+        }
+
+        //To do the DoTransaction in Money-Clear-Clear-List Details 
+        [HttpGet("UpdateMoneyClearClearTransaction")]
+        public IActionResult UpdateMoneyClearClearTransaction(List<int> checkedTransIdList)
+        {
+            return Ok(_moneyClearService.UpdateMoneyClearClearTransaction(checkedTransIdList));
+        }
+
+        //To do the DoVoid in Money-Clear-Clear-List Details
+        [HttpGet("DoVoidMoneyClearClear")]
+        public IActionResult DoVoidMoneyClearClear(int transId, MoneyAccountTransactionFlagType pFlag)
+        {
+            return Ok(_moneyClearService.DoVoidMoneyClearClear(transId,pFlag));
+        }
+    }
+}

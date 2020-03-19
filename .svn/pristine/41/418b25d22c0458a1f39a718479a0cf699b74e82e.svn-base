@@ -1,0 +1,453 @@
+﻿using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using GenerateTables.Models;
+
+namespace ServerAPI.ViewModels
+{
+    public class SearchRequestVm
+    {
+        public int FacilityId { get; set; }
+        public int InmateSearchFacilityId{get;set;}
+        public bool ActiveOnly { get; set; } 
+        public bool activeBookingOnly { get; set; } 
+        public bool activeCasesOnly{get;set;}
+        public bool exactonly { get; set; }
+        public bool SentencedOnly { get; set; }
+        public bool UnSentencedOnly { get; set; }
+        public string FirstName {get;set;}
+        public string MiddleName {get;set;}
+        public string LastName {get;set;}
+        public string cityofBirth {get;set;}
+        public string stateorCountryOfBirth{get;set;}
+        public string Ssn {get;set; }
+        public string OtherId { get;set; }
+        public DateTime? DateOfBirth {get;set;}
+        public string InmateNumber {get;set;}
+        public string BookingNumber {get;set;}
+        public string CourtDocket {get;set;}
+        public string CaseNumber {get;set;}
+        public string WarrantNumber {get;set;}
+        public int BookingType { get; set; }
+        public int gender { get; set; }
+        public int Race { get; set; }
+        public int Haircolor { get; set; }
+        public int Eyecolor { get; set; }
+        public string Classify {get;set;}
+        public string Location {get;set;}
+        public string Category {get;set;}
+        public string ItemCode {get;set;}
+        public DateTime? BookingDateFrm {get;set;}
+        public DateTime? BookingDateTo {get;set;}
+        public DateTime? ArrestDateFrom {get;set;}
+        public DateTime? ArrestDateTo {get;set;}
+        public DateTime? ScheduleReleaseDateFrom {get;set;}
+        public DateTime? ScheduleReleaseDateTo {get;set;}
+        public DateTime? ClearedDateFrom {get;set;}
+        public DateTime? ClearedDateTo {get;set;}
+        public string ReleaseReason {get;set;}
+        public DateTime? ReleaseDateFrom {get;set;}
+        public DateTime? ReleaseDateTo {get;set;}
+        public long ArrestingOfficer { get; set; }
+        public long BookingOfficer { get; set; }
+        public string SiteBooking {get;set;}
+        public string InmateSiteNumber { get;set;}
+        public long ArrestingAgency { get; set; }
+        public long BillingAgency { get; set; }
+        public long Court { get; set; }
+        public string ChargeType {get;set;}
+        public string ChargeSection {get;set;}
+        public string ChargeDescription {get;set;}
+        public int ChargeGroup { get; set; }
+        public int ClearByOfficer {get;set;}
+        public int IntakeOfficer {get;set;}
+        public int ReleaseOfficer {get;set;}
+        public DateTime? SentenceStartDate {get;set;}
+        public DateTime? SentenceEndDate {get;set;}
+        public string Descriptor {get;set;}
+        public string Occupation {get;set;}
+        public int Agefrom {get;set;}
+        public int Ageto {get;set;}
+        public string FbiNumber {get;set;}
+        public string CiiNumber {get;set;}
+        public string AlienNumber {get;set;}
+        public string DocNumber {get;set;}
+        public string DlNumber {get;set;}
+        public int HPfrom {get;set;}
+        public int HPto {get;set;}
+        public int HSfrom {get;set;}
+        public int HSto {get;set;}
+        public int Weightfrom {get;set;}
+        public int Weightto {get;set;}
+        public string Moniker {get;set;}
+        public string PrebookNumber {get;set;}
+        public string PhoneCode {get;set;}
+        public string AfisNumber {get;set;}
+
+        public string AddressNumber { get; set; }
+        public string AddressStreet { get; set; }
+        public string AddressSuffix { get; set; }
+        public string AddressUnitType { get; set; }
+        public string AddressUnitNumber { get; set; }
+        public string AddressType { get; set; }
+        public string AddressCity { get; set; }
+        public string AddressState { get; set; }
+        public string AddressZip { get; set; }
+        public string AddressDirection { get; set; }
+        public string AddressLine2 { get; set; }
+        public string personOccupation { get; set; }
+        public string employer { get; set; }
+        public string DirectionSuffix { get; set; }
+        public bool Homeless { get; set; }
+        public bool Transient { get; set; }
+        public bool Refused { get; set; }
+
+//Newly added for profileSearch
+        public int maritalStatus{get;set;}
+        public int ethnicity{get;set;}
+        public int primLang{get;set;}
+        public int illegalAlien{get;set;}
+        public int eduGed{get;set;}
+        public int desireClasses{get;set;}
+        public int desireFurlough{get;set;}
+        public int desireWorkCrew{get;set;}
+        public int usCitizen{get;set;}
+        public string interpreter{get;set;}
+        public string citizen{get;set;}
+        public string religion{get;set;}
+        public string genderIdentity{get;set;}
+        public string genderIdentityDiff{get;set;}
+        public string eduGrade{get;set;}
+        public string eduDegree{get;set;}
+        public string eduDiscipline{get;set;}
+        public string eduSpecial{get;set;}
+        public string medInsuranceProvider{get;set;}
+        public string medInsuranceProviderOther{get;set;}
+        public string medInsurancePolicyNo{get;set;}
+        public string medInsuranceNote{get;set;}
+        public string personHistoryList{get;set;}
+        public string skillTrade{get;set;}
+      
+        public bool IsAddressSearch { get; set; }
+        public bool IsArrestSearch { get; set; }
+        public bool IsBookingSearch { get; set; }
+        public bool IsInmateSearch { get; set; }
+        public bool IsPersonSearch { get; set; }
+        public bool IncarcerationSearch { get; set; }
+        public bool IsCharSearch { get; set; }
+        public bool IsDescriptorSearch { get; set; }
+        public bool isInmateProfileSearch { get; set; }
+        public bool isInmateRelatedSearch{get;set;}
+        public bool isInmateprebookrelatedsearch{get;set;}
+//Added For inmate related search
+        public string BuildingId{get;set;}
+        public int podId{get;set;}
+        public string cellId{get;set;}
+        public string bunkId{get;set;}
+        public int personFlagId{get;set;}
+        public int inmateFlagId{get;set;}
+        public int medFlagId{get;set;}
+        public int dietFlagId{get;set;}
+        public int medDietFlagId{get;set;}
+        public string classificationId{get;set;}
+        public int locationId{get;set;}
+        // added for Booking Search
+        public int keepNoKeeper{get;set;}
+        public int daysCustomdyFrom{get;set;}
+        public int daysCustomdyTo{get;set;}
+        public string receiveMethod{get;set;}
+        public DateTime? datesearchTimeFrom{get;set;}
+        public DateTime? searchTimeTo{get;set;}
+        public DateTime? inCustodyTo{get;set;}
+        public DateTime? inCustodyFrom{get;set;}
+        public DateTime? afterreleaseTo{get;set;}
+        public DateTime? afterreleaseFrom{get;set;}
+        public DateTime? sentstartTo{get;set;}
+        public DateTime? sentstartFrom{get;set;}
+        public DateTime? schReleaseTo{get;set;}
+        public DateTime? schReleaseFrom{get;set;}
+        public DateTime? releaseOutTo{get;set;}
+        public DateTime? releaseOutFrom{get;set;}
+        public DateTime? dateReleaseFrom{get;set;}
+    public DateTime? dateReleaseTo{get;set;}
+    public DateTime? dateschReleaseFrom{get;set;}
+     public DateTime? dateschReleaseTo{get;set;}
+    public DateTime? datesentStartFrom{get;set;}
+    public DateTime? datesentStartTo{get;set;}
+    public DateTime? dateAfterReleaseFrom{get;set;}
+    public DateTime? dateAfterReleaseTo{get;set;}
+    public DateTime? dateInCustodyFrom{get;set;}
+    public DateTime? dateInCustodyTo{get;set;}
+
+public DateTime? dateSearchFrom{get;set;}
+public DateTime? dateSearchTo{get;set;}
+public int sentenceStatus{get;set;}
+public int overallSentDaysTo{get;set;}
+public int overallSentDaysFrom{get;set;}
+public string prebookNo{get;set;}
+public string prebookCaseNumber{get;set;}
+public int PrebookArrestAgency {get;set;}
+public int prebookarrestingOfficerName{get;set;}
+public bool transportAfterRelease{get;set;}
+public string incarcerabookingNumber{get;set;}
+
+//Newly adding for Case Search
+public string bookingCaseType{get;set;}
+public string bookingcaseNumber{get;set;}
+public int courtJurisdictionId{get;set;}
+public string courtDocket{get;set;}
+public string lawEnforcementDispositionId{get;set;}
+public int bookingCaseFlag{get;set;}
+public bool noBail {get;set;}
+public int bailTo {get;set;}
+public int bailFrom {get;set;}
+public int sentDaysFrom {get;set;}
+public int sentDaysTo {get;set;}
+public int intakeCompleteby {get;set;}
+public int bookingCompletedby {get;set;}
+public int billingAgency {get;set;}
+public string bailType {get;set;}
+public int sentCode {get;set;}
+public int sentMethod {get;set;}
+public int clearOfficer {get;set;}
+public int casearrestingOfficer {get;set;}
+public int caseBookingOfficer {get;set;}
+public int arrestingOfficerName{get;set;}
+public DateTime? caseBookingFrom{get;set;}
+public DateTime? caseBookingTo{get;set;}
+public DateTime? caseClearFrom{get;set;}
+public DateTime? caseClearTo{get;set;}
+public DateTime? casesentStartFrom{get;set;}
+public DateTime? casesentStartTo{get;set;}
+public DateTime? caseSchStartFrom{get;set;}
+public DateTime? caseSchStartTo{get;set;}
+public int arrestConvictionStatus{get;set;}
+public string clearReason{get;set;}
+public bool isChargeSearch{get;set;}
+public bool isCaseSearch{get;set;}
+public String CrimeType{get;set;}
+public string warrentType{get;set;}
+public int jurisdictionId{get;set;}
+public bool freeFormJus{get;set;}
+public int bookingSearchFlag{get;set;}
+
+
+    }
+
+    public class FilteredInmateDetails
+    {
+        public int ArrestId { get; set; }
+        public int IncarcerationId{get;set;}
+        public int InmateId { get; set; }
+        public int PersonId { get; set; }
+    }
+
+    public class SearchResult
+    {
+        public string BookingNumber { get; set; }
+        public string IncarbookingNumber{get;set;}
+        public int IncarcerationId{get;set;}
+        public string BookingType { get; set; }
+        public DateTime? BookingDate { get; set; }
+        public DateTime? ArrestReleaseClearedDate{get;set;}
+        public int? ArrestSupSeqNumber{get;set;}
+        public int WarrantCount{get;set;}
+        public int CrimeCount{get;set;}
+        public int WarrantCrimeCount{get;set;}
+        public int CrimeForceCount{get;set;}
+        public int WarrantCrimeForceCount{get;set;}
+        public string CaseNo { get; set; }
+        public string ArrestAgency { get; set; }
+        public string CourtDocket { get; set; }
+        public string Court { get; set; }
+        public DateTime? ReleaseDate { get; set; } //Incarceration Release Date
+        public string ReleaseReason { get; set; } //Incarceration Release Reason
+        public string Photofilepath { get; set; }
+        public string InmateNumber { get; set; }
+        public string Classify { get; set; }
+        public string FirstName { get; set; }
+        public string MiddleName { get; set; }
+        public string LastName { get; set; }
+        public DateTime? Dob { get; set; }
+        public int InmateActive { get; set; }
+        public int ArrestId { get; set; }
+        public int IncarArrestXrefId{get;set;}
+        public int InmateId { get; set; }
+        public int PersonId { get; set; }
+        public int FacilityId { get; set; }
+        public int? ArrestBillingAgencyId { get; set; }
+        public int? ArrestCourtJurisdictionId { get; set; }
+        public string ArrestType { get; set; }
+        public string DlNumber {get;set;}
+        public string Personcii {get;set;}
+        public string AfisNumber {get;set;}
+        public string HairColorName{get;set;}
+        public string EyeColorName{get;set;}
+        public string RaceName{get;set;}
+        public string SexName{get;set;}
+
+        public List<Lookup>  LookupDetails{get;set;}
+        public int? PrimaryHeight { get; set; }
+        public int? SecondaryHeight { get; set; }
+        public int? Weight { get; set; }
+
+        public string Placeofbirth{get;set;}
+        public DateTime? DateIn{get;set;}
+        public DateTime? ReleaseOut{get;set;}
+        public int DaysCustody{get;set;}
+        public string keeper{get;set;}
+        public int? ArrestSentenceCode{get;set;}
+        public DateTime? ArrestSentenceReleaseDate{get;set;}
+        public int CaseCount{get;set;}
+        public int? TransportFlag{get;set;}
+        public DateTime? TransportScheduleDate{get;set;}
+        public string WarrantNumber{get;set;}
+        public string ChargeStatus{get;set;}
+        public string Charges{get;set;}
+        public string CrimeCodeType{get;set;}
+        public string CrimeSection{get;set;}
+        public string CrimeType{get;set;}
+        public int CrimeLookupId { get; set; }
+        public string CrimeStatuteCode{get;set;}
+        public string CrimeDescription{get;set;}
+        public DateTime? OverallFinalReleaseDate{get;set;}
+        public DateTime? OverallSentStartDate{get;set;}
+        public int? SexLast { get; set; }
+        public int? PersonHairColorLast{get;set;}
+        public int? PersonEyeColorLast{get;set;}
+        public int? PersonRaceLast{get;set;}
+        public int WarrantId { get; set; }
+        public int Days { get; set; }
+        public int PersonAge { get; set; }
+    }
+
+    public class BookingSearchSubData : WarrantDetails
+    {
+        public int ArrestId { get; set; }
+        public int CrimeId { get; set; }
+        public int CrimeForceId { get; set; }
+        public int CrimeLookupId { get; set; }
+        public int CrimeGroupId { get; set; }
+        public int CrimeHistoryId { get; set; }
+        public int CrimeCount { get; set; }
+        public int CrimeNumber { get; set; }
+        public string CrimeSection { get; set; }
+        public string WarrantCounty { get; set; }
+        public string CrimeSubSection { get; set; }
+        public string Qualifier { get; set; }
+        public int CreatedBy { get; set; }
+        public PersonnelVm CreatedPersonnel { get; set; }
+        public int? UpdatedBy { get; set; }
+        public PersonnelVm UpdatedPersonnel { get; set; }
+        public DateTime? CreateDate { get; set; }
+        public DateTime? UpdateDate { get; set; }
+        public string BailType { get; set; }
+        public bool BailFlag { get; set; }
+        public decimal? BailAmount { get; set; }
+        public int? QualifierLookupIndex { get; set; }
+        public string CrimeStatueCode { get; set; }
+        public string CrimeStatuteId { get; set; }
+        public string Note { get; set; }
+        public string Status { get; set; }
+        public string CrimeType { get; set; }
+        public int DeleteFlag { get; set; }
+        public string CrimeLookupForceString { get; set; }
+        public string ChargeQualifierLookup { get; set; }
+        public int? CrimeStatusLookup { get; set; }
+        public PersonnelVm PersonnelDetail { get; set; }
+        public BookingChargeType BookingChargeType { get; set;}
+        public string WarrantAgencyText { get; set; }
+        public string BookingNumber { get; set; }
+        public int? InmateId { get; set; }
+        public InmateHousing PersonDetails { get; set; }
+    }
+
+    public class InmateIncarcerationDetails
+    {
+        public int InmateId { get; set; }
+        public int IncarcerationId { get; set; }
+        public DateTime? ReleaseOut { get; set; }
+        public DateTime? DateIn { get; set; }
+        public List<IncarcerationArrestXrefDetails> IncarcerationArrestXrefDetailLSt { get; set; }
+        public int FacilityId { get; set; }
+        public int PersonId { get; set; }
+        public string UsedPersonLast { get; set; }
+        public string UsedPersonFirst { get; set; }
+        public string UsedPersonMiddle { get; set; }
+        public string UsedPersonSuffix { get; set; }
+        public string TransportHoldName { get; set; }
+        public DateTime? TransportScheduleDate { get; set; }
+        public string TransportInstructions { get; set; }
+        public string TransportCautions { get; set; }
+        public string TransportBail { get; set; }
+        public string TransportType { get; set; }
+        public int? TransportHoldType { get; set; }
+    }
+
+    public class IncarcerationArrestXrefDetails
+    {
+        public int InmateId { get; set; }
+        public int ArrestId { get; set; }
+        public int IncarcerationId { get; set; }
+        public int IncarcerationArrestXrefId { get; set; }
+        public decimal? BailAmount { get; set; }
+        public string BookingNumber { get; set; }
+        public string BookingStatus { get; set; }
+        public string BookingType { get; set; }
+        public int ArrestType { get; set; }
+        public string CourtDocket { get; set; }
+        public string ReleaseReason { get; set; }
+        public DateTime? ReleaseDate { get; set; }
+        public DateTime? BookingDate { get; set; }
+        public DateTime? ArrestSentenceStartDate { get; set; }
+        public DateTime? ArrestSentenceReleaseDate { get; set; }
+        public string CaseNumber { get; set; }
+        public int? BookingActive { get; set; }
+        public int ClearFlag { get; set; }
+        public int? ReactivateFlag { get; set; }
+        public string Arrest { get; set; }
+        public string Court { get; set; }
+        public int? WeekEnder { get; set; }
+        public List<AoWizardStepProgressVm> BookingDataWizardStep { get; set; }
+        public int? AoWizardProgressId { get; set; }
+        public int? wizardCompleteFlag { get; set; }
+        public Boolean BookingSupervisorCompleteFlag { get; set; }
+        public Boolean ReleaseSupervisorCompleteFlag { get; set; }
+
+        public int? ReviewBookingWizardId { set; get; }
+        public List<AoWizardStepProgressVm> ReviewBookingWizard { get; set; }
+        public int? ReviewClearWizardId { set; get; }
+        public List<AoWizardStepProgressVm> ReviewClearWizard { get; set; }
+
+    }
+
+    public enum BookingStatus
+    {
+        NONE,
+        ACTIVE,
+        INACTIVE
+    }
+
+    public enum InmateSummaryType
+    {
+		[Display(Name = "None")]
+		NONE,
+		[Display(Name = "Inmate Summary")]
+		INMATESUMMARY,
+		[Display(Name = "Active Inmate Summary")]
+		ACTIVEINMATESUMMARY,
+		[Display(Name = "Active Inmate Public Summary")]
+		ACTIVEINMATEPUBLICSUMMARY,
+		[Display(Name = "Active Bail Summary")]
+		ACTIVEBAILSUMMARY,
+		[Display(Name = "Active Inmate Finger Print")]
+		ACTIVEINMATEFINGERPRINT
+    }
+
+	public enum BookingChargeType
+	{
+		NONE,
+		CHARGE,
+		WARRANT
+	}
+}

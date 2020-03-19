@@ -1,0 +1,398 @@
+﻿using System;
+using System.Collections.Generic;
+using GenerateTables.Models;
+
+namespace ServerAPI.ViewModels
+{
+    public class HousingUnitVm
+    {
+        public int HousingUnitId { get; set; }
+        public string HousingUnitLocation { get; set; }
+        public string HousingUnitNumber { get; set; }
+        public string HousingUnitBedNumber { get; set; }
+        public string HousingUnitBedLocation { get; set; }
+        public int? HousingUnitActualCapacity { get; set; }
+        public int? HousingUnitRatedCapacity { get; set; }
+        public FacilityVm Facility { get; set; }
+        public string HousingUnitOutOfserviceReason { get; set; }
+        public int? HousingUnitOutOfService { get; set; }
+        public string HousingUnitOutOfServiceNote { get; set; }
+        public int? HousingUnitOutOfServiceBy { get; set; }
+        public DateTime? HousingUnitOutOfServiceDate { get; set; }
+        public PersonnelVm PersonnelDetail { get; set; }
+        public int Assigned { get; set; }
+        public int? AssignedInmate { get; set; }
+        public int Count { get; set; }
+        public string HousingUnitLocationAndNumber { get; set;}
+    }
+
+    public class HousingDetail : FacilityVm
+    {
+        public int HousingUnitId { get; set; }
+        public int? HousingUnitListId { get; set; }
+        public string HousingUnitLocation { get; set; }
+        public string HousingUnitNumber { get; set; }
+        public string HousingUnitBedNumber { get; set; }
+        public string HousingUnitBedLocation { get; set; }
+        public bool Inactive { get; set; }
+        public int? HousingUnitGroupId { get; set; }
+        public int HousingUnitBedGroupId { get; set; }
+    }
+
+    public class HousingUnitListVm
+    {
+        public int HousingUnitListId { get; set; }
+        public string HousingUnitLocation { get; set; }
+        public string HousingUnitNumber { get; set; }
+        public int ? MailBinid { get; set; }
+        public FacilityVm Facility { get; set; }
+    }
+
+    public class HousingUnitGroupVm
+    {
+        public int HousingUnitGroupId { get; set; }
+        public string GroupName { get; set; }
+        public string GroupString { get; set; }
+        public string LocationString { get; set; }
+        public List<KeyValuePair<string, string>> HousingList { get; set; }
+    }
+
+    public class HousingIncarcerationHistory
+    {
+        public int IncarcerationId { get; set; }
+        public DateTime? DateIn { get; set; }
+        public DateTime? ReleaseOut { get; set; }
+        public int InmateMoveCount { get; set; }
+        public string FacilityName { get; set; }
+    }
+
+    public class InmateHousingMoveHistory
+    {
+        public HousingDetail HousingDetail { get; set; }
+        public DateTime? DateIn { get; set; }
+        public DateTime? DateOut { get; set; }
+        public PersonnelVm OfficerIn { get; set; }
+        public PersonnelVm OfficerOut { get; set; }
+        public string Reason { get; set; }
+        public int IncarcerationId { get; set; }
+    }
+
+    public class HousingVm : FacilityVm
+    {
+        public bool ShowFacility { get; set; }
+        public InmateCurrentDetails InmateCurrentDetails { get; set; }
+        public List<HousingCapacityVm> HousingCapacityList { get; set; }
+        public List<InmateSearchVm> InmateDetailsList { get; set; }
+        public List<HousingConflictVm> HousingConflictList { get; set; }
+        public HousingStatsVm HousingStatsDetails { get; set; }
+        public HousingHeaderVm HousingHeaderDetails { get; set; }
+        public List<HousingVisitationVm> HousingVisitationDetails { get; set; }
+        public List<InmateSearchVm> HousingGenderDetails { get; set; }
+        public List<HousingConflictVm> HousingRuleAndClassifyFlags { get; set; }
+        public List<PrivilegeDetailsVm> LocationList { get; set; }
+        public List<HousingCapacityVm> HousingBuildingCapacityList { get; set; }
+        public List<HousingPrivilegesVm> ExternalLocationList { get; set; }
+        public List<HousingPrivilegesVm> InternalLocationList { get; set; }
+        public List<HousingInmateHistory> HousingInmateHistoryList { get; set; }
+        public HousingAttributeVm HousingAttribute { get; set; }
+        public List<HousingFlags> HousingFlag { get; set; }
+        public List<HousingCapacityVm> BunkCapacityList { get; set; }
+        public List<InmateSearchVm> TotalSepDetails { get; set; }       
+        public List<HousingDetail> HousingLockdownList { get; set; }
+        public List<HousingDetail> HousingBuildingLockdownList { get; set; }
+    }
+
+    public class HousingCapacityVm : FacilityVm
+    {
+        public int HousingId { get; set; }
+        public int HousingUnitListId { get; set; }
+        public string HousingLocation { get; set; }
+        public string HousingNumber { get; set; }
+        public string HousingBedNumber { get; set; }
+        public string HousingBedLocation { get; set; }
+        public int CurrentCapacity { get; set; }
+        public int Assigned { get; set; }
+        public int Out { get; set; }
+        public int Actual { get; set; }
+        public int? OutofService { get; set; }
+        public int Gender { get; set; }
+        public int KeepSep { get; set; }
+        public bool ClassifyConflictCheck { get; set; }
+        public string OutOfServiceReason { get; set; }
+        public bool HavingNextLevel { get; set; }       
+        public List<string> HousingClassifyString { get; set; }
+        public List<string> HousingFlag { get; set; }
+        public string HousingFlagString { get; set; }
+        public string HousingAttributeString { get; set; }
+        public int HousingUnitBedGroupId { get; set; }
+
+    }
+
+    public class HousingConflictVm : TrackingConflictVm
+    {
+        public HousingDetail Housing { get; set; }
+        public bool Immovable { get; set; }
+        public string AssignConflictType { get; set; }
+        public string PhotoFilePath { get; set; }
+        public List<string> ListDescription { get; set; }
+        public HousingDetail AssignHousing { get; set; }       
+        public int HousingBedGroupId { get; set; }
+        public int? PersonFlagIndex { get; set; }
+        public int? InmateFlagIndex { get; set; }
+        public int? DietFlagIndex { get; set; }
+    }
+
+    public class HousingStatsDetails
+    {
+        public int InmateId { get; set; }
+        public int PersonId { get; set; }
+        public string Flags { get; set; }
+        public int FlagId { get; set; }
+        public PersonInfoVm PersonDetail { get; set; }
+        public string InmateNumber { get; set; }
+        public string PhotoFilePath { get; set; }
+        public int? HousingUnitId { get; set; }
+        public HousingDetail HousingDetail { get; set; }
+        public string Location { get; set; }
+        public int? InmateFlagIndex { get; set; }
+        public int? PersonFlagIndex { get; set; }
+        public int? DietFlagIndex { get; set; }
+        public string Classify { get; set; }
+        public DateTime? DateValue { get; set; }
+    }
+
+    public class HousingStatsCount
+    {
+        public int FlagId { get; set; }
+        public string FlagName { get; set; }
+        public int InmateCount { get; set; }
+        public double Percentage { get; set; }
+        public CellsEventFlag EventFlag { get; set; }
+        public string Type { get; set; }
+    }
+
+    public enum CellsEventFlag
+    {
+        Flag,
+        Gender,
+        Race,
+        Association,
+        Classification
+    }
+
+    public class HousingStatsVm
+    {
+        public List<HousingStatsDetails> FlagList { get; set; }
+        public List<HousingStatsDetails> GenderList { get; set; }
+        public List<HousingStatsDetails> RaceList { get; set; }
+        public List<HousingStatsDetails> AssociationList { get; set; }
+        public List<HousingStatsDetails> ClassifyList { get; set; }
+
+        public List<HousingStatsCount> FlagCountList { get; set; }
+        public List<HousingStatsCount> GenderCountList { get; set; }
+        public List<HousingStatsCount> RaceCountList { get; set; }
+        public List<HousingStatsCount> AssociationCountList { get; set; }
+        public List<HousingStatsCount> ClassifyCountList { get; set; }
+    }
+
+    public class HousingHeaderVm
+    {
+        public int Status { get; set; }      
+        public string Gender { get; set; }
+        public int? Floor { get; set; }
+        public int? Offsite { get; set; }
+        public int? Medical { get; set; }
+        public int? Mental { get; set; }
+        public int? Visitation { get; set; }
+        public int? Commission { get; set; }
+    }
+
+    public class HousingVisitationVm
+    {
+        public string VisitDay { get; set; }
+        public DateTime? VisitFrom { get; set; }
+        public DateTime? VisitTo { get; set; }
+    }
+
+    public class HousingAssignVm
+    {
+        public int InmateId { get; set; }
+        public int HousingUnitId { get; set; }
+        public string Reason { get; set; }
+        public string ConflictNotes { get; set; }
+        public bool UnAssign { get; set; }
+        public HousingDetail HousingDetail { get; set; }
+        public int FacilityId { get; set; }
+        public bool CheckIn { get; set; }
+        public PrivilegeDetailsVm PrivilegeDetails { get; set; }
+        public List<HousingConflictVm> HousingConflictList { get; set; }
+        public bool IsChangeFacilty { get; set; }
+        public int? InmateClassificationId { get; set; }
+        public int PersonId { get; set; }
+        public int? HousingUnitFromId { get; set; }
+    }
+
+    public enum ScheduleEventFlag
+    {
+        Appt,
+        Court,
+        Program,
+        VisitReg,
+        VisitCom,
+        WorkCrew,
+        WorkCrewAnyTime,
+        WorkFurlough,
+        WorkFurloughAnyTime
+    }
+
+    public class HousingInmateHistory : HousingDetail
+    {
+        public int InmateId { get; set; }
+        public string InmateNumber { get; set; }
+        public PersonInfoVm PersonDetail { get; set; }
+        public string Location { get; set; }
+        public DateTime? FromDate { get; set; }
+        public DateTime? ThruDate { get; set; }
+        public bool Active { get; set; }
+        public string PhotoFilePath { get; set; }
+    }
+
+    public class HousingPrivilegesVm : PrivilegesVm
+    {
+        public int Count { get; set; }
+        public string HousingLocation { get; set; }
+    }
+
+    public class HousingInputVm
+    {
+        public int InmateId { get; set; }
+        public int FacilityId { get; set; }
+        public string HousingLocation { get; set; }
+        public string HousingNumber { get; set; }
+        public int HousingUnitListId { get; set; }
+        public string HousingBedNumber { get; set; }
+        public string HousingBedLocation { get; set; }
+        public DateTime? FromDate { get; set; }
+        public DateTime? ThruDate { get; set; }
+        public int OfficerId { get; set; }
+        public HousingType HousingType { get; set; }
+        public bool ViewerFlag { get; set; }
+    }
+
+    public class HousingStatsInputVm
+    {
+        public int FacilityId { get; set; }
+        public HousingStatsCount HousingStatsCount { get; set; }
+        public HousingDetail HousingUnit { get; set; }
+        public int LocationId { get; set; }
+        public HousingType HousingType { get; set; }
+        public int HousingGroupId { get; set; }
+    }
+
+    public enum HousingType
+    {
+        Facility,
+        HousingLocation,
+        Number,
+        BedNumber,
+        BedLocation,
+        NoHousing,
+        Location
+    }
+    public class CellViewerDetails
+    {
+        public List<HousingCapacityVm> NumberCapacityList { get; set; }
+        public List<HousingCapacityVm> BedNumberCapacityList { get; set; }
+        public List<InmateSearchVm> InmateDetailsList { get; set; }
+        public HousingStatsVm HousingStatsDetails { get; set; }
+        public HousingHeaderVm HousingHeaderDetails { get; set; }
+        public List<HousingVisitationVm> HousingVisitationDetails { get; set; }
+        public List<HousingDetail> HousingLockdownList { get; set; }
+        public List<HousingDetail> HousingCellLockdownList { get; set; }
+    }
+    public class OutOfServiceHistory
+    {
+        public List<HousingUnitVm> HousintUnitList { get; set; }
+        public string[] BedNumberList { get; set; }
+    }
+    public class IssuedPropertyVm
+    {
+        public int IssuedPropertyId {get;set;}
+        public string PropertyName { get; set; }
+        public int Count { get; set; }
+        public int PropertyLookupId { get; set; }
+        public HousingUnitVm HousingDetails { get; set; }
+        public PersonInfoVm Person { get; set; }
+        public string Note { get; set; }
+        public string IssuedNumber { get; set; }
+        public string PropertyDescription {get;set;}
+        public DateTime? IssuedDate {get;set;}
+        public string PersonLastName {get;set;}
+        public string IssueNote {get;set;}
+        public List<IssuedPropertyVm> IssuedPropertyList { get; set; }
+        public string IssuedBy {get;set;}
+        public string InactiveBy {get;set;}
+        public int? IssuedProperty{get;set;}
+        public int DeleteFlag{get;set;}
+        public int ActiveFlag{get;set;}
+        public int? ExpireUponRelease {get;set;}
+        public int? InmateId { get; set; }
+    }
+
+    public class HousingLibraryVm
+    {
+        public PersonInfoVm Person { get; set; }
+        public HousingDetail HousingDetail { get; set; }
+        public int Check { get; set; }
+        public int Late { get; set; }
+    }
+    public class CellPropertyLibraryDetails
+    {
+        public List<IssuedPropertyVm> IssuedPropertyList { get; set; }
+        public List<HousingLibraryVm> LibraryList { get; set; }
+    }
+
+    public class HousingAttributeVm
+    {
+        public string AttributeString { get; set; }
+        public string DisplayNote { get; set; }
+    }
+    public class HousingFlags
+    {
+        public HousingDetail HousingDetail { get; set; }
+        public List<string> Flags { get; set; }
+    }
+    public class GrievanceSample
+    {
+        public DateTime? DateOccured { get; set; }
+        public string Type { get; set; }
+        public int GrievanceType { get; set; }
+        public string GrievanceSummary { get; set; }
+        public int InmateId { get; set; }
+        public string ReportingInmateName { get; set; }
+        public int FacilityId { get; set; }
+        public string HousingUnitLocation { get; set; }
+        public string HousingUnitNumber { get; set; }
+        public string HousingUnitBedNumber { get; set; }
+        public string PrivilegeDescriptionOld { get; set; }
+        public string PrivilegeDescription { get; set; }
+        public int GrievanceLocationId { get; set; }
+        public string LocationOther { get; set; }
+        public int GrievanceId { get; set; }
+        public string InmateNumber { get; set; }
+        public string PersonLastName { get; set; }
+        public string PersonFirstName { get; set; }        
+
+    }
+
+    public class HousingLockInputVm
+    {
+        public int FacilityId { get; set; }
+        public string HousingLocation { get; set; }
+        public string HousingNumber { get; set; }
+        public int HousingUnitListId { get; set; }
+        public string HousingBedNumber { get; set; }
+        public string HousingBedLocation { get; set; }
+        public HousingType HousingType { get; set; }
+    }
+}

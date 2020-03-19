@@ -1,0 +1,126 @@
+using System;
+using ServerAPI.ViewModels;
+using System.Linq;
+using GenerateTables.Models;
+using Microsoft.AspNetCore.Http;
+using System.Collections.Generic;
+
+namespace ServerAPI.Services
+{
+    public class MoneyClearService : IMoneyClearService
+    {
+        private readonly AAtims _context;
+        private readonly int _personnelId;
+        private readonly IMoneyVoidService _moneyVoidService;
+        private readonly IMoneyService _moneyService;
+        public MoneyClearService(AAtims context, IHttpContextAccessor httpContextAccessor, IMoneyVoidService moneyVoidService, IMoneyService moneyService)
+        {
+            _context = context;
+            _personnelId = Convert.ToInt32(httpContextAccessor.HttpContext.User
+                .FindFirst("personnelId")?.Value);
+            _moneyVoidService = moneyVoidService;
+            _moneyService = moneyService;
+        }
+
+
+        //To get the Money-Clear-Clear-List Details
+        public MoneyClearVm GetMoneyClearClearDetails(MoneyAccountFilterVm searchValue)
+        {
+            MoneyClearVm moneyClearList = new MoneyClearVm();
+            if (!searchValue.IsRefresh)
+            {
+                moneyClearList.LoadBankDetails = _moneyService.MoneyGetBank();
+                moneyClearList.LoadFundDetails = _moneyService.MoneyGetFund();
+                searchValue.BankId = moneyClearList.LoadBankDetails.First().Value;
+                searchValue.FundId = moneyClearList.LoadFundDetails.First().AccountAOFundId;
+            }
+
+            moneyClearList.GetMoneyClear = _context.AccountAoTransaction
+                .Where(w => w.AccountAoFund.AccountAoBankId == searchValue.BankId
+                    && (searchValue.FundId == 0 || w.AccountAoFundId == searchValue.FundId)
+                    && !w.TransactionCleared.HasValue
+                    && !String.IsNullOrEmpty(w.TransactionCheckNumber)
+                    && (String.IsNullOrEmpty(searchValue.TransactionCheckNumber) ? (w.TransactionDate.Value.Date >= searchValue.FromDate.Value.Date &&
+                    w.TransactionDate.Value.Date <= searchValue.ToDate.Value.Date) : w.TransactionCheckNumber == searchValue.TransactionCheckNumber))
+                    .Select(s => new MoneyAccountTransactionVm
+                    {
+                        AccountAoTransactionId = s.AccountAoTransactionId,
+                        TransactionDate = s.TransactionDate,
+                        TransactionDescription = s.TransactionDescription,
+                        TransactionCheckNumber = s.TransactionCheckNumber,
+                        InmateId = s.InmateId ?? 0,
+                        InmateNumber = s.Inmate.InmateNumber,
+                        Person = new PersonVm
+                        {
+                            PersonLastName = s.Inmate.Person.PersonLastName,
+                            PersonFirstName = s.Inmate.Person.PersonFirstName,
+                            PersonMaidenName = s.Inmate.Person.PersonMaidenName,
+                            PersonSuffix = s.Inmate.Person.PersonSuffix,
+                        },
+                        TransactionAmount = s.TransactionAmount,
+                        VoidFlag = s.TransactionVoidFlag == 1,
+                        BalanceInmate = s.BalanceInmate,
+                        BalanceFund = s.BalanceFund,
+                        BalanceAccount = s.BalanceAccount,
+                        ClearBy =
+                            new PersonnelVm
+                            {
+                                PersonFirstName = s.TransactionClearedByNavigation.PersonNavigation.PersonFirstName,
+                                PersonLastName = s.TransactionClearedByNavigation.PersonNavigation.PersonLastName,
+                                OfficerBadgeNumber = s.TransactionClearedByNavigation.OfficerBadgeNum
+                            },
+                        VoidBy =
+                            new PersonnelVm
+                            {
+                                PersonFirstName = s.TransactionVoidByNavigation.PersonNavigation.PersonFirstName,
+                                PersonLastName = s.TransactionVoidByNavigation.PersonNavigation.PersonLastName,
+                                OfficerBadgeNumber = s.TransactionVoidByNavigation.OfficerBadgeNum
+                            },
+                        PersonnelBy =
+                            new PersonnelVm
+                            {
+                                PersonFirstName = s.CreatedByNavigation.PersonNavigation.PersonFirstName,
+                                PersonLastName = s.CreatedByNavigation.PersonNavigation.PersonLastName,
+                                OfficerBadgeNumber = s.CreatedByNavigation.OfficerBadgeNum
+                            },
+                        AccountAoReceiveId = s.AccountAoReceiveId ?? 0,
+                        ReceiveFrom = s.TransactionReceiveFrom,
+                        DepositoryName = s.AccountAoReceive.AccountAoDepository.DepositoryName,
+                        TransactionPayToTheOrderOf = s.TransactionPayToTheOrderOf,
+                        ReceiveNumber = s.TransactionReceiveNumber,
+                        TransactionDebitMemo = s.TransactionDebitMemo,
+                        TransactionType = s.TransactionType,
+                        ClearDate = s.TransactionClearedDate,
+                        BankAccountAbbr = s.AccountAoFund.AccountAoBank.BankAccountAbbr,
+                        TransactionNotes = s.TransactionNotes,
+                    }).OrderByDescending(o => o.AccountAoTransactionId).ToList();
+            return moneyClearList;
+        }
+
+        //To do the DoTransaction in Money-Clear-Clear-List Details
+        public int UpdateMoneyClearClearTransaction(List<int> checkedTransIdList)
+        {
+            List<AccountAoTransaction> accountAoTransaction = _context.AccountAoTransaction
+            .Where(w => checkedTransIdList.Contains(w.AccountAoTransactionId)
+             && (!w.TransactionCleared.HasValue || w.TransactionCleared == 0)).ToList();
+
+            //Update the AccountAOTransaction table
+            accountAoTransaction.ForEach(f =>
+            {
+                f.TransactionCleared = 1;
+                f.TransactionClearedBy = _personnelId;
+                f.TransactionClearedDate = DateTime.Now;
+                f.UpdateDate = DateTime.Now;
+                f.UpdatedBy = _personnelId;
+            });
+            return _context.SaveChanges(); ;
+        }
+
+        //To do the DoVoid in Money-Clear-Clear-List Details
+        public MoneyAccountVoidDetailsVm DoVoidMoneyClearClear(int transId, MoneyAccountTransactionFlagType pFlag)
+        {
+            MoneyAccountVoidDetailsVm moneyClearDetails = _moneyVoidService.GetDoVoidDetails(transId, pFlag);
+            return moneyClearDetails;
+        }
+    }
+}

@@ -1,0 +1,238 @@
+﻿using System;
+using System.Collections.Generic;
+
+namespace ServerAPI.ViewModels
+{
+    public class GrievanceVm
+    {
+        public int GrievanceId { get; set; }
+        public int InmateId { get; set; }
+        public int PersonId { get; set; }
+        public DateTime? DateOccured { get; set; }
+        public int? GrievanceType { get; set; }
+        public string GrievanceSummary { get; set; }
+        public DateTime? CreateDate { get; set; }
+        public int CreatedBy { get; set; }
+        public int FacilityId { get; set; }
+        public int GrievanceLocationId { get; set; }
+        public string HousingUnitLocation { get; set; }
+        public string HousingUnitNumber { get; set; }
+        public string HousingUnitBed { get; set; }
+        public string OtherLocation { get; set; }
+        public int? GrievanceWizardStep { get; set; }
+        public PersonInfoVm Person { get; set; }
+
+        public int? ReadyForReview { get; set; }
+        public int? SetReview { get; set; }
+        public string GrievanceDispositionLookup { get; set; }
+        public string GrievanceLocation { get; set; }
+        public string GrievanceNumber { get; set; }
+        public DateTime? AppealDate { get; set; }
+        public List<WizardStep> LastStep { get; set; }
+        public int? WizardProgressId { get; set; }
+        public string Department { get; set; }
+        public int? PersonnelId { get; set; }
+        public string FacilityAbbr { get; set; }
+        public DateTime? ReviewedDate { get; set; }
+       
+        public PersonnelVm ReviewedByPerson { get; set; }
+        public PersonnelVm CreatedByPerson { get; set; }
+        public int DeleteFlag { get; set; }
+        public string GrievanceTypeName { get; set; }
+        public DateTime? ReceiveDate  { get; set; }
+        public bool SensitiveMaterial { get; set; }
+        public int? Completed { get; set; }
+        public int AppealCt { get; set; }
+        public bool PastDue { get; set;}
+        
+    }
+
+    public class GrievanceCountVm
+    {
+        public int FacilityId { get; set; }
+        public bool IsFirst { get; set; }
+        public List<HousingDetail> LstHousingDetails { get; set; }
+        public List<KeyValuePair<int, string>> LstLocation { get; set; }
+        public List<KeyValuePair<int, string>> LstDispo { get; set; }
+        public List<KeyValuePair<int, string>> LstGrievanceFlag { get; set; }
+        public List<GridInfoVm> LstType { get; set; }
+        public List<GrievancePersonnelOrAgainstCount> LstAgainst { get; set; }
+        public List<GrievancePersonnelOrAgainstCount> LstPersonnel { get; set; }
+        public string Building { get; set; }
+        public string Num { get; set; }
+        public string Bed { get; set; }
+        public int LocationId { get; set; }
+        public int Hours { get; set; }
+        public DateTime? FromDate { get; set; }
+        public DateTime? ToDate { get; set; }
+        public string PersonnelType { get; set; }
+        public string Dispo { get; set; }
+        public string Flag { get; set; }
+        public GrievanceType Type { get; set; }
+        public string TypeValue { get; set; }
+        public int PersonnelId { get; set; }
+    }
+
+    public class GrievancePersonnelOrAgainstCount : PersonnelVm
+    {
+        public string Name { get; set; }
+        public int Cnt { get; set; }
+    }
+
+    public class GrievanceCountDetails : PersonDetailVM
+    {
+        public DateTime? Date { get; set; }
+        public string Type { get; set; }
+        public string Against { get; set; }
+        public string Summary { get; set; }
+        public int SetReview { get; set; }
+        public string GrievanceNumber { get; set; }
+    }
+
+    public enum GrievanceType
+    {
+        Type,
+        Against,
+        Personnel
+    }
+
+    public class GrievanceDetailsVm
+    {
+        public List<GrievanceActiveHistoryCount> GrievanceElapsed { get; set; }
+        public List<GrievanceActiveHistoryCount> GrievanceStatus { get; set; }
+        public List<GrievanceActiveHistoryCount> GrievanceType { get; set; }
+        public List<GrievanceActiveHistoryCount> GrievanceIncidentLoc { get; set; }
+        public List<GrievanceVm> GrievanceList { get; set; }
+    }
+
+    public class GrievanceAppealVm : GrievanceVm
+    {
+        public DateTime? AppealCreateDate { get; set; }        
+        public int AppealCount { get; set; }
+        public string Category { get; set; }
+        public string AppealNote { get; set; }
+        public DateTime? ReviewDate { get; set; }
+        public int AppealId { get; set; }
+        public string TypeDescription { get; set; }
+        //public int DeleteFlag { get; set; }
+    }
+
+    public class GrievanceInputs
+    {
+        public int FacilityId { get; set; }
+        public int ActionFlag { get; set; }
+        public int Hours { get; set; }
+        public DateTime FromDate { get; set; }
+        public DateTime ToDate { get; set; }
+        public int GrievanceType { get; set; }
+        public string Grievancenumber { get; set; }
+        public string GrievanceDepartment { get; set; }
+        public string Building { get; set; }
+        public string Number { get; set; }
+        public string Bed { get; set; }
+        public string Location { get; set; }
+        public string Disposition { get; set; }
+        public int PersonnelId { get; set; }
+        public int InmateId { get; set; }
+        public string GrievanceFlag { get; set; }
+        public string GrivenceAppealDispo { get; set; }
+        public int GrievanceAppealFlag { get; set; }
+        public bool ActivePage { get; set; }
+        public bool isDeleted { get; set; }   
+        public bool IsComplete { get; set; }
+    }
+
+    public class GrievanceHistoryDetails
+    {
+        public GrievanceDetailsVm GrievanceDetails { get; set; }
+        public string[] Location { get; set; }
+        public List<HousingDetail> HousingDetails { get; set; }
+    }
+
+    public class GrievanceReview
+    {
+       public DateTime? ReviewedDate { get; set; }
+        public int? ReviewedBy { get; set; }
+        public string DispositionLookup { get; set; }
+        public string Disposition { get; set; }
+        public string InmateResponseNote { get; set; }
+        public int GrievanceId { get; set; }
+        //public List<KeyValuePair<int, string>> LstGrievanceFlag { get; set; }
+        public List<string> LstGrievanceFlag { get; set; }
+        public PersonnelVm ReviewOfficer { get; set; }
+        public bool SensitiveMaterial { get; set; }
+    }
+
+    public class GrievanceDetails
+    {
+        public List<PersonInfoVm> AdditionalInmateLst { get; set; }
+        public string Department { get; set; }
+        public List<PersonnelVm> PersonnelLst { get; set; }
+        public GrievanceReview ReviewDetails { get; set; }
+        public GrievanceAppealVm GrievanceAppeal { get; set; }
+        public List<IncarcerationForms> Forms { get; set; }
+        public List<GrievanceAppealVm> AppealDetails { get; set; }
+        public List<IncarcerationForms> lstGrievanceForms { get; set; }
+        public PersonnelVm CreatePersonnel { get; set; }
+        public List<AttachmentDetails> AttachmentLst { get; set; }
+    }
+
+    public class GrievanceHousingDetails
+    {
+        public List<string> HousingLocationList { get; set; }
+        public List<HousingDetail> HousingNumberList { get; set; }
+        public List<KeyValuePair<int, string>> HousingBedNumberList { get; set; }
+        public List<KeyValuePair<int, string>> LocationList { get; set; }
+    }
+
+    public class AttachmentDetails
+    {
+        public DateTime? CreateDate { get; set; }
+        public string Title { get; set; }
+        public int SavedId { get; set; }
+        public int DeleteFlag { get; set; }
+        public int? GrievanceId { get; set; }
+        public string FilePath { get; set; }
+        public string Type { get; set; }
+        public PersonnelVm CreatedBy { get; set; }
+    }
+
+    public class GrievanceReport
+    {
+        public GrievanceVm Grievance { get; set; }
+        public GrievanceDetails GrievanceDetail { get; set; }
+        public PersonInfoVm InmateDetails { get; set; }
+        public InmateSearchVm AdditionalInmate { get; set; }
+        public string ReportName { get; set; }
+        public PersonnelVm PersonnelDetails { get; set; }
+        public string PhotoPath { get; set; }
+        public GrievanceAppealDetails GrievanceAppealDetails { get; set; }
+    }
+
+    public class MonitorGrivanceVm
+    {
+        public DateTime? GrivanceDate { get; set; }
+        public string GrivanceType { get; set; }
+        public string Department { get; set; }
+        public string Position { get; set; }
+        public string Number { get; set; }
+        public DateTime? ReviewDate { get; set; }
+        public string PersonLastName { get; set; }
+        public string PersonFirstName { get; set; }
+
+    }
+    public class GrievanceActiveHistoryCount {
+    public string GrievanceName { get; set; }
+    public int GrievanceElapsedCount { get; set; }
+    public int PastDueCount { get; set; }
+    public int GrievanceStatusCount { get; set; }
+    public int GrievanceTypeCount { get; set; }
+    public int GrievanceLocationCount { get; set; }
+    }
+    public class CancelGrievance
+    {
+        public int GrievanceId { get; set; }
+        public string Disposition { get; set; }
+        public string DispositionNote { get; set; }
+    }
+}

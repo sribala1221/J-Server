@@ -1,0 +1,71 @@
+using GenerateTables.Models;
+using Microsoft.AspNetCore.Http;
+using System;
+using ServerAPI.Utilities;
+using ServerAPI.ViewModels;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace ServerAPI.Services
+{
+    public class LiveScanService : ILiveScanService
+    {
+        private readonly AAtims _context;       
+        public LiveScanService(AAtims context)
+        {
+            _context = context;          
+        }
+
+        public LiveScanDetail GetLiveScan(int inmateId, int userControlId)
+        {
+            LiveScanDetail getdetail = new LiveScanDetail();           
+           
+            getdetail.Location = webServicedetails(userControlId);
+            getdetail.ArrestBookingDetail = LoadLiveScan(inmateId);
+            return getdetail;
+        }          
+        private List<LoadLiveScanBooking> LoadLiveScan(int inmateId)
+        {           
+        
+            int? incarcerationId = _context.Incarceration
+              .SingleOrDefault(inc => inc.InmateId == inmateId && !inc.ReleaseOut.HasValue)?.IncarcerationId;          
+
+            IQueryable<Lookup> lstLook =
+                _context.Lookup.Where(look => look.LookupType == LookupConstants.ARRTYPE
+                 && look.LookupInactive == 0);
+
+            List<LoadLiveScanBooking> value = _context.Arrest.Where(w =>w.InmateId == inmateId)
+             .Select(s => new LoadLiveScanBooking()
+             {
+                 
+                 ArrestBookingNumber = s.ArrestBookingNo,
+                 ArrestDate = s.ArrestDate.HasValue ? s.ArrestDate.Value : default,
+                 BookingCompleteFlag = s.BookingCompleteFlag.HasValue,
+                 AgencyAbbreviation =s.ArrestingAgency.AgencyAbbreviation,
+                 ArrestCourtDocket =s.ArrestCourtDocket,
+                 ArrestCaseNumber =s.ArrestCaseNumber, 
+                 ArrestType = s.ArrestType != null
+                       ? lstLook.Where(look =>                           
+                          look.LookupIndex == Convert.ToInt32(Convert.ToDouble(s.ArrestType)) &&
+                           look.LookupType == LookupConstants.ARRTYPE)
+                           .Select(f=>f.LookupDescription).SingleOrDefault()
+                       : null,
+                 ReleaseDate = s.ArrestDate
+        
+             }).OrderBy(o => o.BookingCompleteFlag).ToList();
+
+            return value;
+        }      
+
+        private List<KeyValuePair<int, string>> webServicedetails(int userControlId) =>
+        _context.WebServiceExport.Where(s => s.UserInitiatedControlId == userControlId &&
+        s.Inactive.HasValue || s.Inactive == 0).Select(d =>
+          new KeyValuePair<int, string>(d.WebServiceExportId, d.Description)).ToList();
+        
+
+    }
+
+
+
+}

@@ -1,0 +1,342 @@
+using GenerateTables.Models;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
+using ServerAPI.Interfaces;
+using ServerAPI.Utilities;
+using ServerAPI.ViewModels;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace ServerAPI.Services
+{
+    public class RoomManagementService : IRoomManagementService
+    {
+        private readonly AAtims _context;
+        //private readonly int _personnelId;
+        //private readonly string _userName;
+        //private readonly UserManager<AppUser> _userManager;
+        private readonly RoleManager<IdentityRole> _roleManager;
+        //private readonly IPersonService _ipersonService;
+        //private readonly IInmateService _inmateService;
+        private readonly IFacilityHousingService _facilityHousingService;
+        //private readonly IAtimsHubService _atimsHubService;
+        private readonly ICommonService _commonService;
+        private readonly IRegisterService _registerService;
+
+
+        public RoomManagementService(AAtims context, IHttpContextAccessor httpContextAccessor,
+        // UserManager<AppUser> userManager,
+        RoleManager<IdentityRole> roleManager,
+        IPersonService personService,
+        IInmateService inmateService,
+        IFacilityHousingService facilityHousingService,
+        IAtimsHubService _atimsHubService, ICommonService commonService, IRegisterService registerSevice)
+
+        {
+            _context = context;
+            //_userManager = userManager;
+            _roleManager = roleManager;
+            _commonService = commonService;
+            _facilityHousingService = facilityHousingService;
+            _registerService = registerSevice;
+        }
+
+
+        public VisitRoomManagementDetails GetRoomManagementDetails(VisitParam objVisitParam)
+        {            
+            List<HousingUnitVisitationClassRule> maxClassRule = _context.HousingUnitVisitationClassRule.ToList();
+            VisitRoomManagementDetails visitDetails = new VisitRoomManagementDetails();
+            visitDetails.LstVisitRoomDetails = _context.VisitToVisitor
+             .Where(w => w.Visit.RegFacilityId == objVisitParam.FacilityId
+             && w.Visit.VisitDenyFlag == 0 && !w.Visit.CompleteVisitFlag &&
+             (!objVisitParam.AllActiveSchedule || !w.Visit.DeleteFlag)
+             && (objVisitParam.CompleteRegistration || w.Visit.CompleteRegistration)
+             && (!objVisitParam.PendingVisit || w.Visit.CompleteRegistration &&
+             (w.Visit.Location.VisitOpenScheduleFlag || w.Visit.EndDate >= DateTime.Now) &&
+             ((!w.Visit.Location.VisitOpenScheduleFlag && !w.Visit.Location.VisitAllowProfOnlyFlag) || !w.Visit.InmateTrackingStart.HasValue)) &&
+             (!objVisitParam.VisitsInProgress || w.Visit.CompleteRegistration &&
+             (w.Visit.Location.VisitOpenScheduleFlag || w.Visit.EndDate < DateTime.Now) &&
+             ((!w.Visit.Location.VisitOpenScheduleFlag && !w.Visit.Location.VisitAllowProfOnlyFlag) || w.Visit.InmateTrackingStart.HasValue)) &&
+              (!objVisitParam.PendingVisit || w.Visit.CompleteRegistration &&
+               (w.Visit.Location.VisitOpenScheduleFlag || !w.Visit.InmateTrackingStart.HasValue) &&
+               ((!w.Visit.Location.VisitOpenScheduleFlag && !w.Visit.Location.VisitAllowPersonalOnlyFlag) || !w.Visit.InmateTrackingStart.HasValue)) &&
+             (!objVisitParam.VisitsInProgress || w.Visit.CompleteRegistration &&
+              (w.Visit.Location.VisitOpenScheduleFlag || w.Visit.InmateTrackingStart.HasValue) &&
+              ((!w.Visit.Location.VisitOpenScheduleFlag && !w.Visit.Location.VisitAllowPersonalOnlyFlag) || w.Visit.InmateTrackingStart.HasValue))
+              )
+             .OrderBy(o => o.Visit.InmateTrackingStart).ThenBy(o=>o.Visit.StartDate)
+                   .Select(s => new VisitDetails
+                   {
+                       VisitToVisitorId = s.VisitToVisitorId,
+                       ScheduleId = s.ScheduleId,
+                       PrimaryVisitor = new PersonInfoVm
+                       {
+                           PersonId = s.PersonId,
+                           PersonLastName = s.Visitor.PersonLastName,
+                           PersonFirstName = s.Visitor.PersonFirstName
+                       },
+                       InmateInfo = new PersonInfoVm
+                       {
+                           InmateId = s.Visit.InmateId,
+                           InmateNumber = s.Visit.Inmate.InmateNumber,
+                           PersonLastName = s.Visit.Inmate.Person.PersonLastName,
+                           PersonFirstName = s.Visit.Inmate.Person.PersonFirstName,
+                           PersonMiddleName = s.Visit.Inmate.Person.PersonMiddleName,
+                           InmateClassificationId = s.Visit.Inmate.InmateClassificationId,
+                           Classification = s.Visit.Inmate.InmateClassification.InmateClassificationReason,
+                       },
+                       DeleteFlag = s.Visit.DeleteFlag,
+                       Location = s.Visit.Location.PrivilegeDescription,
+                       CompleteVisitReason = s.Visit.CompleteVisitReason,
+                       VisitDenyReason = s.Visit.VisitDenyReason,
+                       VisitDenyNote = s.Visit.VisitDenyNote,
+                       ScheduleDateTime = s.Visit.StartDate,
+                       CountAsVisit = s.Visit.CountAsVisit,
+                    //    AdultVisitorsCount = s.Visit.VisitAdditionAdultCount,
+                    //    ChildVisitorsCount = s.Visit.VisitAdditionChildCount,
+                       CompleteRegistration = s.Visit.CompleteRegistration,
+                       InmateTrackingStart = s.Visit.InmateTrackingStart,
+                       StartDate = s.Visit.StartDate,
+                       EndDate = s.Visit.EndDate,
+                       Time = s.Visit.Time,
+                       Duration = s.Visit.Duration,
+                       LocationId = s.Visit.LocationId ?? 0,
+                       HousingDetails = new HousingDetail()
+                       {
+                           HousingUnitId = s.Visit.Inmate.HousingUnit.HousingUnitId > 0 ? s.Visit.Inmate.HousingUnit.HousingUnitId : default,
+                           HousingUnitLocation = s.Visit.Inmate.HousingUnit.HousingUnitLocation,
+                           HousingUnitNumber = s.Visit.Inmate.HousingUnit.HousingUnitNumber,
+                           HousingUnitBedLocation = s.Visit.Inmate.HousingUnit.HousingUnitBedLocation,
+                           HousingUnitBedNumber = s.Visit.Inmate.HousingUnit.HousingUnitBedNumber,
+                           FacilityAbbr = s.Visit.Inmate.Facility.FacilityAbbr,
+                           HousingUnitListId = s.Visit.Inmate.HousingUnit.HousingUnitListId
+                       },
+                       InmateCurrentTrack = s.Visit.Inmate.InmateCurrentTrack,
+                       VisitBoothId = s.Visit.VisitBooth,
+                       ReasonId = s.Visit.ReasonId,
+                       TypeId = s.Visit.TypeId,
+                       VisitOpenScheduleFlag = s.Visit.LocationId.HasValue ?
+                       s.Visit.Location.VisitOpenScheduleFlag : default,
+                       VisitBoothAssignRoomFlag = s.Visit.Location.VisitBoothAssignRoomFlag,
+                       AssignedBooth = s.Visit.VisitBooth != null ? true : false,
+                       VisitorNotes = s.Visitor.VisitorNotes,
+                       //AssignedBooth = s.Visit.Location.VisitBoothAssignRoomFlag ? false : s.Visit.Location.VisitBoothAssignRoomFlag,
+                   }).ToList();
+
+            List<int> lstPersonId = visitDetails.LstVisitRoomDetails.Select(s => s.PrimaryVisitor.PersonId).ToList();
+
+            List<VisitorToInmate> lstVisitorToInmate = _context.VisitorToInmate
+                .Where(w => lstPersonId.Contains(w.VisitorId ?? 0)).ToList();
+
+            List<VisitorProfessional> lstVisitorProfessional = _context.VisitorProfessional
+                .Where(w => lstPersonId.Contains(w.PersonId)).Select(s => new VisitorProfessional
+                {
+                    PersonId = s.PersonId,
+                    VisitorType = s.VisitorType
+                }).ToList();
+
+            List<LookupVm> lstLookup = _commonService.GetLookups(new[]
+                {LookupConstants.RELATIONS, LookupConstants.VISTYPE,LookupConstants.VISITTYPE,
+            LookupConstants.VISBOOTH,LookupConstants.VISREAS});
+
+
+            List<int> lstScheduleId = visitDetails.LstVisitRoomDetails.Select(s => s.ScheduleId).ToList();
+
+            List<AoWizardProgressVm> lstVisitRegistrationWizardProgress = _registerService.GetVisitRegistrationWizardProgress(lstScheduleId);
+            List<Privileges> lstPrivilages = _context.Privileges.Where(w => w.InactiveFlag == 0).ToList();
+            visitDetails.LstVisitRoomDetails.ForEach(item =>
+            {
+                //Personal Relationship
+                int relationshipId = lstVisitorToInmate.FirstOrDefault(w => w.VisitorId == item.PrimaryVisitor.PersonId
+                                            && w.InmateId == item.InmateInfo.InmateId)?.VisitorRelationship ?? 0;
+
+                if (relationshipId > 0)
+                {
+                    item.Relationship = lstLookup.SingleOrDefault(l =>
+                        l.LookupIndex == relationshipId && l.LookupType == LookupConstants.RELATIONS)?.LookupDescription;
+                }
+                //Getting Reason, Type and Visit Booth details
+
+                item.Reason = item.ReasonId.HasValue
+                    ? lstLookup.SingleOrDefault(w =>
+                        w.LookupType == LookupConstants.VISREAS &&
+                        w.LookupIndex == item.ReasonId)?.LookupDescription
+                    : null;
+
+                LookupVm lookupVm = item.TypeId.HasValue
+                    ? lstLookup.SingleOrDefault(w =>
+                        w.LookupType == LookupConstants.VISITTYPE &&
+                        w.LookupIndex == item.TypeId)
+                    : null;
+
+                if (lookupVm != null)
+                {
+                    item.Type = lookupVm.LookupDescription;
+                }
+
+                item.VisitBooth = item.VisitBoothId.HasValue
+                    ? lstLookup.SingleOrDefault(w =>
+                        w.LookupType == LookupConstants.VISBOOTH &&
+                        w.LookupIndex == item.VisitBoothId)?.LookupDescription
+                    : null;
+                List<VisitorPersonal> lstVisitorPersonal = _context.VisitorPersonal.Where(w =>
+                           lstPersonId.Contains(w.PersonId)).Select(s => new VisitorPersonal
+                           {
+                               PersonId = s.PersonId,
+                               VisitorNotAllowedFlag = s.VisitorNotAllowedFlag,
+                               PersonOfInterestFlag = s.PersonOfInterestFlag,
+                               PersonOfInterestReason = s.PersonOfInterestReason,
+                               PersonOfInterestNote = s.PersonOfInterestNote,
+                               PersonOfInterestExpire = s.PersonOfInterestExpire,
+                               VisitorBefore = (bool)s.VisitorBefore ? true : false
+                           }).ToList();
+                //Visitor Personal details
+                VisitorPersonal visitorPersonal = lstVisitorPersonal.SingleOrDefault(w => w.PersonId == item.PersonId);
+
+                if (visitorPersonal != null)
+                {
+                    item.VisitorNotAllowedFlag = visitorPersonal.VisitorNotAllowedFlag;
+                    item.PersonOfInterestFlag = visitorPersonal.PersonOfInterestFlag;
+                    item.PersonOfInterestReason = visitorPersonal.PersonOfInterestReason;
+                    item.PersonOfInterestNote = visitorPersonal.PersonOfInterestNote;
+                    item.PersonOfInterestExpire = visitorPersonal.PersonOfInterestExpire;
+                }
+
+                //Professional Relationship - needs to be rechecked
+                VisitorProfessional visitorProfessional = lstVisitorProfessional.SingleOrDefault(w =>
+                    w.PersonId == item.PrimaryVisitor.PersonId);
+
+                if (visitorProfessional != null)
+                {
+                    item.VisitorType = visitorProfessional.VisitorType ?? 0;
+
+                    if (item.VisitorType > 0)
+                    {
+                        item.Relationship = lstLookup.SingleOrDefault(l => l.LookupIndex == item.VisitorType
+                                                        && l.LookupType == LookupConstants.VISTYPE)?.LookupDescription;
+                    }
+                }
+
+                //Wizard details
+                item.RegistrationProgress =
+                    lstVisitRegistrationWizardProgress.FirstOrDefault(w => w.ScheduleId == item.ScheduleId);
+
+                InmateTrak lstInmateTrak = _context.InmateTrak.FirstOrDefault(w => w.InmateId == item.InmateInfo.InmateId);
+
+                if (lstInmateTrak != null && lstInmateTrak.EnrouteFinalLocationId > 0)
+                {
+                    item.Destination = lstPrivilages.FirstOrDefault(s =>
+                                                    s.PrivilegeId == lstInmateTrak.EnrouteFinalLocationId)?.PrivilegeDescription;
+                    item.DestinationId = lstInmateTrak.EnrouteFinalLocationId;
+                }
+                if (item.LocationId > 0)
+                {
+                    if (lstPrivilages.Count(f => f.PrivilegeId == item.LocationId) > 0)
+                    {
+                        item.VisitOpenScheduleFlag = lstPrivilages.Where(f => f.PrivilegeId == item.LocationId && f.InactiveFlag != 1).FirstOrDefault().VisitOpenScheduleFlag;
+                        item.VisitBoothManageFlag = lstPrivilages.Where(f => f.PrivilegeId == item.LocationId && f.InactiveFlag != 1).FirstOrDefault().VisitBoothManageFlag;
+                    }
+                }
+                if (item.HousingDetails.HousingUnitListId != null && item.InmateInfo.InmateClassificationId != null)
+                {
+                    HousingUnitVisitationClassRule maxLength = maxClassRule.FirstOrDefault(f => f.HousingUnitListId == item.HousingDetails.HousingUnitListId
+                      && f.ClassificationReason == item.InmateInfo.Classification);
+                      if(maxLength!=null)
+                      {
+                          item.MaxRule=maxLength.VisitRuleMaxLengthMin;
+                      }
+                }
+            });
+            visitDetails.OpenAndAssignedBooth = visitDetails.LstVisitRoomDetails.Count();//lstLookup.Where(w => w.LookupType == LookupConstants.VISBOOTH).Count();
+            visitDetails.NoAssignedBooth = visitDetails.LstVisitRoomDetails.Where(w => !w.AssignedBooth).Count();
+            visitDetails.AssignedBoothOnly = visitDetails.LstVisitRoomDetails.Where(w => w.AssignedBooth).Count();
+            visitDetails.WaitingForInmate = visitDetails.LstVisitRoomDetails.Where(w => w.AssignedBooth && w.InmateTrackingStart is null).Count();
+            visitDetails.StartedNoboothAssign = visitDetails.LstVisitRoomDetails.Where(w => !w.AssignedBooth && w.InmateTrackingStart != null).Count();
+            visitDetails.MaxTimeExceeded = visitDetails.LstVisitRoomDetails.Where(w => w.AssignedBooth && w.InmateTrackingStart==DateTime.Now && w.MaxRule > 0).Count();               
+            visitDetails.LstSlotScheduleDetails=visitDetails.LstVisitRoomDetails.GroupBy(g=>new{g.Time}).Select(s=>new SlotScheduleDetails
+            {
+                Time=s.Key.Time,
+                ScheduleVisit=s.Count(k=>k.InmateTrackingStart==null),
+                OutVisitOccurance=s.Count(k=>k.InmateTrackingStart!=null),
+                CompleteVisitOccurance=s.Count(k=>k.InmateTrackingStart!=null && k.CompleteVisitFlag)
+            }).ToList();
+                       
+            
+            visitDetails.LstBoothInfo = lstLookup.Where(l => l.LookupType == LookupConstants.VISBOOTH).Select(s => new BoothInfo            
+            {
+                BoothName = s.LookupDescription,
+                LookupIndex = (int)s.LookupIndex,
+                BoothId = (int)s.LookupIndex,
+
+            }).ToList();
+           
+
+
+            visitDetails.LstBoothInfo.ForEach(f =>
+            {
+                VisitDetails BoothAssigned = visitDetails.LstVisitRoomDetails.FirstOrDefault(s => s.VisitBoothId == f.BoothId);
+
+                if (BoothAssigned != null)
+                {
+                    f.BoothStatus = BoothAssigned.AssignedBooth;
+                    f.InmateTrackingStart = BoothAssigned.InmateTrackingStart;
+                    f.StartDate = BoothAssigned.StartDate;
+                    f.EndDate=BoothAssigned.EndDate;
+                    f.InmateId = BoothAssigned.InmateInfo.InmateId??0;
+                    f.InmateNumber = BoothAssigned.InmateInfo.InmateNumber;
+                    f.PersonFirstName = BoothAssigned.InmateInfo.PersonFirstName;
+                    f.PersonLastName = BoothAssigned.InmateInfo.PersonLastName;
+                    f.PersonMiddleName = BoothAssigned.InmateInfo.PersonMiddleName;
+                    //f.MaxTime=BoothAssigned.MaxRule;             
+                    f.Location = BoothAssigned.Location;
+                    f.ScheduleDateTime = BoothAssigned.ScheduleDateTime;
+                    f.VisitorNote = BoothAssigned.VisitorNotes;
+                    f.Relationship = BoothAssigned.Relationship;
+                    f.ScheduleId = BoothAssigned.ScheduleId;
+                    f.LocationId=BoothAssigned.LocationId;
+                    f.InmateCurrentTrack=BoothAssigned.InmateCurrentTrack;
+                    f.PersonId=BoothAssigned.PrimaryVisitor.PersonId;
+                    f.VisitAdultDetails=_registerService.GetAdultVisitorDetails(f.ScheduleId);
+                    f.VisitChildDetail=_registerService.GetChildVisitors(f.ScheduleId, f.PersonId);                   
+                    f.PrimaryVisitor=BoothAssigned.PrimaryVisitor;
+                    f.HousingDetails=BoothAssigned.HousingDetails;  
+                    f.BoothName=BoothAssigned.VisitBooth;              
+                }
+            });
+
+            visitDetails.BoothDataList=visitDetails.LstBoothInfo.Select(s=>new KeyValuePair<int,string>
+           ((int)s.BoothId,s.BoothName)).ToList();
+
+            return visitDetails;
+        }
+
+        public async Task<int> UpdateScheduleBooth(BoothInfo boothinfo)
+        {
+            if(boothinfo.BoothStatus==null || boothinfo.BoothStatus==false)
+            {
+               
+                    Visit Schedule = _context.Visit.Where(v => v.VisitBooth == null && v.ScheduleId==boothinfo.ScheduleId).FirstOrDefault();
+                    Schedule.VisitBooth = boothinfo.BoothId;
+                
+            Visit dbSchedule = _context.Visit.Where(v => v.VisitBooth == null && v.InmateTrackingStart != null).OrderBy(o => o.InmateTrackingStart).FirstOrDefault();
+            if (dbSchedule != null)
+            {
+                dbSchedule.VisitBooth = boothinfo.BoothId;
+            }
+            }
+            else
+            {
+                Visit dbSchedule = _context.Visit.Where(v => v.VisitBooth==boothinfo.BoothId && v.ScheduleId==boothinfo.ScheduleId).OrderBy(o => o.InmateTrackingStart).FirstOrDefault();
+                 if (dbSchedule != null)
+            {
+                dbSchedule.VisitBooth = null;
+            }
+            }
+
+            return await _context.SaveChangesAsync();
+        }
+
+    }
+}

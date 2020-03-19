@@ -1,0 +1,12 @@
+
+using System.Collections.Generic;
+using ServerAPI.ViewModels;
+
+namespace ServerAPI.Services
+{
+    public interface IMoneyDepositoryAdjustService
+    {
+        List<MoneyAdjustCountVm> MoneyAdjust(MoneyAdjustInputVm adjust);
+        List<MoneyAccountTransactionVm> MoneyAdjustTransaction(MoneyAdjustInputVm adjustTransaction);
+    }
+}

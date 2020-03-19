@@ -1,0 +1,400 @@
+﻿using ServerAPI.ViewModels;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
+using ServerAPI.Authorization;
+using ServerAPI.Services;
+using System;
+
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    public class PersonAlertController : ControllerBase
+    {
+
+        private readonly IAlertService _alertService;
+        private readonly IKeepSepAlertService _keepSepAlertService;
+
+        public PersonAlertController(IAlertService alertService, IKeepSepAlertService keepSepAlertService)
+        {
+            _alertService = alertService;
+            _keepSepAlertService = keepSepAlertService;
+        }
+
+        #region Message Alert
+
+        // Insert Person Alert Details
+        [FuncPermission(451, FuncPermissionType.Add)]
+        [HttpPost("InsertMessageAlertDetails")]
+        public async Task<IActionResult> InsertMessageAlertDetails([FromBody] PersonAlertVm personAlertDetails)
+        {
+            return Ok(await _alertService.InsertUpdateMessageAlertDetails(personAlertDetails));
+        }
+
+		//Update Person Alert Details
+		[FuncPermission(451, FuncPermissionType.Edit)]
+		[HttpPut("UpdateMessageAlertDetails")]
+		public async Task<IActionResult> UpdateMessageAlertDetails([FromBody] PersonAlertVm personAlertDetails)
+		{
+			return Ok(await _alertService.InsertUpdateMessageAlertDetails(personAlertDetails));
+		}
+
+		// Get Person Message Alert Details List using PersonId
+        [HttpGet("GetMessageAlertDetails")]
+        public IActionResult GetMessageAlertDetails(int personId)
+        {
+            return Ok(_alertService.GetMessageAlertDetailLst(personId));
+        }
+
+        // Get Message Alert History Details List using AlertId
+        [HttpGet("GetMessageAlertHistory")]
+        public IActionResult GetMessageAlertHistoryDetails(int alertId)
+        {
+            return Ok(_alertService.GetMessageAlertHistoryLst(alertId));
+        }
+
+        #endregion
+
+        #region Flag Alert
+
+        [FuncPermission(452, FuncPermissionType.Edit)]
+		[HttpPost("InsertFlagAlertDetails")]
+		public async Task<IActionResult> InsertFlagAlertDetails([FromBody] FlagAlertVm flagAlertDetails)
+        {
+            return Ok(await _alertService.InsertUpdateFlagAlert(flagAlertDetails));
+        }
+
+        [HttpGet("GetFlagAlertDetails")]
+		public IActionResult GetFlagAlertDetails(int personId, bool isPermission)
+        {
+            return Ok(_alertService.GetFlagAlertDetails(personId,isPermission));
+        }
+
+        [HttpGet("GetFlagAlertHistoryDetails")]
+        public IActionResult GetFlagAlertHistoryDetails(int personId, int flagIndex, string type)
+        {
+            return Ok(_alertService.GetFlagAlertHistoryDetails(personId, flagIndex, type));
+        }
+
+        [HttpGet("GetFlagAlertHistoryByPerson")]
+        public IActionResult GetFlagAlertHistoryByPerson(int personId)
+        {
+            return Ok(_alertService.GetFlagAlertHistoryByPerson(personId));
+        }
+
+        [HttpGet("GetFlagAlertHistoryByPersonInfo")]
+        public IActionResult GetFlagAlertHistoryByPersonInfo(int personId, FlagAlert flagAlert)
+        {
+            return Ok(_alertService.GetFlagAlertHistoryByPerson(personId, flagAlert));
+        }
+
+        [HttpGet("GetLookupSubList")]
+        public IActionResult GetLookupSubList(int LookupIdentity)
+        {
+            return Ok(_alertService.GetLookupSubList(LookupIdentity));
+        }
+
+		#endregion
+
+		#region Keep Separate Alert
+
+		[HttpGet("GetKeepSepAlertDetails")]
+        public IActionResult GetKeepSeparateAlertDetails(int inmateId)
+        {
+            return Ok(_keepSepAlertService.GetKeepSeparateAlertDetails(inmateId));
+        }
+
+        [HttpGet("GetKeepSepHistoryDetails")]
+        public IActionResult GetKeepSeparateHistory(int keepSeparateId, KeepSepType keepSepType)
+        {
+            return Ok(_keepSepAlertService.GetKeepSeparateHistory(keepSeparateId, keepSepType));
+        }
+
+        [HttpGet("GetKeepSepAssocSubsetDetails")]
+        public IActionResult GetKeepSepAssocSubsetDetails(string keepSepType, int? subset, KeepSepType type)
+        {
+            return Ok(_keepSepAlertService.GetKeepSepAssocSubsetDetails(keepSepType, subset, type));
+		}
+        
+        [HttpGet("GetKeepSepInmateConflictDetails")]
+        public IActionResult GetKeepSepInmateConflictDetails(int inmateId)
+        {
+            return Ok(_keepSepAlertService.GetKeepSepInmateConflictDetails(inmateId));
+        }
+
+	    [FuncPermission(453, FuncPermissionType.Add)]
+		[HttpPost("InsertKeepSepInmateDetails")]
+        public async Task<IActionResult> InsertUpdateKeepSepInmateDetails([FromBody] KeepSeparateVm keepSepDetails)
+        {
+            return Ok(await _keepSepAlertService.InsertUpdateKeepSepInmateDetails(keepSepDetails));
+        }
+
+	    [FuncPermission(453, FuncPermissionType.Edit)]
+	    [HttpPut("UpdateKeepSepInmateDetails")]
+	    public async Task<IActionResult> UpdateKeepSepInmateDetails([FromBody] KeepSeparateVm keepSepDetails)
+	    {
+		    return Ok(await _keepSepAlertService.InsertUpdateKeepSepInmateDetails(keepSepDetails));
+	    }
+
+	    [FuncPermission(453, FuncPermissionType.Delete)]
+	    [HttpPost("DeleteKeepSepInmateDetails")]
+	    public async Task<IActionResult> DeleteKeepSepInmateDetails([FromBody] KeepSeparateVm keepSepDetails)
+	    {
+			return Ok(await _keepSepAlertService.DeleteUndoKeepSeparateDetails(keepSepDetails));
+		}
+
+
+		[FuncPermission(458, FuncPermissionType.Add)]
+		[HttpPost("InsertKeepSepAssocDetails")]
+        public async Task<IActionResult> InsertKeepSepAssocDetails([FromBody] KeepSeparateVm keepSepDetails)
+        {
+            return Ok(await _keepSepAlertService.InsertUpdateKeepSepAssocDetails(keepSepDetails));
+        }
+
+	    [FuncPermission(458, FuncPermissionType.Edit)]
+	    [HttpPut("UpdateKeepSepAssocDetails")]
+	    public async Task<IActionResult> UpdateKeepSepAssocDetails([FromBody] KeepSeparateVm keepSepDetails)
+	    {
+		    return Ok(await _keepSepAlertService.InsertUpdateKeepSepAssocDetails(keepSepDetails));
+	    }
+
+	    [FuncPermission(458, FuncPermissionType.Delete)]
+	    [HttpPost("DeteleKeepSepAssocDetails")]
+	    public async Task<IActionResult> DeteleKeepSepAssocDetails([FromBody] KeepSeparateVm keepSepDetails)
+	    {
+			return Ok(await _keepSepAlertService.DeleteUndoKeepSeparateDetails(keepSepDetails));
+		}
+
+		[FuncPermission(459, FuncPermissionType.Add)]
+        [HttpPost("InsertKeepSepSubsetDetails")]
+		public async Task<IActionResult> InsertKeepSepSubsetDetails([FromBody] KeepSeparateVm keepSepDetails)
+        {
+            return Ok(await _keepSepAlertService.InsertUpdateKeepSepSubsetDetails(keepSepDetails));
+        }
+
+	    [FuncPermission(459, FuncPermissionType.Edit)]
+	    [HttpPut("UpdateKeepSepSubsetDetails")]
+	    public async Task<IActionResult> UpdateKeepSepSubsetDetails([FromBody] KeepSeparateVm keepSepDetails)
+	    {
+		    return Ok(await _keepSepAlertService.InsertUpdateKeepSepSubsetDetails(keepSepDetails));
+	    }
+
+	    [FuncPermission(459, FuncPermissionType.Delete)]
+	    [HttpPost("DeleteKeepSepSubsetDetails")]
+	    public async Task<IActionResult> DeleteKeepSepSubsetDetails([FromBody] KeepSeparateVm keepSepDetails)
+	    {
+			return Ok(await _keepSepAlertService.DeleteUndoKeepSeparateDetails(keepSepDetails));
+
+		}
+
+        #endregion
+
+        #region Assoc Alert
+        [HttpGet("GetAssocAlertDetails")]
+        public IActionResult GetAssocAlertDetails(int personId)
+        {
+            return Ok(_alertService.GetAssocAlertDetails(personId));
+        }
+
+        [HttpGet("GetAssocHistoryDetails")]
+        public IActionResult InsertAssocDetails(int personClassificationId)
+        {
+            return Ok(_alertService.GetAssocHistoryDetails(personClassificationId));
+        }
+
+        [FuncPermission(454, FuncPermissionType.Add)]
+        [HttpPost("InsertUpdateAssocDetails")]
+        public async Task<IActionResult> InsertUpdateAssocDetails([FromBody] PersonClassificationDetails personAssocDetails)
+        {
+            return Ok(await _alertService.InsertUpdateAssocDetails(personAssocDetails));
+        }
+
+        [FuncPermission(454, FuncPermissionType.Edit)]
+        [HttpPost("InsertUpdateAssocDetailsEdit")]
+        public async Task<IActionResult> InsertUpdateAssocDetailsEdit([FromBody] PersonClassificationDetails personAssocDetails)
+        {
+            return Ok(await _alertService.InsertUpdateAssocDetails(personAssocDetails));
+        }
+
+        [FuncPermission(454, FuncPermissionType.Delete)]
+        [HttpPost("DeleteAssocDetails")]
+        public async Task<IActionResult> DeleteAssocDetails([FromBody] PersonClassificationDetails personAssocDetails)
+        {
+            return Ok(await _alertService.DeleteAssocDetails(personAssocDetails));
+        }
+
+        #endregion
+
+        #region Privilege
+
+        [HttpGet("AccessCheckPrivilegeDetails")]
+        public IActionResult AccessCheckPrivilegeDetails()
+        {
+            return Ok(); // Access Permission Check Purpose
+        }
+
+        // Get Privilege Alert Details
+        [HttpGet("GetPrivilegeDetails")]
+        public IActionResult GetPrivilegeDetails(int inmateId, int incidentId)
+        {
+            return Ok(_alertService.GetPrivilegeDetails(inmateId, incidentId));
+        }
+
+        //Insert or update and Remove privilege details
+        [FuncPermission(455, FuncPermissionType.Add)]
+        [HttpPost("InsertPrivilegeInfo")]
+        public async Task<IActionResult> InsertPrivilegeInfo([FromBody] PrivilegeAlertVm privilege)
+        {
+            return Ok(await _alertService.InsertOrUpdatePrivilegeInfo(privilege));
+        }
+
+        [FuncPermission(455, FuncPermissionType.Edit)]
+        [HttpPost("UpdatePrivilegeInfo")]
+        public async Task<IActionResult> UpdatePrivilegeInfo([FromBody] PrivilegeAlertVm privilege)
+        {
+            return Ok(await _alertService.InsertOrUpdatePrivilegeInfo(privilege));
+        }
+        [FuncPermission(1138,FuncPermissionType.Add)]
+        [HttpPost("InsertPrivilegeInfoInIncident")]
+        public async Task<IActionResult> InsertPrivilegeInfoInIncident([FromBody] PrivilegeAlertVm privilege)
+        {
+            return Ok(await _alertService.InsertOrUpdatePrivilegeInfo(privilege));
+        }
+        [FuncPermission(455, FuncPermissionType.Edit)]
+        [HttpPost("UpdatePrivilegeInfoInIncident")]
+        public async Task<IActionResult> UpdatePrivilegeInfoInIncident([FromBody] PrivilegeAlertVm privilege)
+        {
+            return Ok(await _alertService.InsertOrUpdatePrivilegeInfo(privilege));
+        }
+
+        [FuncPermission(1170, FuncPermissionType.Edit)]
+        [HttpPut("UpdateByPrivilegeInfo")]
+        public async Task<IActionResult> UpdateByPrivilegeInfo([FromBody] PrivilegeAlertVm privilege)
+        {
+            return Ok(await _alertService.InsertOrUpdatePrivilegeInfo(privilege));
+        }
+
+        [FuncPermission(455, FuncPermissionType.Delete)]
+        [HttpPost("DeletePrivilegeInfo")]
+        public async Task<IActionResult> DeletePrivilegeInfo([FromBody] PrivilegeAlertVm privilege)
+        {
+            return Ok(await _alertService.InsertOrUpdatePrivilegeInfo(privilege));
+        }
+
+        [FuncPermission(1170, FuncPermissionType.Delete)]
+        [HttpDelete("DeleteByPrivilegeInfo")]
+        public async Task<IActionResult> DeleteByPrivilegeInfo([FromBody] PrivilegeAlertVm privilege)
+        {
+            return Ok(await _alertService.InsertOrUpdatePrivilegeInfo(privilege));
+        }
+
+        //Get Privilege and Incident Details
+        [HttpGet("GetPrivilegeIncidentDetails")]
+        public IActionResult GetPrivilegeIncidentDetails(int inmateId, int facilityId,bool isMailComponent)
+        {
+            return Ok(_alertService.GetPrivilegeIncidentDetails(inmateId, facilityId,isMailComponent));
+        }
+
+        [HttpGet("GetDisciplinaryIncidentList")]
+        public IActionResult GetDisciplinaryIncidentList(int inmateId)
+        {
+            return Ok(_alertService.GetDisciplinaryIncidentList(inmateId));
+        }
+
+        //Get PrivilegeXref History Details
+        [HttpGet("GetPrivilegeHistoryDetails")]
+        public IActionResult GetPrivilegeHistoryDetails(int privilegeXrefId)
+        {
+            return Ok(_alertService.GetPrivilegeHistoryDetails(privilegeXrefId));
+        }
+
+        #endregion
+
+        #region Observable
+
+        [HttpGet("GetObservationDetails")]
+        public IActionResult GetObservationDetails(int inmateId, int deleteFlag)
+        {
+            return Ok(_alertService.GetObservationLog(inmateId, deleteFlag));
+        }
+
+        [HttpGet("GetObservationHistoryDetails")]
+        public IActionResult GetObservationHistory(int observationScheduleId)
+        {
+            return Ok(_alertService.GetObservationHistory(observationScheduleId));
+        }
+
+        [FuncPermission(456, FuncPermissionType.Add)]
+        [HttpPost("InsertObservationScheduleEntryDetails")]
+        public async Task<IActionResult> InsertObservationScheduleEntryDetails([FromBody] ObservationScheduleVm scheduleDetails)
+        {
+            return Ok(await _alertService.InsertObservationScheduleEntryDetails(scheduleDetails));
+        }
+
+        [FuncPermission(456, FuncPermissionType.Edit)]
+        [HttpPost("UpdateObservationScheduleEntryDetails")]
+        public async Task<IActionResult> UpdateObservationScheduleEntryDetails([FromBody] ObservationScheduleVm scheduleDetails)
+        {
+            return Ok(await _alertService.UpdateObservationScheduleEntryDetails(scheduleDetails));
+        }
+
+        [FuncPermission(456, FuncPermissionType.Delete)]
+        [HttpPost("DeleteObservationScheduleEntry")]
+        public async Task<IActionResult> DeleteObservationScheduleEntry([FromBody] ObservationScheduleVm scheduleDetails)
+        {
+            return Ok(await _alertService.DeleteUndoObservationScheduleEntry(scheduleDetails));
+        }
+
+        [FuncPermission(456, FuncPermissionType.Edit)]
+        [HttpPost("UndoObservationScheduleEntry")]
+        public async Task<IActionResult> UndoObservationScheduleEntry([FromBody] ObservationScheduleVm scheduleDetails)
+        {
+            return Ok(await _alertService.DeleteUndoObservationScheduleEntry(scheduleDetails));
+        }
+
+        [HttpGet("GetObservationLookupDetails")]
+        public IActionResult GetObservationLookupDetails()
+        {
+            return Ok(_alertService.GetObservationLookupDetails());
+        }
+
+        [HttpPost("UpdateScheduleActionNote")]
+        public async Task<IActionResult> UpdateScheduleActionNote([FromBody] ObservationScheduleActionVm observationScheduleAction)
+        {
+            return Ok(await _alertService.UpdateScheduleActionNote(observationScheduleAction));
+        }
+        //As per update functionality permission ,457 access permission not exist
+        // [FuncPermission(457, FuncPermissionType.Access)]
+        [HttpGet("LoadObservationLogDetail")]
+        public IActionResult LoadObservationLogDetail(int observationLogId)
+        {
+            return Ok(_alertService.LoadObservationLogDetail(observationLogId));
+        }
+
+        [HttpGet("CheckSheduleOverlap")]
+        public IActionResult CheckSheduleOverlap(DateTime dateTime, int inmateId)
+        {
+            return Ok(_alertService.CheckScheduleOverlap(dateTime, inmateId));
+        }
+        #endregion
+        //Newly added for functionality Permission
+
+        [FuncPermission(1170,FuncPermissionType.Access)]
+        [HttpPut("AccessAuthPrivilege")]
+        public IActionResult AccessAuthPrivilege()
+        {
+            return Ok();
+        }
+        [FuncPermission(1170,FuncPermissionType.Add)]
+        [HttpPut("AddAuthPrivilege")]
+        public IActionResult AddAuthPrivilege()
+        {
+            return Ok();
+        }
+        [FuncPermission(455,FuncPermissionType.Access)]
+        [HttpPut("AccessRevokePrivilege")]
+        public IActionResult AccessRevokePrivilege()
+        {
+            return Ok();
+        }
+    }
+}

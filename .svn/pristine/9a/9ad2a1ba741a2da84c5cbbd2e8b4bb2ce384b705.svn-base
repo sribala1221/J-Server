@@ -1,0 +1,138 @@
+using System;
+using System.Collections.Generic;
+using GenerateTables.Models;
+using ScheduleWidget.Common;
+
+namespace ServerAPI.ViewModels
+{
+    public class CourseList : ScheduleVm
+    {
+        public string CourseNumber { get; set; }
+        public string CourseName { get; set; }
+        public DateTime SessionTime { get; set; }
+        public int ScheduleGroupId { get; set; }
+    }
+
+    public class ProgramAppointmentVm
+    {
+        public int ScheduleId { get; set; }
+        public int? InmateId { get; set; }
+        public int LocationId { get; set; }
+        public int? ReasonId { get; set; }
+        public int? TypeId { get; set; }
+        public DateTime StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
+        public TimeSpan Duration { get; set; }
+        public InmateDetailsList InmateDetails { get; set; }
+        public string Location { get; set; }
+        public string Reason { get; set; }
+        public string DeleteReason { get; set; }
+        public string DeleteReasonNote { get; set; }
+        public bool DeleteFlag { get; set; }
+        public int? DeletedBy { get; set; }
+        public DateTime? DeleteDate { get; set; }
+        public PersonnelVm DeletedOfficer { get; set; }
+        public string Notes { get; set; }
+        public bool IsSingleOccurrence { get; set; }
+        public int? ProgramClassId { get; set; }
+        public string LocationDetail { get; set; }
+        public ApptOccurance ApptOccurance { get; set; }
+        public int? AgencyId { get; set; }
+        public int? DeptId { get; set; }
+        public string ApptType { get; set; }
+        public string Court { get; set; }
+        public string Dept { get; set; }
+        public List<string> BookingNo { get; set; }
+        public int FacilityId { get; set; }
+        public List<HousingCapacityVm> HousingVmDetails { get; set; }
+        public List<KeepSeparateVm> KeepSepDetails { get; set; }
+        public int? DispInmateId { get; set; }
+        public string Discriminator { get; set; }
+        public bool InmateTraked { get; set; }
+        public DayInterval DayInterval { get; set; }
+        public WeekInterval WeekInterval { get; set; }
+        public FrequencyType FrequencyType { get; set; }
+        public MonthOfQuarterInterval MonthOfQuarterInterval { get; set; }
+        public QuarterInterval QuarterInterval { get; set; }
+        public int? DayOfMonth { get; set; }
+        public MonthOfYear MonthOfYear { get; set; }
+        public bool EndDateNull { get; set; }
+        public string CourseNumber { get; set; }
+        public string CourseName { get; set; }
+        public string CRN { get; set; }
+        public int CourseCapacity { get; set; }
+        public int ProgramCourseId { get; set; }
+        public string ProgramCategory { get; set; }
+        public int ProgramInstructorString { get; set; }
+        public string CourseClassificationFilter {get;set;}
+        public string CourseGenderFilter {get;set;}
+        public int InmateCount { get; set; }
+    }
+    public class InstructorsVm
+    {
+        public PersonnelVm InstructorsInfo { get; set; }
+        public int? PersonnelNo { get; set; }
+        public int? Instructors { get; set; }
+        public int Identification { get; set; }
+        public string Certification { get; set; }
+        public string AssignedCourses { get; set; }
+        public string Crn  { get; set; }
+
+        public int ProgramClassId { get; set; }
+    }
+
+    public class EnrollmentRequest {
+        public int? Enrolled { get; set; }
+        public int? EnrollmentCapacity { get; set; }
+        public List<EnrollmentRequestDetails> EnrollmentRequestDetails { get; set; }
+    }
+
+    public class EnrollmentRequestDetails {
+        public PersonInfoVm InmateInfo { get; set; }
+        public DateTime? RequestDate { get; set; }
+        public string Classification { get; set; }
+        public HousingDetail HousingDetails { get; set; }
+        public int Capacity { get; set; }
+        public bool ApprovedFlag { get; set; }
+        public int RequestId { get; set; }
+        public int ScheduleId { get; set; }
+        public int InmateId { get; set; }
+        public string AssignNote { get; set; }
+    }
+
+    public class ClassManagement
+    {
+        public PersonInfoVm InmateInfo { get; set; }
+        public HousingDetail HousingDetails { get; set; }
+        public string Location { get; set; }
+        public DateTime? AssignedDate { get; set; }
+        public bool CompleteNotPass { get; set; }
+        public bool CompletePass { get; set; }
+        public bool CourseComplete { get; set; }
+        public bool CourseNotComplete { get; set; }
+        public string CourseUnassignReason { get; set; }
+        public string CompleteGrade { get; set; }
+        public bool CertificateFlag { get; set; }
+        public string Note { get; set; }
+        public int ScheduleId { get; set; }
+        public int ProgramClassAssignId { get; set; }
+        public string CertificateName { get; set; }
+        public int ProgramClassId { get; set; }
+        public int ProgramCourseId { get; set; }
+        public bool GradeFlag { get; internal set; }
+        public bool PassNotPassFlag { get; set; }
+        public int ProgramRequestId { get; set; }
+        public List<ClassManagement> ClassMgtDetails { get; set; }
+
+    }
+
+  
+
+}
+
+
+
+
+
+
+

@@ -1,0 +1,60 @@
+﻿using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
+using ServerAPI.Services;
+using ServerAPI.ViewModels;
+using ServerAPI.Authorization;
+
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    public class AltSentSitesController : ControllerBase
+    {
+        private readonly IAltSentSitesNoteService _altSentSitesNoteService;
+
+        public AltSentSitesController(IAltSentSitesNoteService altSentSitesNoteService)
+        {
+            _altSentSitesNoteService = altSentSitesNoteService;
+        }
+
+        [HttpGet("GetAltSentProgramDetails")]
+        public IActionResult GetAltSentProgramDetails()
+        {
+            return Ok(_altSentSitesNoteService.GetAltSentProgramDetails());
+        }
+
+        [FuncPermission(5150, FuncPermissionType.Access)]
+        [HttpGet("GetAltSentSiteDetails")]
+        public IActionResult GetAltSentSiteDetails(int altSentProgramId)
+        {
+            return Ok(_altSentSitesNoteService.GetAltSentSiteDetails(altSentProgramId));
+        }
+
+        [FuncPermission(5133, FuncPermissionType.Access)]
+        [HttpGet("GetSiteApptDetails")]
+        public IActionResult GetSiteApptDetails(SiteApptParam objParam)
+        {
+            return Ok(_altSentSitesNoteService.GetSiteApptDetails(objParam));
+        }
+
+        [FuncPermission(5085, FuncPermissionType.Add)]
+        [HttpPost("InsertSiteNote")]
+        public async Task<IActionResult> InsertSiteNote([FromBody] SiteApptDetails siteNoteParam)
+        {
+            return Ok(await _altSentSitesNoteService.InsertSiteNote(siteNoteParam));
+        }
+
+        [FuncPermission(5134, FuncPermissionType.Edit)]
+        [HttpPut("UpdateSiteNote")]
+        public async Task<IActionResult> UpdateSiteNote(int siteNoteId, [FromBody] SiteApptDetails siteNoteParam)
+        {
+            return Ok(await _altSentSitesNoteService.UpdateSiteNote(siteNoteId, siteNoteParam));
+        }
+
+        [FuncPermission(5134, FuncPermissionType.Delete)]
+        [HttpDelete("DeleteSiteNote")]
+        public async Task<IActionResult> DeleteSiteNote(int siteNoteId)
+        {
+            return Ok(await _altSentSitesNoteService.DeleteSiteNote(siteNoteId));
+        }
+    }
+}

@@ -1,0 +1,96 @@
+﻿using Microsoft.AspNetCore.Mvc;
+using ServerAPI.Interfaces;
+using ServerAPI.ViewModels;
+using System;
+using System.Threading.Tasks;
+
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    public class ProgramController : Controller
+    {
+        private readonly IProgramClassService _programClassService;
+
+        public ProgramController(IProgramClassService programClassService)
+        {
+            _programClassService = programClassService;
+        }
+
+        //ProgramClass Schedules
+        [HttpGet("GetProgramClassSchedules")]
+        public IActionResult GetProgramClassSchedules(int? facilityId)
+        {
+            return Ok(_programClassService.GetProgramClassSchedules(facilityId));
+        }
+
+        //Insert ProgramClass Schedules
+        [HttpPost("InsertProgramClassSchedule")]
+        public IActionResult InsertProgramClassSchedule([FromBody] ProgramClassScheduleVm pgmClassDetails)
+        {
+            return Ok(_programClassService.InsertProgramClassSchedule(pgmClassDetails));
+        }
+
+        //Update ProgramClass Schedules
+        [HttpPost("UpdateProgramClassSchedule")]
+        public IActionResult UpdateProgramClassSchedule([FromBody] ProgramClassScheduleVm pgmClassDetails)
+        {
+            return Ok(_programClassService.UpdateProgramClassSchedule(pgmClassDetails));
+        }
+
+        [HttpGet("GetCurrentCourse")]
+        public IActionResult GetCurrentCourse(int facilityId, DateTime fromDate, DateTime toDate)
+        {
+            return Ok(_programClassService.GetCurrentCourse(facilityId, fromDate, toDate));
+        }
+
+
+        [HttpGet("GetCurrentCourseList")]
+        public IActionResult GetCurrentCourseList(int facilityId, DateTime fromDate, DateTime toDate)
+        {
+            return Ok(_programClassService.GetCurrentCourseList(facilityId, fromDate, toDate));
+        }
+
+        [HttpPost("DeleteScheduleProgram")]
+        public async Task<IActionResult> DeleteScheduleProgram([FromBody] ProgramAppointmentVm programRequest)
+        {
+            return Ok(await _programClassService.DeleteScheduleProgram(programRequest));
+        }
+
+        [HttpGet("GetInstructorsList")]
+        public IActionResult GetInstructorsList()
+        {
+            return Ok(_programClassService.GetInstructorsList());
+        }
+
+        //To get Inmate details for Class enrollment
+        [HttpGet("GetClassEnrollmentInmateDetails")]
+        public IActionResult GetClassEnrollmentInmateDetails(int inmateId)
+        {
+            return Ok(_programClassService.GetClassEnrollmentInmateDetails(inmateId));
+        }
+
+        [HttpGet("GetClassListDetails")]
+        public IActionResult GetClassListDetails()
+        {
+            return Ok(_programClassService.GetClassListDetails());
+        }
+        [HttpGet("GetEnrollmentRequest")]
+        public IActionResult GetEnrollmentRequest(int programClassId, int locationId, int scheduleId)
+        {
+            return Ok(_programClassService.GetEnrollmentRequest(programClassId, locationId, scheduleId));
+        }
+        [HttpPost("InsertEnrollmentDetails")]
+        public IActionResult InsertEnrollmentDetails([FromBody] EnrollmentRequest enrollmentRequest)
+        {
+            return Ok(_programClassService.InsertEnrollmentDetails(enrollmentRequest));
+        }
+
+        [HttpGet("GetClassManagementDetails")]
+        public IActionResult GetClassManagementDetails(int scheduleId)
+        {
+            return Ok(_programClassService.GetClassManagement(scheduleId));
+        }
+
+
+    }
+}

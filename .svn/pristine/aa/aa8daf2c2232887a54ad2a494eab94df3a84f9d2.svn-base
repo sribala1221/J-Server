@@ -1,0 +1,27 @@
+﻿using ServerAPI.ViewModels;
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+
+namespace ServerAPI.Interfaces
+{
+    public interface IProgramClassService
+    {
+        ProgramClassScheduleVm GetProgramClassSchedules(int? facilityId);
+
+        int InsertProgramClassSchedule(ProgramClassScheduleVm pgmClassDetails);
+
+        int UpdateProgramClassSchedule(ProgramClassScheduleVm pgmClassDetails);
+
+        List<ProgramAppointmentVm> GetCurrentCourse(int facilityId, DateTime fromDate, DateTime toDate);
+        List<ProgramAppointmentVm> GetCurrentCourseList(int facilityId, DateTime fromDate, DateTime toDate);
+        Task<int> DeleteScheduleProgram(ProgramAppointmentVm pgmClassDetails);
+
+        List<InstructorsVm> GetInstructorsList();
+        List<ScheduleVm> GetClassListDetails();
+        EnrollmentRequest GetEnrollmentRequest(int programClassId, int locationId, int scheduleId);
+
+        //To get Inmate details for Class enrollment
+        ClassEnrollmentInmateDetails GetClassEnrollmentInmateDetails(int inmateId);
+    }
+}

@@ -1,0 +1,90 @@
+﻿using Microsoft.AspNetCore.Mvc;
+using ServerAPI.Services;
+using ServerAPI.ViewModels;
+using System;
+using System.Threading.Tasks;
+
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    [ApiController]
+    public class SentenceAttendeeController : ControllerBase
+    {
+        private readonly ISentenceAttendeeService _sentenceAttendeeService;
+        private readonly ISentenceAdjustmentService _sentenceAdjustmentService;
+        public SentenceAttendeeController(ISentenceAttendeeService sentenceAttendeeService, ISentenceAdjustmentService sentenceAdjustmentService)
+        {
+            _sentenceAttendeeService = sentenceAttendeeService;
+            _sentenceAdjustmentService = sentenceAdjustmentService;
+        }
+
+        [HttpGet("GetAttendanceList")]
+        public IActionResult GetAttendanceList(DateTime dateValue)
+        {
+            return Ok(_sentenceAttendeeService.GetAttendanceList(dateValue));
+        }
+
+        [HttpGet("GetAttendanceValue")]
+        public IActionResult GetAttendanceValue(int arrestSentenceAttendanceId)
+        {
+            return Ok(_sentenceAttendeeService.GetAttendanceValue(arrestSentenceAttendanceId));
+        }
+
+        [HttpGet("GetRecentAttendanceValue")]
+        public IActionResult GetRecentAttendanceValue(DateTime dateValue)
+        {
+            return Ok(_sentenceAttendeeService.GetRecentAttendanceValue(dateValue));
+        }
+
+        [HttpGet("GetDuplicateAttendance")]
+        public IActionResult GetDuplicateAttendance(DateTime dateValue, int inmateId)
+        {
+            return Ok(_sentenceAttendeeService.GetDuplicateAttendance(dateValue, inmateId));
+        }
+
+        [HttpPost("InsertAttendance")]
+        public async Task<IActionResult> InsertAttendance(AttendanceVm obj)
+        {
+            return Ok(await _sentenceAttendeeService.InsertAttendance(obj));
+        }
+
+        #region SendAdj
+
+        [HttpGet("GetAttendeeList")]
+        public IActionResult GetAttendeeList(DateTime dateValue,int inmateId)
+        {
+            return Ok(_sentenceAdjustmentService.GetAttendeeList(dateValue, inmateId));
+        }
+
+        [HttpGet("GetSentenceAdjDetail")]
+        public IActionResult GetSentenceAdjDetail(int inmateId)
+        {
+            return Ok(_sentenceAdjustmentService.GetSentenceAdjDetail(inmateId));
+        }
+
+        [HttpPost("UpdateNoDayForDay")]
+        public async Task<IActionResult> UpdateNoDayForDay([FromBody]int[] attendanceIds)
+        {
+            return Ok(await _sentenceAdjustmentService.UpdateNoDayForDay(attendanceIds));
+        }
+
+        [HttpPost("UpdateArrestAttendance")]
+        public async Task<IActionResult> UpdateArrestAttendance(AttendanceParam attendanceParam)
+        {
+            return Ok(await _sentenceAdjustmentService.UpdateArrestAttendance(attendanceParam));
+        }
+
+        [HttpGet("GetRunAttendanceList")]
+        public IActionResult GetRunAttendanceList(DateTime dateValue)
+        {
+            return Ok(_sentenceAttendeeService.GetRunAttendanceList(dateValue));
+        }
+
+        [HttpPost("InsertArrestSentenceAttendanceDay")]
+        public async Task<IActionResult> InsertArrestSentenceAttendanceDay(WorkAttendanceVm value)
+        {
+            return Ok(await _sentenceAttendeeService.InsertArrestSentenceAttendanceDay(value));
+        }
+        #endregion
+    }
+}

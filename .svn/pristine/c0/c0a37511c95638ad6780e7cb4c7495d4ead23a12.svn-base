@@ -1,0 +1,1463 @@
+﻿using GenerateTables.Models;
+using ServerAPI.ViewModels;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using ServerAPI.Utilities;
+using System.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
+using System.Data;
+using Microsoft.AspNetCore.Http;
+using Newtonsoft.Json;
+using System.Threading.Tasks;
+
+// ReSharper disable once CheckNamespace
+namespace ServerAPI.Services
+{
+    //TODO Replace Connection.Open() with EF calls
+    // ReSharper disable once UnusedMember.Global
+    public class DataMergeService : IDataMergeService
+    {
+        private readonly AAtims _context;
+        private readonly int _personnelId;
+        private readonly IInterfaceEngineService _interfaceEngine;
+        public DataMergeService(AAtims context,
+            IHttpContextAccessor httpContextAccessor,
+            IInterfaceEngineService interfaceEngine)
+        {
+            _context = context;
+            _personnelId =
+                Convert.ToInt32(httpContextAccessor.HttpContext.User
+                .FindFirst(AuthDetailConstants.PERSONNELID)?.Value);
+            _interfaceEngine = interfaceEngine;
+        }
+
+        public List<RecordsDataVm> GetNewMergePersons(RecordsDataVm searchValue)
+        {
+            List<RecordsDataVm> lstRecordsDataVms = _context.Person.Where(x =>
+                    (searchValue.IsInclPrevMerge || !x.PersonDuplicateId.HasValue) &&
+                    (string.IsNullOrEmpty(searchValue.PersonLastName) ||
+                     x.PersonLastName.StartsWith(searchValue.PersonLastName)) &&
+                    (string.IsNullOrEmpty(searchValue.PersonFirstName) ||
+                     x.PersonFirstName.StartsWith(searchValue.PersonFirstName)) &&
+                    (string.IsNullOrEmpty(searchValue.PersonMiddleName) ||
+                     x.PersonMiddleName.StartsWith(searchValue.PersonMiddleName)) &&
+                    (!searchValue.PersonDob.HasValue || x.PersonDob == searchValue.PersonDob) &&
+                    (string.IsNullOrEmpty(searchValue.Fbi) || x.PersonFbiNo.StartsWith(searchValue.Fbi)) &&
+                    (string.IsNullOrEmpty(searchValue.AlienNo) || x.PersonAlienNo.StartsWith(searchValue.AlienNo)) &&
+                    (string.IsNullOrEmpty(searchValue.Ssn) || x.PersonSsn.StartsWith(searchValue.Ssn.Replace("-", ""))) &&
+                    (string.IsNullOrEmpty(searchValue.Dln) || x.PersonDlNumber.StartsWith(searchValue.Dln)) &&
+                    (string.IsNullOrEmpty(searchValue.Cii) || x.PersonCii.StartsWith(searchValue.Cii)) &&
+                    (string.IsNullOrEmpty(searchValue.AfisNumber) || x.AfisNumber.StartsWith(searchValue.AfisNumber)))
+                .Select(x => new RecordsDataVm
+                {
+                    PersonId = x.PersonId,
+                    PersonDuplicateId = x.PersonDuplicateId,
+                    PersonLastName = x.PersonLastName,
+                    PersonFirstName = x.PersonFirstName,
+                    PersonMiddleName = x.PersonMiddleName,
+                    PersonDob = x.PersonDob,
+                    Dln = x.PersonDlNumber,
+                    Ssn = x.PersonSsn,
+                    Cii = x.PersonCii,
+                    Fbi = x.PersonFbiNo,
+                    AlienNo = x.PersonAlienNo,
+                    AfisNumber = x.AfisNumber
+                }).OrderBy(a => a.PersonId).Take(searchValue.Results).ToList();
+
+            if (searchValue.IsInclAka)
+            {
+                lstRecordsDataVms.AddRange(_context.Aka.Where(x =>
+                        x.PersonId != null &&
+                        (string.IsNullOrEmpty(searchValue.PersonLastName) ||
+                         x.AkaLastName.StartsWith(searchValue.PersonLastName)) &&
+                        (string.IsNullOrEmpty(searchValue.PersonFirstName) ||
+                         x.AkaFirstName.StartsWith(searchValue.PersonFirstName)) &&
+                        (string.IsNullOrEmpty(searchValue.PersonMiddleName) ||
+                         x.AkaMiddleName.StartsWith(searchValue.PersonMiddleName)) &&
+                        (!searchValue.PersonDob.HasValue || x.AkaDob == searchValue.PersonDob) &&
+                        (string.IsNullOrEmpty(searchValue.Fbi) || x.AkaFbi.StartsWith(searchValue.Fbi)) &&
+                        (string.IsNullOrEmpty(searchValue.AlienNo) || x.AkaAlienNo.StartsWith(searchValue.AlienNo)) &&
+                        (string.IsNullOrEmpty(searchValue.Ssn) || x.AkaSsn.StartsWith(searchValue.Ssn)) &&
+                        (string.IsNullOrEmpty(searchValue.Dln) || x.AkaDl.StartsWith(searchValue.Dln)) &&
+                        (string.IsNullOrEmpty(searchValue.Cii) || x.AkaCii.StartsWith(searchValue.Cii)) &&
+                        (string.IsNullOrEmpty(searchValue.AfisNumber) || x.AkaAfisNumber.StartsWith(searchValue.AfisNumber)) &&
+                        (string.IsNullOrEmpty(searchValue.InmateNumber) ||
+                         x.AkaInmateNumber.StartsWith(searchValue.InmateNumber)) &&
+                        (string.IsNullOrEmpty(searchValue.SiteInmateNo) ||
+                         x.AkaSiteInmateNumber.StartsWith(searchValue.SiteInmateNo)))
+                    .Select(x => new RecordsDataVm
+                    {
+                        PersonId = x.PersonId ?? 0,
+                        AkaId = x.AkaId,
+                        PersonLastName = x.Person.PersonLastName,
+                        PersonFirstName = x.Person.PersonFirstName,
+                        PersonMiddleName = x.Person.PersonMiddleName,
+                        PersonDob = x.Person.PersonDob,
+                        Dln = x.Person.PersonDlNumber,
+                        Ssn = x.Person.PersonSsn,
+                        Cii = x.Person.PersonCii,
+                        Fbi = x.Person.PersonFbiNo,
+                        AlienNo = x.Person.PersonAlienNo,
+                        AfisNumber = x.Person.AfisNumber,
+                        AkaInmateNumber = x.AkaInmateNumber,
+                        SiteInmateNo = x.AkaSiteInmateNumber
+                    }).OrderBy(a => a.AkaId).Take(searchValue.Results).ToList());
+            }
+
+            int[] personIds = lstRecordsDataVms.Select(d => d.PersonId).ToArray();
+            List<Inmate> lstInmates = _context.Inmate.Where(p => personIds.Contains(p.PersonId)).ToList();
+            if (!string.IsNullOrEmpty(searchValue.InmateNumber) || !string.IsNullOrEmpty(searchValue.SiteInmateNo))
+            {
+                List<Inmate> inmateLst = _context.Inmate.Where(p => (string.IsNullOrEmpty(searchValue.InmateNumber) ||
+                     p.InmateNumber.StartsWith(searchValue.InmateNumber)) &&
+                    (!searchValue.InmateActive || p.InmateActive == 1) &&
+                    (string.IsNullOrEmpty(searchValue.SiteInmateNo) ||
+                     p.InmateSiteNumber.StartsWith(searchValue.SiteInmateNo)) &&
+                     (string.IsNullOrEmpty(searchValue.PersonLastName) ||
+                     p.Person.PersonLastName.StartsWith(searchValue.PersonLastName)) &&
+                    (string.IsNullOrEmpty(searchValue.PersonFirstName) ||
+                     p.Person.PersonFirstName.StartsWith(searchValue.PersonFirstName)) &&
+                    (string.IsNullOrEmpty(searchValue.PersonMiddleName) ||
+                     p.Person.PersonMiddleName.StartsWith(searchValue.PersonMiddleName)) &&
+                    (!searchValue.PersonDob.HasValue || p.Person.PersonDob == searchValue.PersonDob) &&
+                    (string.IsNullOrEmpty(searchValue.Fbi) || p.Person.PersonFbiNo.StartsWith(searchValue.Fbi)) &&
+                    (string.IsNullOrEmpty(searchValue.AlienNo) || p.Person.PersonAlienNo.StartsWith(searchValue.AlienNo)) &&
+                    (string.IsNullOrEmpty(searchValue.Ssn) || p.Person.PersonSsn.StartsWith(searchValue.Ssn.Replace("-", ""))) &&
+                    (string.IsNullOrEmpty(searchValue.Dln) || p.Person.PersonDlNumber.StartsWith(searchValue.Dln)) &&
+                    (string.IsNullOrEmpty(searchValue.Cii) || p.Person.PersonCii.StartsWith(searchValue.Cii)) &&
+                    (string.IsNullOrEmpty(searchValue.AfisNumber) || p.Person.AfisNumber.StartsWith(searchValue.AfisNumber)))
+                     .OrderBy(a => a.PersonId).Take(searchValue.Results).ToList();
+                lstInmates.AddRange(inmateLst);
+
+                personIds = lstInmates.Select(d => d.PersonId).ToArray();
+                List<Person> lstPersons = _context.Person.Where(p => personIds.Contains(p.PersonId)).ToList();
+                List<RecordsDataVm> lstLocalDataVms = lstRecordsDataVms;
+                lstInmates.ForEach(item =>
+                {
+                    Person person = lstPersons.Single(p => p.PersonId == item.PersonId);
+                    if (person == null) return;
+                    RecordsDataVm records = new RecordsDataVm
+                    {
+                        PersonId = person.PersonId,
+                        PersonDuplicateId = person.PersonDuplicateId,
+                        PersonLastName = person.PersonLastName,
+                        PersonFirstName = person.PersonFirstName,
+                        PersonMiddleName = person.PersonMiddleName,
+                        PersonDob = person.PersonDob,
+                        Dln = person.PersonDlNumber,
+                        Ssn = person.PersonSsn,
+                        Cii = person.PersonCii,
+                        Fbi = person.PersonFbiNo,
+                        AlienNo = person.PersonAlienNo,
+                        AfisNumber = person.AfisNumber
+                    };
+                    lstLocalDataVms.Add(records);
+                });
+
+                lstRecordsDataVms = lstLocalDataVms;
+            }
+
+            lstRecordsDataVms.ForEach(item =>
+            {
+                Inmate inmate = lstInmates.FirstOrDefault(p => p.PersonId == item.PersonId);
+                if (inmate != null)
+                {
+                    if (!searchValue.IsInclPrevMerge)
+                    {
+                        PersonVm person = _context.Person.Where(p => p.PersonId == item.PersonId)
+                            .Select(a => new PersonVm{ 
+                                DuplicateId = a.PersonDuplicateId
+                            }).Single();
+                        item.PersonDuplicateId = person.DuplicateId;
+                    }
+
+                    item.InmateId = inmate.InmateId;
+                    item.InmateActive = inmate.InmateActive == 1;
+                    item.InmateNumber = inmate.InmateNumber;
+                    if (item.AkaId == 0)
+                    {
+                        item.SiteInmateNo = inmate.InmateSiteNumber;
+                    }
+                }
+
+                item.InmateNumber = item.InmateNumber ?? "";
+                item.AkaInmateNumber = item.AkaInmateNumber ?? "";
+                item.SiteInmateNo = item.SiteInmateNo ?? "";
+            });
+
+            lstRecordsDataVms = lstRecordsDataVms.Where(x =>
+                    (searchValue.IsInclPrevMerge || !x.PersonDuplicateId.HasValue) &&
+                    (string.IsNullOrEmpty(searchValue.InmateNumber) ||
+                     x.InmateNumber.StartsWith(searchValue.InmateNumber)
+                      || x.AkaInmateNumber.StartsWith(searchValue.InmateNumber)) &&
+                    (!searchValue.InmateActive || x.InmateActive) &&
+                    (string.IsNullOrEmpty(searchValue.SiteInmateNo) ||
+                    x.SiteInmateNo.StartsWith(searchValue.SiteInmateNo)))
+                .ToList();
+
+            lstRecordsDataVms = lstRecordsDataVms.GroupBy(a => a.PersonId).Select(a => a.First()).ToList();
+
+            lstRecordsDataVms = lstRecordsDataVms.OrderBy(a => a.PersonId)
+                .ThenBy(a => a.AkaId).Take(searchValue.Results).ToList();
+
+            return lstRecordsDataVms;
+        }
+        public List<RecordsDataVm> GetPersonsToAddMerge(RecordsDataVm searchValue)
+        {
+            List<RecordsDataVm> recordsDataVm = new List<RecordsDataVm>();
+            int[] personIds = new int[0];
+            if (!string.IsNullOrEmpty(searchValue.InmateNumber))
+            {
+                personIds = _context.Inmate.Where(i => i.InmateNumber.StartsWith(searchValue.InmateNumber))
+                    .Select(x => x.PersonId).ToArray();
+            }
+
+            //For Person
+            List<RecordsDataVm> personRecords = _context.Person.Where(x =>
+                    (string.IsNullOrEmpty(searchValue.PersonLastName) ||
+                     x.PersonLastName.StartsWith(searchValue.PersonLastName)) &&
+                    (string.IsNullOrEmpty(searchValue.PersonFirstName) ||
+                     x.PersonFirstName.StartsWith(searchValue.PersonFirstName)) &&
+                    (string.IsNullOrEmpty(searchValue.PersonMiddleName) ||
+                     x.PersonMiddleName.StartsWith(searchValue.PersonMiddleName)) &&
+                    (!searchValue.PersonDob.HasValue || x.PersonDob.Value.Date == searchValue.PersonDob.Value.Date) &&
+                    (string.IsNullOrEmpty(searchValue.Ssn) || x.PersonSsn.Replace("-", "").StartsWith(searchValue.Ssn)) &&
+                    (string.IsNullOrEmpty(searchValue.Dln) || x.PersonDlNumber.StartsWith(searchValue.Dln)) &&
+                    (string.IsNullOrEmpty(searchValue.Fbi) || x.PersonFbiNo.StartsWith(searchValue.Fbi)) &&
+                    (string.IsNullOrEmpty(searchValue.Cii) || x.PersonCii.StartsWith(searchValue.Cii)) &&
+                    (string.IsNullOrEmpty(searchValue.AlienNo) || x.PersonAlienNo.StartsWith(searchValue.AlienNo)) &&
+                    (string.IsNullOrEmpty(searchValue.AfisNumber) || x.AfisNumber.StartsWith(searchValue.AfisNumber)) &&
+                    (string.IsNullOrEmpty(searchValue.InmateNumber) || personIds.Contains(x.PersonId)))
+                    .Select(x => new RecordsDataVm
+                    {
+                        PersonId = x.PersonId,
+                        PersonLastName = x.PersonLastName,
+                        PersonFirstName = x.PersonFirstName,
+                        PersonDuplicateId = x.PersonDuplicateId,
+                        PersonMiddleName = x.PersonMiddleName,
+                        PersonDob = x.PersonDob.Value.Date,
+                        Ssn = x.PersonSsn,
+                        Dln = x.PersonDlNumber,
+                        Fbi = x.PersonFbiNo,
+                        Cii = x.PersonCii,
+                        AlienNo = x.PersonAlienNo,
+                        AfisNumber = x.AfisNumber,
+                        InmateNumber = _context.Inmate.FirstOrDefault(s => s.PersonId == x.PersonId).InmateNumber
+                    }).ToList();
+            //Aka
+            if (searchValue.IsInclAka)
+            {
+                personRecords.AddRange(_context.Aka.Where(x =>
+                    (!x.DeleteFlag.HasValue || x.DeleteFlag == 0) && x.PersonId != null &&
+                    (string.IsNullOrEmpty(searchValue.PersonLastName) ||
+                     x.AkaLastName.StartsWith(searchValue.PersonLastName)) &&
+                    (string.IsNullOrEmpty(searchValue.PersonFirstName) ||
+                     x.AkaFirstName.StartsWith(searchValue.PersonFirstName)) &&
+                    (string.IsNullOrEmpty(searchValue.PersonMiddleName) ||
+                     x.AkaMiddleName.StartsWith(searchValue.PersonMiddleName)) &&
+                    (!searchValue.PersonDob.HasValue || x.AkaDob.Value.Date == searchValue.PersonDob.Value.Date) &&
+                    (string.IsNullOrEmpty(searchValue.Ssn) || x.AkaSsn.Replace("-", "").StartsWith(searchValue.Ssn)) &&
+                    (string.IsNullOrEmpty(searchValue.Dln) || x.AkaDl.StartsWith(searchValue.Dln)) &&
+                    (string.IsNullOrEmpty(searchValue.Fbi) || x.AkaFbi.StartsWith(searchValue.Fbi)) &&
+                    (string.IsNullOrEmpty(searchValue.Cii) || x.AkaCii.StartsWith(searchValue.Cii)) &&
+                    (string.IsNullOrEmpty(searchValue.AlienNo) || x.AkaAlienNo.StartsWith(searchValue.AlienNo)) &&
+                    (string.IsNullOrEmpty(searchValue.InmateNumber) || x.AkaInmateNumber.StartsWith(searchValue.InmateNumber)) &&
+                    (string.IsNullOrEmpty(searchValue.AfisNumber) ||
+                     x.AkaAfisNumber.StartsWith(searchValue.AfisNumber))).Select(s => new RecordsDataVm
+                     {
+                         AkaId = s.AkaId,
+                         PersonId = s.Person.PersonId,
+                         AkaFirstName = s.Person.PersonFirstName,
+                         AkaLastName = s.Person.PersonLastName,
+                         AkaMiddleName = s.Person.PersonMiddleName,
+                         AkaDob = s.Person.PersonDob.Value.Date,
+                         AkaDln = s.Person.PersonDlNumber,
+                         AkaSsn = s.Person.PersonSsn,
+                         AkaCii = s.Person.PersonCii,
+                         AkaFbi = s.Person.PersonFbiNo,
+                         AkaAlienNo = s.Person.PersonAlienNo,
+                         AkaAfisNumber = s.Person.AfisNumber,
+                         PersonFirstName = s.AkaFirstName,
+                         PersonLastName = s.AkaLastName,
+                         PersonDuplicateId = s.Person.PersonDuplicateId,
+                         PersonMiddleName = s.AkaMiddleName,
+                         PersonDob = s.AkaDob.Value.Date,
+                         Ssn = s.AkaSsn,
+                         Dln = s.AkaDl,
+                         Fbi = s.AkaFbi,
+                         Cii = s.AkaCii,
+                         AlienNo = s.AkaAlienNo,
+                         AfisNumber = s.AkaAfisNumber,
+                         InmateNumber = s.AkaInmateNumber
+                     }).ToList());
+            }
+
+            GetGroupByRecords(personRecords, searchValue, recordsDataVm);
+            recordsDataVm = FilterRecords(recordsDataVm, searchValue);
+            recordsDataVm = recordsDataVm.Distinct().Take(searchValue.Results).ToList();
+            recordsDataVm = GetAkaDetails(recordsDataVm, searchValue);
+
+            personIds = recordsDataVm.Select(s => s.PersonId).ToArray();
+            List<Inmate> lstInmateDet = _context.Inmate.Where(per => personIds.Contains(per.PersonId)).Select(s =>
+                new Inmate
+                {
+                    PersonId = s.PersonId,
+                    InmateNumber = s.InmateNumber,
+                    InmateSiteNumber = s.InmateSiteNumber,
+                    InmateId = s.InmateId,
+                    InmateActive = s.InmateActive
+                }).ToList();
+
+            recordsDataVm.ForEach(i =>
+            {
+                Inmate inmate = lstInmateDet.FirstOrDefault(s => s.PersonId == i.PersonId);
+                if (inmate != null)
+                {
+                    i.InmateNumber = inmate.InmateNumber;
+                    i.SiteInmateNo = inmate.InmateSiteNumber;
+                    i.InmateId = inmate.InmateId;
+                    i.InmateActive = inmate.InmateActive == 1;
+                }
+            });
+
+            return recordsDataVm;
+        }
+
+        private List<RecordsDataVm> GetAkaDetails(List<RecordsDataVm> recordsDataVm, RecordsDataVm searchValue)
+        {
+            recordsDataVm = recordsDataVm.GroupBy(a => a.PersonId).Select(a => a.Last()).ToList();
+
+            if (searchValue.IsInclAka)
+            {
+                recordsDataVm.ForEach(item =>
+                {
+                    if (item.AkaId > 0)
+                    {
+                        string akaLastName = item.PersonLastName;
+                        string akaFirstName = item.PersonFirstName;
+                        string akaMiddleName = item.PersonMiddleName;
+                        DateTime? akaDob = item.PersonDob;
+                        string ssn = item.Ssn;
+                        string dln = item.Dln;
+                        string fbi = item.Fbi;
+                        string cii = item.Cii;
+                        string alienNo = item.AlienNo;
+                        string afisNo = item.AfisNumber;
+                        string akaInmateNum = item.InmateNumber;
+                        item.PersonLastName = item.AkaLastName;
+                        item.PersonFirstName = item.AkaFirstName;
+                        item.PersonMiddleName = item.AkaMiddleName;
+                        item.PersonDob = item.AkaDob;
+                        item.Ssn = item.AkaSsn;
+                        item.Dln = item.AkaDln;
+                        item.Fbi = item.AkaFbi;
+                        item.Cii = item.AkaCii;
+                        item.AlienNo = item.AkaAlienNo;
+                        item.AfisNumber = item.AkaAfisNumber;
+                        item.AkaLastName = akaLastName;
+                        item.AkaFirstName = akaFirstName;
+                        item.AkaMiddleName = akaMiddleName;
+                        item.AkaDob = akaDob;
+                        item.AkaSsn = ssn;
+                        item.AkaDln = dln;
+                        item.AkaFbi = fbi;
+                        item.AkaCii = cii;
+                        item.AkaAlienNo = alienNo;
+                        item.AkaAfisNumber = afisNo;
+                        item.AkaInmateNumber = akaInmateNum;
+                    }
+                });
+            }
+
+            return recordsDataVm;
+        }
+        public List<BookingDataVm> GetRecordsDataInmateBooking(int[] inmateIds)
+        {
+            inmateIds = inmateIds.Where(x => x > 0).ToArray();
+            List<BookingDataVm> data = _context.IncarcerationArrestXref
+                .Where(x => inmateIds.Contains(x.Arrest.InmateId ?? 0)).Select(x => new BookingDataVm
+                {
+                    InmateId = x.Incarceration.InmateId,
+                    ArrestId = x.Arrest.ArrestId,
+                    IncarcerationId = x.Incarceration.IncarcerationId,
+                    ArrestBookingType = _context.Lookup
+                        .FirstOrDefault(l => l.LookupType == LookupConstants.ARRTYPE &&
+                                    Equals(l.LookupIndex, Convert.ToDouble(x.Arrest.ArrestType))).LookupDescription,
+                    CourtDocket = _context.Agency.FirstOrDefault(a => a.AgencyId == x.Arrest.ArrestCourtJurisdictionId).AgencyAbbreviation,
+                    ArrestBookingNumber = x.Arrest.ArrestBookingNo,
+                    BookedDate = x.Arrest.ArrestBookingDate,
+                    ReleasedOut = x.Incarceration.ReleaseOut != null,
+                    InmateActive = x.Incarceration.Inmate.InmateActive == 1
+                }).OrderBy(o => o.InmateId).ThenBy(o => o.ArrestId).ToList();
+
+            return data;
+        }
+        public List<AkaVm> GetRecordsDataAkaDetails(int[] personIds)
+        {
+            List<AkaVm> lstPersonAka = _context.Aka.Where(a =>
+                    personIds.Contains(a.PersonId ?? 0) &&
+                    (!a.DeleteFlag.HasValue || a.DeleteFlag == 0))
+                .Select(a => new AkaVm
+                {
+                    AkaId = a.AkaId,
+                    PersonId = a.PersonId,
+                    AkaFirstName = a.AkaFirstName,
+                    AkaLastName = a.AkaLastName,
+                    AkaMiddleName = a.AkaMiddleName,
+                    AkaSuffix = a.AkaSuffix,
+                    AkaDob = a.AkaDob,
+                    PersonGangName = a.PersonGangName,
+                    AkaDl = a.AkaDl,
+                    AkaDlState = a.AkaDlState,
+                    AkaSsn = a.AkaSsn,
+                    AkaFbi = a.AkaFbi,
+                    AkaCii = a.AkaCii,
+                    AkaAlienNo = a.AkaAlienNo,
+                    AkaDoc = a.AkaDoc,
+                    AkaInmateNumber = a.AkaInmateNumber,
+                    AkaSiteInmateNumber = a.AkaSiteInmateNumber,
+                    AkaAfisNumber = a.AkaAfisNumber,
+                    AkaOtherIdType = a.AkaOtherIdType,
+                    AkaOtherPhoneType = a.AkaOtherPhoneType,
+                    AkaOtherIdNumber = a.AkaOtherIdNumber,
+                    AkaOtherIdDescription = a.AkaOtherIdDescription,
+                    AkaOtherPhoneNumber = a.AkaOtherPhoneNumber,
+                    AkaOtherPhoneDescription = a.AkaOtherPhoneDescription,
+                    AkaDlExpiration = a.AkaDlExpiration,
+                    AkaDlNoExpiration = a.AkaDlNoExpiration
+                }).OrderBy(a => a.PersonId).ThenBy(a => a.AkaId).ToList();
+            return lstPersonAka;
+        }
+        public List<RecordsDataReferenceVm> GetPersonReferences(List<KeyValuePair<int, int>> lstIds,
+            RecordsDataType type, int incarcerationId = 0)
+        {
+            List<RecordsDataReferenceVm> allRecordsDataReference = new List<RecordsDataReferenceVm>();
+            string sqlCommand = string.Empty;
+
+            List<DataAoLookup> dataAoLookup = _context.DataAoLookup
+                .Where(d => (type != RecordsDataType.Merge || d.RunInMerge == 1)
+                            && (type != RecordsDataType.Move || d.RunInMove == 1)
+                            && (type != RecordsDataType.Seal || d.RunInSeal == 1) && d.Inactive == 0)
+                .OrderBy(o => o.DataAoLookupId).ToList();
+
+            lstIds.ForEach(item =>
+            {
+                List<RecordsDataReferenceVm> recordsDataReference = new List<RecordsDataReferenceVm>();
+
+                dataAoLookup.ForEach(data =>
+                {
+                    sqlCommand = GetSqlCommand(data, item.Key, item.Value, type, sqlCommand, incarcerationId);
+                });
+
+                DataSet ds = new DataSet();
+                SqlConnection connection = (SqlConnection)_context.Database.GetDbConnection();
+                connection.Open();
+                using (SqlCommand cmd = connection.CreateCommand())
+                {
+                    cmd.CommandText = sqlCommand;
+                    cmd.CommandType = CommandType.Text;
+                    cmd.CommandTimeout = 0;
+                    SqlDataAdapter da = new SqlDataAdapter(cmd);
+                    da.Fill(ds);
+                    foreach (DataTable table in ds.Tables)
+                    {
+                        foreach (DataRow row in table.Rows)
+                        {
+                            RecordsDataReferenceVm dataReference = new RecordsDataReferenceVm
+                            {
+                                DataAoLookUpId = (int)(row.ItemArray[0]),
+                                ReferenceName = row.ItemArray[5].ToString(),
+                                Count = (int)(row.ItemArray[10]),
+                                InmateId = item.Key,
+                                PersonId = item.Value,
+                                ExcludeInRefMove = !string.IsNullOrEmpty(row.ItemArray[9]?.ToString())
+                                                   ? (int?)(row.ItemArray[9]) : default(int?)
+                            };
+                            recordsDataReference.Add(dataReference);
+                        }
+                    }
+                }
+
+                connection.Close();
+                recordsDataReference =
+                    recordsDataReference.Where(x => x.Count > 0).OrderBy(o => o.ReferenceName).ToList();
+                allRecordsDataReference.AddRange(recordsDataReference);
+            });
+
+            return allRecordsDataReference;
+
+        }
+        public List<RecordsDataReferenceVm> GetPersonReferenceDetails(int dataAoLookupId, int inmateId, int personId,
+            int incarcerationId = 0)
+        {
+            List<RecordsDataReferenceVm> recordsDataReferenceDetail = new List<RecordsDataReferenceVm>();
+            DataAoLookup dataAoLookup = _context.DataAoLookup.FirstOrDefault(x => x.DataAoLookupId == dataAoLookupId);
+            if (dataAoLookup != null)
+            {
+                string sqlQuery =
+                    $"{dataAoLookup.DetailSql} where {dataAoLookup.TableName}.{dataAoLookup.FieldName} = " +
+                    $"{(dataAoLookup.IsInmate == 1 ? inmateId : personId)}";
+                if (incarcerationId > 0)
+                {
+                    Incarceration inc = _context.Incarceration.Single(i => i.IncarcerationId == incarcerationId);
+                    string releaseOut = inc.ReleaseOut.HasValue ? inc.ReleaseOut.Value.ToString("yyyy/MM/dd") : DateTime.Now.ToString("yyyy/MM/dd");
+                    if (inc.DateIn != null)
+                    {
+                        string dateIn = inc.DateIn.Value.ToString("yyyy/MM/dd");
+                        sqlQuery = "select * from ( " + sqlQuery + $" and cast({dataAoLookup.RefDateField} as date) " +
+                                   $" BETWEEN cast('{dateIn}' as date) and cast('{releaseOut}' as date) " +
+                                   " ) as a where isnull(RefDate,'') <> '' or isnull(RefNumber,'') <> '' or isnull(RefDetail,'') <> '' ";
+                    }
+                }
+                DataSet ds = new DataSet();
+                SqlConnection connection = (SqlConnection)_context.Database.GetDbConnection();
+                connection.Open();
+                using (SqlCommand cmd = connection.CreateCommand())
+                {
+                    cmd.CommandText = sqlQuery;
+                    cmd.CommandType = CommandType.Text;
+                    SqlDataAdapter da = new SqlDataAdapter(cmd);
+                    da.Fill(ds);
+                    foreach (DataTable table in ds.Tables)
+                    {
+                        foreach (DataRow row in table.Rows)
+                        {
+                            RecordsDataReferenceVm dataReference = new RecordsDataReferenceVm
+                            {
+                                ReferenceId = !string.IsNullOrEmpty(row["RefId"]?.ToString())
+                                              ? Convert.ToInt32(row["RefId"].ToString()) : default(int?),
+                                Date = row["RefDate"].ToString(),
+                                Number = row["RefNumber"].ToString(),
+                                Description = row["RefDetail"].ToString()
+                            };
+                            recordsDataReferenceDetail.Add(dataReference);
+                        }
+                    }
+                }
+
+                connection.Close();
+            }
+
+            return recordsDataReferenceDetail;
+        }
+        public async Task<int> DoMerge(DoMergeParam doMergeParam)
+        {
+            UpdatePinAndWatchFlag(doMergeParam.LstMergeNames, doMergeParam.KeepName);
+            MergeIncarceration(doMergeParam.LstBookingData, doMergeParam.KeepName);
+            MergeAccount(doMergeParam.LstMergeNames, doMergeParam.KeepName);
+            MergeNames(doMergeParam.KeepName, doMergeParam.LstMergeNames, doMergeParam.DataAoLookup,
+                doMergeParam.AkaIds, doMergeParam.MergeReasonId, doMergeParam.Notes, doMergeParam.ConfirmDelete);
+            if (doMergeParam.IsVerify)
+                UpdateVerifyFlag(doMergeParam.KeepName);
+            return await _context.SaveChangesAsync();
+        }
+        private void GetGroupByRecords(List<RecordsDataVm> lstRecords, RecordsDataVm searchValue,
+            List<RecordsDataVm> recordsDataVms)
+        {
+            List<RecordsDataVm> lstRecordsData = lstRecords.Where(x => x.PersonDuplicateId == null).GroupBy(g => new
+            {
+                PersonLastName = searchValue.IsGroupByLastName ? (!string.IsNullOrEmpty(g.PersonLastName) ? g.PersonLastName.ToLower() : g.PersonLastName) : "",
+                PersonFirstName = searchValue.IsGroupByFirstName ? (!string.IsNullOrEmpty(g.PersonFirstName) ? g.PersonFirstName.ToLower() : g.PersonFirstName) : "",
+                PersonMiddleName = searchValue.IsGroupByMiddleName ? (!string.IsNullOrEmpty(g.PersonMiddleName) ? g.PersonMiddleName.ToLower() : g.PersonMiddleName) : "",
+                InmateNumber = searchValue.IsGroupByInmateNumber ? g.InmateNumber : "",
+                PersondDob = searchValue.IsGroupByDob ? g.PersonDob : null,
+                Dln = searchValue.IsGroupByDln ? g.Dln : "",
+                Ssn = searchValue.IsGroupBySsn ? g.Ssn : "",
+                Fbi = searchValue.IsGroupByFbi ? g.Fbi : "",
+                Cii = searchValue.IsGroupByCii ? g.Cii : "",
+                AlienNo = searchValue.IsGroupByAlienNo ? g.AlienNo : "",
+                AfisNumber = searchValue.IsGroupByAfisNo ? g.AfisNumber : ""
+            }).Where(s => s.Count() > 1).Select(x => new RecordsDataVm
+            {
+                LstPerson = x.ToList()
+            }).ToList();
+            if (searchValue.IsGroupBy) { 
+                lstRecordsData.ForEach(item => recordsDataVms.AddRange(item.LstPerson));
+            }
+            else { 
+                recordsDataVms.AddRange(lstRecords.Where(x => x.PersonDuplicateId == null).ToList());
+            }
+        }
+
+        private List<RecordsDataVm> FilterRecords(List<RecordsDataVm> recordsDataVm, RecordsDataVm searchValue)
+        {
+            recordsDataVm = searchValue.IsGroupByLastName
+                ? recordsDataVm.Where(x => !string.IsNullOrEmpty(x.PersonLastName)).ToList()
+                : recordsDataVm;
+            recordsDataVm = searchValue.IsGroupByFirstName
+                ? recordsDataVm.Where(x => !string.IsNullOrEmpty(x.PersonFirstName)).ToList()
+                : recordsDataVm;
+            recordsDataVm = searchValue.IsGroupByMiddleName
+                ? recordsDataVm.Where(x => !string.IsNullOrEmpty(x.PersonMiddleName)).ToList()
+                : recordsDataVm;
+            recordsDataVm = searchValue.IsGroupByInmateNumber
+                ? recordsDataVm.Where(x => !string.IsNullOrEmpty(x.InmateNumber)).ToList()
+                : recordsDataVm;
+            recordsDataVm = searchValue.IsGroupByDob
+                ? recordsDataVm.Where(x => x.PersonDob != null).ToList()
+                : recordsDataVm;
+            recordsDataVm = searchValue.IsGroupByDln
+                ? recordsDataVm.Where(x => !string.IsNullOrEmpty(x.Dln)).ToList()
+                : recordsDataVm;
+            recordsDataVm = searchValue.IsGroupBySsn
+                ? recordsDataVm.Where(x => !string.IsNullOrEmpty(x.Ssn)).ToList()
+                : recordsDataVm;
+            recordsDataVm = searchValue.IsGroupByFbi
+                ? recordsDataVm.Where(x => !string.IsNullOrEmpty(x.Fbi)).ToList()
+                : recordsDataVm;
+            recordsDataVm = searchValue.IsGroupByCii
+                ? recordsDataVm.Where(x => !string.IsNullOrEmpty(x.Cii)).ToList()
+                : recordsDataVm;
+            recordsDataVm = searchValue.IsGroupByAlienNo
+                ? recordsDataVm.Where(x => !string.IsNullOrEmpty(x.AlienNo)).ToList()
+                : recordsDataVm;
+            recordsDataVm = searchValue.IsGroupByAfisNo
+                ? recordsDataVm.Where(x => !string.IsNullOrEmpty(x.AfisNumber)).ToList()
+                : recordsDataVm;
+            return recordsDataVm;
+        }
+        private string GetSqlCommand(DataAoLookup dataAoLookup, int inmateId, int personId, RecordsDataType type,
+            string sqlCommand, int incarcerationId = 0)
+        {
+            string where;
+            switch (type)
+            {
+                case RecordsDataType.Merge:
+                    where = "run_in_merge=1";
+                    break;
+                case RecordsDataType.Move:
+                    where = "run_in_move=1";
+                    break;
+                case RecordsDataType.Seal:
+                    where = "run_in_seal=1";
+                    break;
+                default:
+                    where = string.Empty;
+                    break;
+            }
+
+            string countQry = "";
+            if (type == RecordsDataType.Move && incarcerationId > 0)
+            {
+                Incarceration inc = _context.Incarceration.Single(i => i.IncarcerationId == incarcerationId);
+                string releaseOut = inc.ReleaseOut.HasValue ? inc.ReleaseOut.Value.ToString("yyyy/MM/dd") : DateTime.Now.ToString("yyyy/MM/dd");
+                if (inc.DateIn != null)
+                {
+                    string dateIn = inc.DateIn.Value.ToString("yyyy/MM/dd");
+                    countQry =
+                        $"(select count(a.RefId) as cnt from({dataAoLookup.DetailSql} where {dataAoLookup.TableName}.{dataAoLookup.FieldName} = " +
+                        $" {(dataAoLookup.IsInmate == 1 ? inmateId : personId)} and cast({dataAoLookup.RefDateField} as date) " +
+                        $" BETWEEN cast('{dateIn}' as date) and cast('{releaseOut}' as date)) as a " +
+                        " where isnull(RefDate,'') <> '' or isnull(RefNumber,'') <> '' or isnull(RefDetail,'') <> '' ) as Count";
+                }
+            }
+            else
+            {
+                countQry =
+                    $"(select count(a.RefId) as cnt from({dataAoLookup.DetailSql} where {dataAoLookup.TableName}.{dataAoLookup.FieldName} = " +
+                    $"{(dataAoLookup.IsInmate == 1 ? inmateId : personId)}) as a ) as Count";
+            }
+            string sqlQuery =
+                "SELECT  DataAO_Lookup_id,isnull(Table_Name,'') as Table_Name,isnull(Primary_Key,'') as Primary_Key,isnull(Field_Name,'') as Field_Name," +
+                "isnull(Is_Person,0) as Is_Person,isnull(Reference_Name,'') as Reference_Name, isnull(Is_Inmate,0) as Is_Inmate,isnull(Detail_SQL,'') as Detail_SQL," +
+                $"RefDateField, Exclude_in_Ref_Move, {countQry} FROM DataAO_Lookup WHERE(isnull(Inactive, 0) = 0) and {where} and DataAO_Lookup_id = {dataAoLookup.DataAoLookupId}  ";
+
+            sqlCommand = !string.IsNullOrEmpty(sqlCommand) ? $"{sqlCommand} union {sqlQuery}" : sqlQuery;
+
+            return sqlCommand;
+        }
+
+        private void MergeNames(RecordsDataVm keepName, List<RecordsDataVm> lstMergeNames,
+            List<RecordsDataReferenceVm> dataAoLookup, int[] akaIds, int reasonId, string notes, bool chkDelete)
+        {
+            lstMergeNames.ForEach(data =>
+            {
+                List<PersonDescription> personDescription = _context.PersonDescription
+                    .Where(x => x.PersonId == data.PersonId)
+                    .Select(x => x).ToList();
+                personDescription.ForEach(desc => { desc.PersonId = keepName.PersonId; });
+                _context.SaveChanges();
+
+                InsertAka(data, keepName);
+                UpdatePersonIdentity(data, keepName.PersonId);
+                Person person = _context.Person.SingleOrDefault(x => x.PersonId == data.PersonId);
+                if (person != null)
+                {
+                    person.PersonLastName = $"{DataMergeConstants.DUPLICATE} {data.PersonLastName}";
+                    person.PersonFirstName = $"{DataMergeConstants.DUPLICATE} {data.PersonFirstName}";
+                    person.PersonMiddleName = $"{DataMergeConstants.DUPLICATE} {data.PersonMiddleName}";
+                    person.PersonSuffix = $"{DataMergeConstants.DUPLICATE} {data.PersonSuffix}";
+                    person.PersonDuplicateId = keepName.PersonId;
+                    _context.SaveChanges();
+                }
+                DataAoHistory dataAoHistory = new DataAoHistory
+                {
+                    HistoryType = RecordsDataType.Merge.ToString().ToUpper(),
+                    DataDate = DateTime.Now,
+                    DataBy = _personnelId,
+                    KeepPersonId = keepName.PersonId,
+                    KeepInmateId = keepName.InmateId,
+                    DataPersonId = data.PersonId,
+                    DataInmateId = data.InmateId,
+                    DataTitle =
+                        $"{data.PersonLastName} {data.PersonFirstName} {data.PersonMiddleName} {data.PersonSuffix} {data.InmateNumber}",
+                    DataReason = _context.Lookup.Where(x => Equals(x.LookupIndex,(double?)(reasonId)))
+                        .Select(x => x.LookupDescription).FirstOrDefault(),
+                    DataNote = notes
+                };
+                _context.DataAoHistory.Add(dataAoHistory);
+                _context.SaveChanges();
+
+                UpdatePersonFlagDetail(data, keepName);
+
+                List<RecordsDataReferenceVm>
+                    recordsData = dataAoLookup.Where(x => x.PersonId == data.PersonId).ToList();
+                LoopAllReferences(recordsData, data, keepName, dataAoHistory.DataAoHistoryId);
+                if (chkDelete)
+                {
+                    DeleteDuplicatePerson(data.PersonId);
+                }
+
+                if (data.InmateId > 0)
+                {
+                    _interfaceEngine.Export(new ExportRequestVm
+                    {
+                        EventName = EventNameConstants.MERGE,
+                        PersonnelId = _personnelId,
+                        Param1 = data.InmateId?.ToString(),
+                        Param2 = dataAoHistory.DataAoHistoryId.ToString()
+                    });
+                }
+            });
+
+            UpdateKeepAkas(akaIds, keepName.PersonId);
+        }
+
+        private void MergeIncarceration(List<BookingDataVm> lstBookingData, RecordsDataVm keepName)
+        {
+            int? activeInmate = lstBookingData.FirstOrDefault(x => x.InmateActive)?.InmateId;
+            int?[] inmateIds = lstBookingData.Select(x => x.InmateId).ToArray();
+            if (activeInmate > 0)
+            {
+                UpdateInmateStatusAndHousingUnit(lstBookingData, inmateIds, keepName.InmateId);
+            }
+            int?[] incarcerationIds = lstBookingData.Select(x => x.IncarcerationId).ToArray();
+            int[] arrestIds = lstBookingData.Select(x => x.ArrestId).ToArray();
+            List<Incarceration> incarcerations =
+                _context.Incarceration.Where(x => incarcerationIds.Contains(x.IncarcerationId)).ToList();
+            incarcerations.ForEach(inc => { inc.InmateId = keepName.InmateId; });
+            _context.SaveChanges();
+
+            List<Arrest> arrests = _context.Arrest
+                .Where(x => arrestIds.Contains(x.ArrestId)).ToList();
+            arrests.ForEach(ar => { ar.InmateId = keepName.InmateId; });
+            _context.SaveChanges();
+
+
+
+            //Set Inactive to MergeInmate
+            List<Inmate> inmate = _context.Inmate.Where(x => inmateIds.Contains(x.InmateId)).ToList();
+            inmate.ForEach(data =>
+            {
+                data.InmateActive = 0;
+            });
+            _context.SaveChanges();
+        }
+
+        private void MergeAccount(List<RecordsDataVm> lstMergeNames, RecordsDataVm keepName)
+        {
+            lstMergeNames.ForEach(data =>
+            {
+                AccountAoInmate acc =
+                    _context.AccountAoInmate.SingleOrDefault(x => x.InmateId == data.InmateId);
+                int count = _context.AccountAoTransaction.Count(x => x.InmateId == data.InmateId);
+                if (count > 0)
+                {
+                    if (acc != null)
+                    {
+                        if (acc.AccountAoBankId > 0)
+                        {
+                            int aoFund = _context.AccountAoFund
+                                .Where(x => x.AccountAoBankId == acc.AccountAoBankId && x.Inactive == 0 &&
+                                            x.FundInmateOnlyFlag == 1)
+                                .Select(x => x.AccountAoFundId).FirstOrDefault();
+                            if (acc.BalanceInmate > 0)
+                            {
+                                int fromId = SaveTransaction(aoFund, data.InmateId, acc.BalanceInmate,
+                                    acc.AccountAoBankId, RecordsDataType.Merge.ToString().ToUpper());
+                                int toId = SaveTransaction(aoFund, keepName.InmateId, acc.BalanceInmate,
+                                    acc.AccountAoBankId, DataMergeConstants.MERGEINMATEBALANCETRANSFER);
+
+                                AccountAoTransaction aoTransaction =
+                                    _context.AccountAoTransaction.FirstOrDefault(
+                                        x => x.AccountAoTransactionId == fromId);
+                                if (aoTransaction != null)
+                                {
+                                    aoTransaction.AccountAoTransactionFromId = fromId;
+                                    aoTransaction.AccountAoTransactionToId = toId;
+                                    _context.SaveChanges();
+                                }
+                            }
+                            if (acc.BalanceInmatePending > 0)
+                            {
+                                List<RecordsDataTransaction> lsTransactions =
+                                    GetReceiveTransaction(data.InmateId, acc.AccountAoBankId);
+                                lsTransactions.ForEach(item =>
+                                {
+                                    AddVoidFlag(item.AccountAoReceivedId, acc.AccountAoBankId, data.InmateId, aoFund,
+                                        acc.BalanceInmatePending);
+                                    AddReceiptCash(item, acc.AccountAoBankId, aoFund, acc.BalanceInmatePending);
+                                });
+                            }
+                            if (acc.BalanceInmateFee > 0)
+                            {
+                                List<RecordsDataTransaction> lsTransactions =
+                                    GetFeeTransaction(data.InmateId, acc.AccountAoBankId);
+                                lsTransactions.ForEach(item =>
+                                {
+                                    AddFeeVoidFlag(item.AccountAoFeeId, data.InmateId, acc.BalanceInmateFee,
+                                        acc.AccountAoBankId, item.AccountAoFundId);
+                                    AddAppFee(item.AccountAoFundId, keepName.InmateId, acc.BalanceInmateFee,
+                                        acc.AccountAoBankId);
+                                });
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    if (acc != null)
+                    {
+                        AccountAoInmate aoInmates =
+                            _context.AccountAoInmate.SingleOrDefault(x => x.InmateId == keepName.InmateId);
+                        if (aoInmates != null)
+                        {
+                            acc.BalanceInmate = acc.BalanceInmate + aoInmates.BalanceInmate;
+                            acc.BalanceInmatePending = acc.BalanceInmatePending + aoInmates.BalanceInmatePending;
+                            acc.BalanceInmateFee = acc.BalanceInmateFee + aoInmates.BalanceInmateFee;
+                            UpdateInmateBalance(acc, keepName.InmateId);
+                            DeleteInmateBalance(data.InmateId);
+                        }
+                        else
+                        {
+                            AccountAoInmate aoInmate =
+                                _context.AccountAoInmate.SingleOrDefault(x => x.InmateId == data.InmateId);
+                            if (aoInmate != null)
+                            {
+                                aoInmate.InmateId = (int)(keepName.InmateId??0);
+                                _context.SaveChanges();
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        private void UpdateInmateBalance(AccountAoInmate aoInmate, int? inmateId)
+        {
+            AccountAoInmate accountAoInmate = _context.AccountAoInmate.FirstOrDefault(x => x.InmateId == inmateId);
+            if (accountAoInmate != null)
+            {
+                accountAoInmate.BalanceInmate = aoInmate.BalanceInmate;
+                accountAoInmate.BalanceInmatePending = aoInmate.BalanceInmatePending;
+                accountAoInmate.BalanceInmateFee = aoInmate.BalanceInmateFee;
+                _context.SaveChanges();
+            }
+        }
+
+        private void DeleteInmateBalance(int? inmateId)
+        {
+            AccountAoInmate aoInmate = _context.AccountAoInmate.SingleOrDefault(x => x.InmateId == inmateId);
+            if (aoInmate != null)
+            {
+                _context.AccountAoInmate.RemoveRange(aoInmate);
+                _context.SaveChanges();
+            }
+        }
+
+        private void AddAppFee(int fundId, int? keepInmateId, decimal owe, int bankId)
+        {
+            SqlConnection connection = (SqlConnection)_context.Database.GetDbConnection();
+            connection.Open();
+            SqlCommand cmd = new SqlCommand(@"AO_MoneyAppFee", connection)
+            {
+                CommandType = CommandType.StoredProcedure
+            };
+            cmd.Parameters.Add("@p_AffectedRows", SqlDbType.Int);
+            SqlParameter rowsParam = cmd.Parameters.Add("@p_AffectedRows", SqlDbType.Int);
+            rowsParam.Direction = ParameterDirection.Output;
+            SqlParameter valueParam = cmd.Parameters.Add("@p_IdentityValue", SqlDbType.Int);
+            valueParam.Direction = ParameterDirection.Output;
+            SqlParameter codeParam = cmd.Parameters.Add("@p_StatusCode", SqlDbType.Int);
+            codeParam.Direction = ParameterDirection.Output;
+            SqlParameter errorParam = cmd.Parameters.Add("@p_ErrorMessage", SqlDbType.VarChar);
+            errorParam.Direction = ParameterDirection.Output;
+            errorParam.Size = 150;
+            cmd.Parameters.Add(new SqlParameter("@p_InmateId", keepInmateId));
+            cmd.Parameters.Add(new SqlParameter("@p_BankId", bankId));
+            cmd.Parameters.Add(new SqlParameter("@p_FundId", fundId));
+            cmd.Parameters.Add(new SqlParameter("@p_TransDesc", DataMergeConstants.MERGEINMATEOWETRANSFER));
+            cmd.Parameters.Add(new SqlParameter("@p_TransAmt", owe));
+            cmd.Parameters.Add(new SqlParameter("@p_CreatedBy", _personnelId));
+            cmd.Parameters.Add(new SqlParameter("@p_CreatedDate", DateTime.Now));
+            cmd.Parameters.Add(new SqlParameter("@p_FeeTypeID", null));
+            cmd.Parameters.Add(new SqlParameter("@p_FunctionFlag", null));
+            cmd.Parameters.Add(new SqlParameter("@p_TansactionNotes", null));
+            cmd.ExecuteNonQuery();
+            connection.Close();
+        }
+        public void AddFeeVoidFlag(int feeId, int? inmateId, decimal owe, int bankId, int fundId)
+        {
+            SqlConnection connection = (SqlConnection)_context.Database.GetDbConnection();
+            connection.Open();
+            SqlCommand cmd = new SqlCommand($@"AO_MoneyCommonSetVoidFee", connection)
+            {
+                CommandType = CommandType.StoredProcedure
+            };
+            cmd.Parameters.Add("@p_AffectedRows", SqlDbType.Int);
+            SqlParameter rowsParam = cmd.Parameters.Add("@p_AffectedRows", SqlDbType.Int);
+            rowsParam.Direction = ParameterDirection.Output;
+            SqlParameter valueParam = cmd.Parameters.Add("@p_IdentityValue", SqlDbType.Int);
+            valueParam.Direction = ParameterDirection.Output;
+            SqlParameter codeParam = cmd.Parameters.Add("@p_StatusCode", SqlDbType.Int);
+            codeParam.Direction = ParameterDirection.Output;
+            SqlParameter errorParam = cmd.Parameters.Add("@p_ErrorMessage", SqlDbType.VarChar);
+            errorParam.Direction = ParameterDirection.Output;
+            errorParam.Size = 150;
+            cmd.Parameters.Add(new SqlParameter("@p_FeeId", feeId));
+            cmd.Parameters.Add(new SqlParameter("@p_InmateId", inmateId));
+            cmd.Parameters.Add(new SqlParameter("@p_TxtAmnt", owe));
+            cmd.Parameters.Add(new SqlParameter("@p_BankId", bankId));
+            cmd.Parameters.Add(new SqlParameter("@p_FundId", fundId));
+            cmd.Parameters.Add(new SqlParameter("@p_prsnId", _personnelId));
+            cmd.Parameters.Add(new SqlParameter("@p_date", DateTime.Now));
+            cmd.Parameters.Add(new SqlParameter("@p_Trans_Type", DataMergeConstants.DEBIT));
+            cmd.Parameters.Add(new SqlParameter("@p_Affecting_Table", DataMergeConstants.ACCOUNTAOFEE));
+            cmd.ExecuteNonQuery();
+            connection.Close();
+        }
+        public List<RecordsDataTransaction> GetFeeTransaction(int? inmateId, int bankId)
+        {
+
+            List<RecordsDataTransaction> feeTransactions = _context.AccountAoFee
+                .Where(x => x.TransactionCleared == 0 && x.TransactionVoidFlag == 0).Select(s => new RecordsDataTransaction
+                {
+                    AccountAoFeeId = s.AccountAoFeeId,
+                    AccountAoFundId = s.AccountAoFundId,
+                    InmateId = s.InmateId,
+                    FundId = s.AccountAoFundId
+                }).OrderByDescending(o => o.AccountAoFeeId).ToList();
+
+            int?[] inmateIds = feeTransactions.Select(x => x.InmateId).ToArray();
+            int[] fundIds = feeTransactions.Select(x => x.FundId).ToArray();
+            int[] lstInmates =
+                _context.AccountAoInmate.Where(x => inmateIds.Contains(x.InmateId) && x.AccountAoBankId == bankId).Select(x => x.InmateId).ToArray();
+            int[] lstFunds =
+                _context.AccountAoFund.Where(x =>
+                        fundIds.Contains(x.AccountAoFundId) && x.AccountAoBankId == bankId && x.FundInmateOnlyFlag == 1)
+                    .Select(x => x.AccountAoFundId).ToArray();
+
+            feeTransactions = feeTransactions.Where(x => lstInmates.Contains((int)(x.InmateId??0))).ToList();
+            feeTransactions = feeTransactions.Where(x => lstFunds.Contains(x.AccountAoFundId)).ToList();
+            return feeTransactions;
+        }
+        private void AddReceiptCash(RecordsDataTransaction transaction, int bankId, int fundId, decimal pending)
+        {
+            SqlConnection connection = (SqlConnection)_context.Database.GetDbConnection();
+            connection.Open();
+            SqlCommand cmd = new SqlCommand($@"AO_MoneyReceiptCashCheckInsert", connection)
+            {
+                CommandType = CommandType.StoredProcedure
+            };
+            cmd.Parameters.Add("@p_AffectedRows", SqlDbType.Int);
+            SqlParameter rowsParam = cmd.Parameters.Add("@p_AffectedRows", SqlDbType.Int);
+            rowsParam.Direction = ParameterDirection.Output;
+            SqlParameter valueParam = cmd.Parameters.Add("@p_IdentityValue", SqlDbType.Int);
+            valueParam.Direction = ParameterDirection.Output;
+            SqlParameter codeParam = cmd.Parameters.Add("@p_StatusCode", SqlDbType.Int);
+            codeParam.Direction = ParameterDirection.Output;
+            SqlParameter errorParam = cmd.Parameters.Add("@p_ErrorMessage", SqlDbType.VarChar);
+            errorParam.Direction = ParameterDirection.Output;
+            errorParam.Size = 150;
+            cmd.Parameters.Add(new SqlParameter("@p_FundId", fundId));
+            cmd.Parameters.Add(new SqlParameter("@p_TransType", null));
+            cmd.Parameters.Add(new SqlParameter("@p_InmateId", transaction.InmateId));
+            cmd.Parameters.Add(new SqlParameter("@p_CashFlag", transaction.CashFlag));
+            cmd.Parameters.Add(new SqlParameter("@p_TransDesc", DataMergeConstants.MERGEINMATEPENDINGTRANSFER));
+            cmd.Parameters.Add(new SqlParameter("@p_DepoId", transaction.AccountAoDepositoryId));
+            cmd.Parameters.Add(new SqlParameter("@p_TransAmt", pending));
+            cmd.Parameters.Add(new SqlParameter("@p_RexedFrom", null));
+            cmd.Parameters.Add(new SqlParameter("@p_CreatedBy", _personnelId));
+            cmd.Parameters.Add(new SqlParameter("@p_CreatedDate", DateTime.Now));
+            cmd.Parameters.Add(new SqlParameter("@p_RecieptNo", null));
+            cmd.Parameters.Add(new SqlParameter("@p_BankId", bankId));
+            cmd.Parameters.Add(new SqlParameter("@p_ReceiveNo", null));
+            cmd.Parameters.Add(new SqlParameter("@p_TansactionNotes", null));
+            cmd.ExecuteNonQuery();
+            connection.Close();
+        }
+        private void AddVoidFlag(int receiveId, int bankId, int? inmateId, int fundId, decimal pending)
+        {
+            SqlConnection connection = (SqlConnection)_context.Database.GetDbConnection();
+            connection.Open();
+            SqlCommand cmd = new SqlCommand($@"AO_MoneyCommonSetVoid", connection)
+            {
+                CommandType = CommandType.StoredProcedure
+            };
+            cmd.Parameters.Add("@p_AffectedRows", SqlDbType.Int);
+            SqlParameter rowsParam = cmd.Parameters.Add("@p_AffectedRows", SqlDbType.Int);
+            rowsParam.Direction = ParameterDirection.Output;
+            SqlParameter valueParam = cmd.Parameters.Add("@p_IdentityValue", SqlDbType.Int);
+            valueParam.Direction = ParameterDirection.Output;
+            SqlParameter codeParam = cmd.Parameters.Add("@p_StatusCode", SqlDbType.Int);
+            codeParam.Direction = ParameterDirection.Output;
+            SqlParameter errorParam = cmd.Parameters.Add("@p_ErrorMessage", SqlDbType.VarChar);
+            errorParam.Direction = ParameterDirection.Output;
+            errorParam.Size = 150;
+            cmd.Parameters.Add(new SqlParameter("@p_ReceiveId", receiveId));
+            cmd.Parameters.Add(new SqlParameter("@p_InmateId", inmateId));
+            cmd.Parameters.Add(new SqlParameter("@p_TxtAmnt", pending));
+            cmd.Parameters.Add(new SqlParameter("@p_BankId", bankId));
+            cmd.Parameters.Add(new SqlParameter("@p_FundId", fundId));
+            cmd.Parameters.Add(new SqlParameter("@p_prsnId", _personnelId));
+            cmd.Parameters.Add(new SqlParameter("@p_date", DateTime.Now));
+            cmd.Parameters.Add(new SqlParameter("@p_Trans_Type", DataMergeConstants.DEBIT));
+            cmd.Parameters.Add(new SqlParameter("@p_Affecting_Table", DataMergeConstants.ACCOUNTAORECEIVE));
+            cmd.ExecuteNonQuery();
+            connection.Close();
+        }
+        private List<RecordsDataTransaction> GetReceiveTransaction(int? inmateId, int bankId)
+        {
+            List<RecordsDataTransaction> aoReceive = _context.AccountAoReceive.Where(x => x.TransactionVoidFlag == 0 &&
+                                                x.TransactionVerified == 0 && x.InmateId == inmateId).Select(s => new RecordsDataTransaction
+                                                {
+                                                    AccountAoReceivedId = s.AccountAoReceiveId,
+                                                    AccountAoDepositoryId = s.AccountAoDepositoryId,
+                                                    CashFlag = s.TransactionReceiveCashFlag,
+                                                    AccountAoFundId = s.AccountAoFundId,
+                                                    InmateId = s.InmateId,
+                                                    FundId = s.AccountAoFundId
+                                                }).OrderBy(o => o.AccountAoReceivedId).ToList();
+
+            int?[] inmateIds = aoReceive.Select(x => x.InmateId).ToArray();
+            int[] fundIds = aoReceive.Select(x => x.FundId).ToArray();
+            int[] lstInmates =
+                 _context.AccountAoInmate.Where(x => inmateIds.Contains(x.InmateId) && x.AccountAoBankId == bankId).Select(x => x.InmateId).ToArray();
+            int[] lstFunds =
+                 _context.AccountAoFund.Where(x => fundIds.Contains(x.AccountAoFundId) && x.AccountAoBankId == bankId && x.FundInmateOnlyFlag == 1)
+                     .Select(x => x.AccountAoFundId).ToArray();
+
+            aoReceive = aoReceive.Where(x => lstInmates.Contains((int)(x.InmateId??0))).ToList();
+            aoReceive = aoReceive.Where(x => lstFunds.Contains(x.AccountAoFundId)).ToList();
+            return aoReceive;
+        }
+
+        private int SaveTransaction(int fundId, int? inmateId, decimal balance, int bankId, string transDesc)
+        {
+            SqlConnection connection = (SqlConnection)_context.Database.GetDbConnection();
+            connection.Open();
+            SqlCommand cmd = new SqlCommand($@"AO_MoneyJournal", connection)
+            {
+                CommandType = CommandType.StoredProcedure
+            };
+
+            cmd.Parameters.Add("@p_AffectedRows", SqlDbType.Int);
+            SqlParameter rowsParam = cmd.Parameters.Add("@p_AffectedRows", SqlDbType.Int);
+            rowsParam.Direction = ParameterDirection.Output;
+            SqlParameter valueParam = cmd.Parameters.Add("@p_IdentityValue", SqlDbType.Int);
+            valueParam.Direction = ParameterDirection.Output;
+            SqlParameter codeParam = cmd.Parameters.Add("@p_StatusCode", SqlDbType.Int);
+            codeParam.Direction = ParameterDirection.Output;
+            SqlParameter errorParam = cmd.Parameters.Add("@p_ErrorMessage", SqlDbType.VarChar);
+            errorParam.Direction = ParameterDirection.Output;
+            errorParam.Size = 150;
+            cmd.Parameters.Add(new SqlParameter("@p_InmateId", inmateId));
+            cmd.Parameters.Add(new SqlParameter("@p_BankId", bankId));
+            cmd.Parameters.Add(new SqlParameter("@p_FundId", fundId));
+            cmd.Parameters.Add(new SqlParameter("@p_TransDesc", transDesc));
+            cmd.Parameters.Add(new SqlParameter("@p_TransAmt", balance));
+            cmd.Parameters.Add(new SqlParameter("@p_CreatedBy", _personnelId));
+            cmd.Parameters.Add(new SqlParameter("@p_CreatedDate", DateTime.Now));
+            cmd.Parameters.Add(new SqlParameter("@p_TansactionNotes", null));
+            cmd.ExecuteNonQuery();
+            connection.Close();
+            return (int)(valueParam.Value);
+        }
+        private void DeleteDuplicatePerson(int personId)
+        {
+            Person per = _context.Person.SingleOrDefault(x => x.PersonId == personId);
+            if (per != null)
+            {
+                Person newPerson = new Person
+                {
+                    PersonId = personId,
+                    PersonFirstName = DataMergeConstants.PURGED,
+                    PersonLastName = DataMergeConstants.PURGED,
+                };
+                _context.Entry(per).CurrentValues.SetValues(newPerson);
+                _context.SaveChanges();
+            }
+
+            Inmate inmate = _context.Inmate.FirstOrDefault(x => x.PersonId == personId);
+            if (inmate != null)
+            {
+                Inmate detail = new Inmate
+                {
+                    InmateId = inmate.InmateId,
+                    FacilityId = inmate.FacilityId,
+                    PersonId = personId,
+                    InmateNumber = $"{DataMergeConstants.PURGED}_ {personId}"
+                };
+                _context.Entry(inmate).CurrentValues.SetValues(detail);
+                _context.SaveChanges();
+            }
+        }
+        private void UpdatePinAndWatchFlag(List<RecordsDataVm> lstMergeNames, RecordsDataVm keepName)
+        {
+            lstMergeNames.ForEach(data =>
+            {
+                Inmate inmateDetail = _context.Inmate.Where(x => x.PersonId == data.PersonId).Select(x => new Inmate
+                {
+                    PhonePin = x.PhonePin,
+                    InmateWatchFlag = x.InmateWatchFlag
+                }).FirstOrDefault();
+                Inmate inmate = _context.Inmate.FirstOrDefault(x => x.PersonId == keepName.PersonId);
+                if (inmate != null)
+                {
+                    inmate.PhonePin = inmateDetail?.PhonePin ?? inmate.PhonePin;
+                    if (inmateDetail?.InmateWatchFlag != null && !Convert.ToBoolean(inmateDetail.InmateWatchFlag))
+                    {
+                        inmate.InmateWatchFlag = 1;
+                    }
+                }
+                _context.SaveChanges();
+            });
+        }
+        private void UpdatePersonFlagDetail(RecordsDataVm data, RecordsDataVm keepName)
+        {
+            int?[] personFlagIndex = _context.PersonFlag.Where(x => x.PersonId == keepName.PersonId && x.DeleteFlag == 0).Select(x => x.PersonFlagIndex).ToArray();
+            int?[] inmateFlagIndex = _context.PersonFlag.Where(x => x.PersonId == keepName.PersonId && x.DeleteFlag == 0).Select(x => x.InmateFlagIndex).ToArray();
+            int?[] dietFlagIndex = _context.PersonFlag.Where(x => x.PersonId == keepName.PersonId && x.DeleteFlag == 0).Select(x => x.DietFlagIndex).ToArray();
+            int?[] medicalFlagIndex = _context.PersonFlag.Where(x => x.PersonId == keepName.PersonId && x.DeleteFlag == 0).Select(x => x.MedicalFlagIndex).ToArray();
+
+            List<PersonFlag> personFlag = _context.PersonFlag
+                .Where(x => x.PersonId == data.PersonId && x.DeleteFlag == 0 &&
+                            (!personFlagIndex.Contains(x.PersonFlagIndex)
+                            || !inmateFlagIndex.Contains(x.InmateFlagIndex) || !dietFlagIndex.Contains(x.DietFlagIndex)
+                            || !medicalFlagIndex.Contains(x.MedicalFlagIndex))
+                ).Select(x => new PersonFlag
+                {
+                    PersonFlagIndex = x.PersonFlagIndex,
+                    InmateFlagIndex = x.InmateFlagIndex,
+                    MedicalFlagIndex = x.MedicalFlagIndex,
+                    DietFlagIndex = x.DietFlagIndex,
+                    PersonFlagId = x.PersonFlagId,
+                    FlagExpire = x.FlagExpire,
+                    FlagNote = x.FlagNote
+                }).ToList();
+            personFlag.ForEach(flag =>
+            {
+                flag.PersonId = keepName.PersonId;
+                PersonFlagHistory historyValue =
+                _context.PersonFlagHistory.FirstOrDefault(x => x.PersonId == data.PersonId &&
+                                        x.PersonFlagIndex == flag.PersonFlagIndex &&
+                                        x.InmateFlagIndex == flag.InmateFlagIndex &&
+                                        x.DietFlagIndex == flag.DietFlagIndex &&
+                                        x.MedicalFlagIndex == flag.MedicalFlagIndex && x.FlagNote != DataMergeConstants.MERGEDRECORD);
+                if (historyValue != null)
+                {
+                    historyValue.FlagNote = $"{DataMergeConstants.MERGEDRECORD}: {flag.FlagNote}";
+                    historyValue.PersonFlagIndex = flag.PersonFlagIndex;
+                    historyValue.InmateFlagIndex = flag.InmateFlagIndex;
+                    historyValue.MedicalFlagIndex = flag.MedicalFlagIndex;
+                    historyValue.DietFlagIndex = flag.DietFlagIndex;
+                    historyValue.PersonId = keepName.PersonId;
+                }
+            });
+            _context.SaveChanges();
+
+        }
+        //Updating Incarceration details from Merge Inmate to KeepInmate
+        private void UpdateInmateStatusAndHousingUnit(List<BookingDataVm> lstBookingData, int?[] inmateIds, int? keepInmateId)
+        {
+            int? inmateId = lstBookingData.Select(x => x.InmateId).OrderBy(o => o).Last();
+
+            Inmate inmateIncVm = _context.Incarceration.Where(x => x.InmateId == inmateId).OrderByDescending(o => o.ReleaseOut)
+                .Select(x => x.Inmate).FirstOrDefault();
+
+            Inmate keepInmate = _context.Inmate.SingleOrDefault(x => x.InmateId == keepInmateId);
+            if (keepInmate != null && inmateIncVm != null)
+            {
+                keepInmate.InmateActive = 1;
+                keepInmate.InmateCurrentTrackId = inmateIncVm.InmateCurrentTrackId;
+                keepInmate.HousingUnitId = inmateIncVm.HousingUnitId > 0 ? inmateIncVm.HousingUnitId : keepInmate.HousingUnitId;
+                keepInmate.FacilityId = inmateIncVm.FacilityId > 0 ? inmateIncVm.FacilityId : keepInmate.FacilityId;
+                keepInmate.InmateSecurityLevel = inmateIncVm.InmateSecurityLevel;
+                keepInmate.InmateScheduledReleaseDate = inmateIncVm.InmateScheduledReleaseDate;
+                keepInmate.LastReviewDate = inmateIncVm.LastReviewDate;
+                keepInmate.LastClassReviewDate = inmateIncVm.LastClassReviewDate;
+                keepInmate.InmateOfficerId = inmateIncVm.InmateOfficerId;
+                keepInmate.InmateContractHousing = inmateIncVm.InmateContractHousing;
+                keepInmate.InmateFootlocker = inmateIncVm.InmateFootlocker;
+                keepInmate.InmateJuvenileFlag = inmateIncVm.InmateJuvenileFlag;
+                keepInmate.InmateClassificationId = inmateIncVm.InmateClassificationId;
+                keepInmate.InmateCurrentTrack = inmateIncVm.InmateCurrentTrack;
+                keepInmate.InmateBalance = inmateIncVm.InmateBalance;
+                keepInmate.InmateDepositedBalance = inmateIncVm.InmateDepositedBalance;
+                keepInmate.InmateDebt = inmateIncVm.InmateDebt;
+                keepInmate.InmateMedicalFlags = inmateIncVm.InmateMedicalFlags;
+                keepInmate.InmateClassFlags = inmateIncVm.InmateClassFlags;
+                keepInmate.WorkCrewId = inmateIncVm.WorkCrewId;
+                keepInmate.LastClassReviewBy = inmateIncVm.LastClassReviewBy;
+                keepInmate.LastReviewBy = inmateIncVm.LastReviewBy;
+                keepInmate.SupplyShirt = inmateIncVm.SupplyShirt;
+                keepInmate.SupplyPants = inmateIncVm.SupplyPants;
+                keepInmate.SupplyBra = inmateIncVm.SupplyBra;
+                keepInmate.SupplyShoes = inmateIncVm.SupplyShoes;
+                keepInmate.SupplyUnderwear = inmateIncVm.SupplyUnderwear;
+                keepInmate.InmateWristbandId = inmateIncVm.InmateWristbandId;
+                keepInmate.InmateStatus = inmateIncVm.InmateStatus;
+                keepInmate.InmateCurrentTrackId = inmateIncVm.InmateCurrentTrackId;
+                _context.SaveChanges();
+            }
+            if (string.IsNullOrEmpty(keepInmate?.InmateSiteNumber) && lstBookingData.Count == 1)
+            {
+                string siteNumber = _context.Inmate.Where(x => inmateIds.Contains(x.InmateId)).Select(x => x.InmateSiteNumber).FirstOrDefault();
+                if (!string.IsNullOrEmpty(siteNumber))
+                {
+                    Inmate inmate = _context.Inmate.FirstOrDefault(x => x.InmateId == keepInmateId);
+                    if (inmate != null)
+                    {
+                        inmate.InmateSiteNumber = siteNumber;
+                        _context.SaveChanges();
+                    }
+                }
+            }
+        }
+        private void InsertAka(RecordsDataVm data, RecordsDataVm keepName)
+        {
+            Aka aka = new Aka
+            {
+                PersonId = keepName.PersonId,
+                AkaFirstName = data.PersonFirstName,
+                AkaLastName = data.PersonLastName,
+                AkaMiddleName = data.PersonMiddleName,
+                AkaDob = data.PersonDob,
+                AkaSsn = data.Ssn,
+                AkaDl = data.Dln,
+                AkaCii = data.Cii,
+                AkaFbi = data.Fbi,
+                AkaInmateNumber = data.InmateNumber,
+                AkaAfisNumber = data.AfisNumber,
+                AkaSiteInmateNumber = data.SiteInmateNo,
+                CreatedBy = _personnelId,
+                CreateDate = DateTime.Now
+            };
+            _context.Aka.Add(aka);
+            _context.SaveChanges();
+            InsertAkaHistory(aka.AkaId, data);
+        }
+        private void InsertAkaHistory(int akaId, RecordsDataVm data)
+        {
+            Dictionary<string, string> headers = new Dictionary<string, string>();
+            AddHistory(data, headers);
+            AkaHistory history = new AkaHistory
+            {
+                AkaId = akaId,
+                PersonnelId = _personnelId,
+                CreateDate = DateTime.Now,
+                AkaHistoryList = JsonConvert.SerializeObject(headers)
+            };
+            _context.AkaHistory.Add(history);
+            _context.SaveChanges();
+        }
+        private void AddHistory(RecordsDataVm data, Dictionary<string, string> headers)
+        {
+            InsertAkaHisValue("FROMPAGE", RecordsDataType.Merge.ToString().ToUpper(), headers);
+            InsertAkaHisValue("LastName", data.PersonLastName, headers);
+            InsertAkaHisValue("FirstName", data.PersonFirstName, headers);
+            InsertAkaHisValue("MiddleName", data.PersonMiddleName, headers);
+            InsertAkaHisValue("Suffix", data.PersonSuffix, headers);
+            InsertAkaHisValue("Dob", data.PersonDob.ToString(), headers);
+            InsertAkaHisValue("Fbi", data.Fbi, headers);
+            InsertAkaHisValue("AlienNumber", data.AlienNo, headers);
+            InsertAkaHisValue("DLNumber", data.Dln, headers);
+            InsertAkaHisValue("CII", data.Cii, headers);
+            InsertAkaHisValue("AFISNumber", data.AfisNumber, headers);
+            InsertAkaHisValue("AkaSiteInmateNumber", data.SiteInmateNo, headers);
+        }
+        private void UpdatePersonIdentity(RecordsDataVm data, int? keepPersonId)
+        {
+            //Comparing two person objects(keep and merge) and updating person detail from merge person to keep person using JsonConvert.
+            Person mergePerson = _context.Person.SingleOrDefault(x => x.PersonId == data.PersonId);
+            if (mergePerson != null)
+            {
+                Person keepPerson = _context.Person.SingleOrDefault(x => x.PersonId == keepPersonId);
+                if (keepPerson != null)
+                {
+                    string jsonKeep = JsonConvert.SerializeObject(keepPerson, Formatting.Indented,
+                        new JsonSerializerSettings { ReferenceLoopHandling = ReferenceLoopHandling.Ignore });
+                    string jsonMerge = JsonConvert.SerializeObject(mergePerson, Formatting.Indented,
+                        new JsonSerializerSettings { ReferenceLoopHandling = ReferenceLoopHandling.Ignore });
+                    Dictionary<string, object> tempKeepPerson = JsonConvert.DeserializeObject<Dictionary<string, object>>(jsonKeep);
+                    Dictionary<string, object> tempMergePerson = JsonConvert.DeserializeObject<Dictionary<string, object>>(jsonMerge);
+
+                    foreach ((string key, object value) in tempMergePerson)
+                    {
+                        if (tempKeepPerson[key] == null && value != null)
+                        {
+                            tempKeepPerson[key] = tempMergePerson[key];
+                        }
+                    }
+                    Person updatedPerson = JsonConvert.DeserializeObject<Person>(JsonConvert.SerializeObject(tempKeepPerson));
+                    _context.Entry(keepPerson).CurrentValues.SetValues(updatedPerson);
+                    _context.SaveChanges();
+                    InsertPersonHistory(updatedPerson, data);
+                }
+            }
+        }
+        private void InsertPersonHistory(Person keepPerson, RecordsDataVm data)
+        {
+            Dictionary<string, string> headers = new Dictionary<string, string>();
+            AddHistory(data, headers);
+            PersonHistory personHistory = new PersonHistory
+            {
+                PersonId = keepPerson.PersonId,
+                PersonnelId = _personnelId,
+                CreateDate = DateTime.Now,
+                PersonHistoryList = JsonConvert.SerializeObject(headers)
+            };
+            _context.PersonHistory.Add(personHistory);
+            _context.SaveChanges();
+        }
+        private void LoopAllReferences(List<RecordsDataReferenceVm> recordsData, RecordsDataVm data, RecordsDataVm keepName, int dataAoHistoryId)
+        {
+            recordsData.ForEach(i =>
+            {
+                DataAoLookup dataAo = _context.DataAoLookup
+                    .SingleOrDefault(d => d.DataAoLookupId == i.DataAoLookUpId);
+                List<RecordsDataReferenceVm> recordsDataReference =
+                    GetReferenceDetail(dataAo, data.InmateId, data.PersonId, 0);
+                int? formId = dataAo != null && dataAo.IsInmate == 1 ? data.InmateId : data.PersonId;
+                int? toId = dataAo != null && dataAo.IsInmate == 1 ? keepName.InmateId : keepName.PersonId;
+                if (dataAo != null && dataAo.TableName.ToUpper() != PersonConstants.AKA)
+                {
+                    recordsDataReference.ForEach(dataRef =>
+                    {
+                        DataAoHistoryField dataAoHistoryField = new DataAoHistoryField
+                        {
+                            DataAoHistoryId = dataAoHistoryId,
+                            TableName = dataAo.TableName,
+                            PrimaryKey = dataAo.PrimaryKey,
+                            FieldName = dataAo.FieldName,
+                            FromId = formId,
+                            ToId = toId,
+                            PrimaryKeyId = dataRef.ReferenceId
+                        };
+                        _context.DataAoHistoryField.Add(dataAoHistoryField);
+                        MergeRecords(dataAo, toId, dataRef.ReferenceId);
+                    });
+                    _context.SaveChanges();
+                }
+
+            });
+        }
+        private void UpdateKeepAkas(int[] akaIds, int personId)
+        {
+            List<Aka> aka = _context.Aka.Where(x => akaIds.Contains(x.AkaId)).ToList();
+            aka.ForEach(a =>
+            {
+                a.PersonId = personId;
+                a.AkaId = a.AkaId;
+            });
+            _context.SaveChanges();
+        }
+        public void MergeRecords(DataAoLookup dataAo, int? toId, int? refId)
+        {
+            if (dataAo.TableName.ToUpper() != DataMergeConstants.PERSONFLAGHISTORY || dataAo.TableName.ToUpper() != DataMergeConstants.PERSONFLAG)
+            {
+                string sqlQuery =
+                    $"update {dataAo.TableName} set {dataAo.FieldName}={toId} where {dataAo.PrimaryKey}={refId}";
+                SqlConnection connection = (SqlConnection)_context.Database.GetDbConnection();
+                connection.Open();
+                using (SqlCommand cmd = connection.CreateCommand())
+                {
+                    cmd.CommandText = sqlQuery;
+                    cmd.CommandType = CommandType.Text;
+                    cmd.ExecuteNonQuery();
+                }
+                connection.Close();
+            }
+        }
+        public void InsertAkaHisValue(string header, string detail, Dictionary<string, string> headers)
+        {
+            if (!string.IsNullOrEmpty(detail))
+            {
+                headers.Add(header, detail);
+            }
+        }
+        public List<RecordsDataReferenceVm> GetReferenceDetail(DataAoLookup dataAoLookup, int? inmateId, int personId, int incarcerationId = 0)
+        {
+            List<RecordsDataReferenceVm> recordsDataReferenceDetail = new List<RecordsDataReferenceVm>();
+
+            string sqlQuery = "";
+            if (incarcerationId > 0)
+            {
+                Incarceration inc = _context.Incarceration.Single(i => i.IncarcerationId == incarcerationId);
+                string releaseOut = inc.ReleaseOut.HasValue ? (inc.ReleaseOut.Value.ToString("yyyy-MM-dd HH:mm:ss")):
+                 DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");       
+                if (inc.DateIn != null)
+                {
+                    string dateIn = inc.DateIn.Value.ToString("yyyy-MM-dd HH:mm:ss");
+                    sqlQuery = $"{dataAoLookup.DetailSql} where {dataAoLookup.TableName}.{dataAoLookup.FieldName} = " +
+                            $" {(dataAoLookup.IsInmate == 1 ? inmateId : personId)} and cast({dataAoLookup.RefDateField} as datetime) " +
+                            $" BETWEEN cast('{dateIn}' as datetime) and cast('{releaseOut}' as datetime)";
+                }
+            }
+            else
+            {
+                sqlQuery = $"{dataAoLookup.DetailSql} where {dataAoLookup.TableName}.{dataAoLookup.FieldName} = " +
+                  $"{(dataAoLookup.IsInmate == 1 ? inmateId : personId)} order by RefOrderby desc";
+            }
+            DataSet ds = new DataSet();
+            SqlConnection connection = (SqlConnection)_context.Database.GetDbConnection();
+            connection.Open();
+            using (SqlCommand cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = sqlQuery;
+                cmd.CommandType = CommandType.Text;
+                SqlDataAdapter da = new SqlDataAdapter(cmd);
+                da.Fill(ds);
+                foreach (DataTable table in ds.Tables)
+                {
+                    foreach (DataRow row in table.Rows)
+                    {
+                        RecordsDataReferenceVm dataReference = new RecordsDataReferenceVm
+                        {
+                            ReferenceId = !string.IsNullOrEmpty(row["RefId"]?.ToString())
+                                ? Convert.ToInt32(row["RefId"].ToString())
+                                : default(int?)
+                        };
+                        recordsDataReferenceDetail.Add(dataReference);
+                    }
+                }
+            }
+
+            connection.Close();
+            return recordsDataReferenceDetail;
+        }
+        private void UpdateVerifyFlag(RecordsDataVm keepName)
+        {
+            Incarceration inc = _context.Incarceration.SingleOrDefault(x => !x.ReleaseOut.HasValue && x.Inmate.InmateActive == 1 &&
+                                                                            x.InmateId == keepName.InmateId);
+            if (inc != null)
+            {
+                inc.VerifyIDFlag = Convert.ToInt32(BookingVerifyType.NotVerified);
+                inc.VerifyIDDate = DateTime.Now;
+                inc.VerifyIDBy = _personnelId;
+                _context.SaveChanges();
+            }
+        }
+    }
+}

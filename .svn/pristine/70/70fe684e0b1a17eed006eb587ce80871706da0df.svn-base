@@ -1,0 +1,37 @@
+﻿using Microsoft.AspNetCore.Mvc;
+using ServerAPI.Services;
+using ServerAPI.ViewModels;
+
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    public class ContactHistoryController : Controller
+    {
+        private readonly IContactHistoryService _contactService;
+        public ContactHistoryController(IContactHistoryService contactService)
+        {
+            _contactService = contactService;
+            
+        }
+        [HttpGet("GetContacts")]
+        public IActionResult GetContacts(ContactHistoryVm searchValue)
+        {
+            return Ok(_contactService.GetContacts(searchValue));
+        }
+        [HttpGet("GetContactDetail")]
+        public IActionResult GetContactDetail(ContactHistoryDetailVm contacts, ContactHistoryVm searchValue)
+        {
+            return Ok(_contactService.GetContactDetail(contacts, searchValue));
+        }
+        [HttpGet("GetPersonnelContacts")]
+        public IActionResult GetPersonnelContacts(ContactHistoryVm searchValue)
+        {
+            return Ok(_contactService.GetPersonnelContacts(searchValue));
+        }
+        [HttpGet("GetPersonnelDetail")]
+        public IActionResult GetPersonnelDetail(ContactHistoryDetailVm contacts)
+        {
+            return Ok(_contactService.GetPersonnelDetail(contacts));
+        }
+    }
+}

@@ -1,0 +1,1673 @@
+﻿using GenerateTables.Models;
+using ServerAPI.Utilities;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using JetBrains.Annotations;
+using ServerAPI.ViewModels;
+
+// ReSharper disable once CheckNamespace
+namespace ServerAPI.Services
+{
+    [UsedImplicitly]
+    public class ContactHistoryService : IContactHistoryService
+    {
+        private readonly AAtims _context;
+        private readonly IPhotosService _photosService;
+
+        public ContactHistoryService(AAtims context, IPhotosService photosService)
+        {
+            _context = context;
+            _photosService = photosService;
+        }
+
+        #region Person Contacts
+        public List<ContactHistoryDetailVm> GetContacts(ContactHistoryVm searchValue)
+        {
+            List<LookupVm> lookUpList = _context.Lookup.Where(w => w.LookupInactive == 0 &&
+                (w.LookupType == LookupConstants.ARRTYPE ||
+                    w.LookupType == LookupConstants.RELATIONS ||
+                    w.LookupType == LookupConstants.DISCTYPE ||
+                    w.LookupType == LookupConstants.GRIEVTYPE ||
+                    w.LookupType == LookupConstants.VISREAS ||
+                    w.LookupType== LookupConstants.CLASSGROUP)).Select(
+                x => new LookupVm
+                {
+                    LookupIndex = x.LookupIndex,
+                    LookupDescription = x.LookupDescription
+                }).ToList();
+
+            List<ContactHistoryDetailVm> contactHistoryDetail = new List<ContactHistoryDetailVm>();
+            searchValue.FilterDate = searchValue.ToDate?.Date.AddHours(23).AddMinutes(59).AddSeconds(59) ?? DateTime.Now;
+            if (searchValue.IsHousingNumber)
+            {
+                List<ContactHistoryDetailVm> housingNumDetail = _context.HousingUnitMoveHistory
+                    .Where(s => s.Inmate.PersonId == searchValue.PersonId && s.HousingUnitToId.HasValue
+                        && (!searchValue.FromDate.HasValue || s.MoveDate <= searchValue.FilterDate &&
+                            (s.MoveDateThru >= searchValue.FromDate.Value.Date ||
+                                !s.MoveDateThru.HasValue)))
+                    .Select(x =>
+                        new ContactHistoryDetailVm
+                        {
+                            Id = x.HousingUnitMoveHistoryId,
+                            InmateId = x.Inmate.InmateId,
+                            PersonId = x.Inmate.PersonId,
+                            UnitId = x.HousingUnitTo.HousingUnitId,
+                            FromDate = x.MoveDate,
+                            ToDate = x.MoveDateThru,
+                            Type = ContactConstants.HOUSINGNUMBER,
+                            Detail = x.HousingUnitTo.HousingUnitId > 0 ? new ContactDetail
+                            {
+                                Detail1 = x.HousingUnitTo.HousingUnitLocation,
+                                Detail2 = x.HousingUnitTo.HousingUnitNumber,
+                                Detail3 = x.HousingUnitTo.HousingUnitBedNumber,
+                                Detail4 = x.HousingUnitTo.HousingUnitBedLocation
+                            } : new ContactDetail(),
+                        }).ToList();
+                housingNumDetail.ForEach(item =>
+                  {
+                      item.Count = GetHousingCount(item, searchValue);
+                  });
+                contactHistoryDetail.AddRange(housingNumDetail);
+            }
+
+            if (searchValue.IsHousingBed)
+            {
+                List<ContactHistoryDetailVm> housingNumDetail = _context.HousingUnitMoveHistory
+                    .Where(s => s.Inmate.PersonId == searchValue.PersonId && s.HousingUnitToId.HasValue
+                     && (!searchValue.FromDate.HasValue || s.MoveDate <= searchValue.FilterDate &&
+                     (s.MoveDateThru >= searchValue.FromDate.Value.Date ||!s.MoveDateThru.HasValue)))
+                    .Select(x =>
+                        new ContactHistoryDetailVm
+                        {
+                            Id = x.HousingUnitMoveHistoryId,
+                            InmateId = x.Inmate.InmateId,
+                            PersonId = x.Inmate.PersonId,
+                            FromDate = x.MoveDate,
+                            ToDate = x.MoveDateThru,
+                            UnitId = x.HousingUnitTo.HousingUnitId,
+                            Type = ContactConstants.HOUSINGBEDNUMBER,
+                            Detail = x.HousingUnitTo.HousingUnitId > 0 ? new ContactDetail
+                            {
+                                Detail1 = x.HousingUnitTo.HousingUnitLocation,
+                                Detail2 = x.HousingUnitTo.HousingUnitNumber,
+                                Detail3 = x.HousingUnitTo.HousingUnitBedNumber,
+                                Detail4 = x.HousingUnitTo.HousingUnitBedLocation
+                            } : new ContactDetail(),
+                        }).ToList();
+               
+                housingNumDetail.ForEach(item =>
+                {
+                    item.Count = GetHousingCount(item, searchValue);
+                });
+
+                contactHistoryDetail.AddRange(housingNumDetail);
+            }
+
+            if (searchValue.IsIntakeDate)
+            {
+                List<ContactHistoryDetailVm> lstIncDetails = _context.Incarceration
+                    .Where(x => x.Inmate.PersonId == searchValue.PersonId
+                                && (!searchValue.FromDate.HasValue || x.DateIn <= searchValue.FilterDate &&
+                                    (x.DateIn >= searchValue.FromDate.Value.Date ||
+                                        !x.DateIn.HasValue))).Select(s => new ContactHistoryDetailVm
+                                  {
+                                      Id = s.IncarcerationId,
+                                      PersonId = s.Inmate.PersonId,
+                                      InmateId = s.InmateId ?? 0,
+                                      FromDate = searchValue.AddHour > 0 ? s.DateIn.Value.AddHours(-searchValue.AddHour) : s.DateIn,
+                                      ToDate = searchValue.AddHour > 0 ? s.DateIn.Value.AddHours(searchValue.AddHour) : s.DateIn,
+                                      Type = ContactConstants.INTAKE
+                                  }).ToList();
+                int[] inmateIds = lstIncDetails.Select(x => x.InmateId).ToArray();
+                List<BookingDataVm> booking = _context.IncarcerationArrestXref
+                    .Where(x => inmateIds.Contains(x.Arrest.InmateId ?? 0)).Select(x => new BookingDataVm
+                    {
+                        IncarcerationId = x.IncarcerationId,
+                        ArrestId = x.Arrest.ArrestId,
+                        ArrestBookingType = lookUpList
+                            .FirstOrDefault(l => l.LookupType == LookupConstants.ARRTYPE && 
+                                l.LookupIndex == Convert.ToInt32(x.Arrest.ArrestType))
+                            .LookupDescription,
+                        ArrestBookingNumber = x.Arrest.ArrestBookingNo,
+                    }).ToList();
+                lstIncDetails.ForEach(item =>
+                {
+                    BookingDataVm data = booking.FirstOrDefault(x => x.IncarcerationId == item.Id);
+                    if (data != null)
+                    {
+                        item.Detail = new ContactDetail
+                        {
+                            Detail1 = data.ArrestBookingNumber,
+                            Detail2 = data.ArrestBookingType
+                        };
+                    }
+                    item.Count = GetIntakeCount(item, searchValue);
+                });
+                contactHistoryDetail.AddRange(lstIncDetails);
+            }
+
+            if (searchValue.IsVisitorHistory && searchValue.InmateId > 0)
+            {
+                List<ContactHistoryDetailVm> schedule = _context.VisitToVisitor
+                    .Where(x => x.Visit.InmateId == searchValue.InmateId && (!searchValue.FromDate.HasValue ||
+                        x.Visit.StartDate <= searchValue.FilterDate &&
+                        (x.Visit.EndDate >= searchValue.FromDate.Value.Date ||
+                            !x.Visit.EndDate.HasValue))).Select(x => new ContactHistoryDetailVm
+                    {
+                        Id = x.Visit.LocationId ?? 0,
+                        PersonId = x.Visit.Inmate.PersonId,
+                        InmateId = x.Visit.Inmate.InmateId,
+                        FromDate = x.Visit.StartDate,
+                        ToDate = x.Visit.EndDate,
+                        Type = ContactConstants.VISIT,
+                        Detail1 = x.Visit.Location.PrivilegeDescription,
+                        Detail3 = lookUpList.FirstOrDefault(l =>
+                                l.LookupType == LookupConstants.VISREAS &&
+                                Equals(l.LookupIndex, (double?) x.Visit.ReasonId))
+                            .LookupDescription
+                    }).ToList();
+                schedule.ForEach(item => item.Count = GetVisitorCount(item, searchValue));
+                contactHistoryDetail.AddRange(schedule);
+            }
+
+            if (searchValue.IsIncidentDate)
+            {
+                List<ContactHistoryDetailVm> discInmate = _context.DisciplinaryInmate
+                    .Where(x => x.Inmate.PersonId == searchValue.PersonId && (!searchValue.FromDate.HasValue ||
+                        x.DisciplinaryIncident.DisciplinaryIncidentDate <= searchValue.FilterDate &&
+                        (x.DisciplinaryIncident.DisciplinaryIncidentDate >= searchValue.FromDate.Value.Date ||
+                           !x.DisciplinaryIncident.DisciplinaryIncidentDate.HasValue)))
+                    .Select(x => new ContactHistoryDetailVm
+                    {
+                        PersonId = x.Inmate.PersonId,
+                        Id = x.DisciplinaryIncident.DisciplinaryIncidentId,
+                        FromDate = x.DisciplinaryIncident.DisciplinaryIncidentDate,
+                        ToDate = x.DisciplinaryIncident.DisciplinaryIncidentDate,
+                        Detail = new ContactDetail
+                        {
+                            Detail1 = lookUpList.FirstOrDefault(l => l.LookupType == LookupConstants.DISCTYPE &&
+                                                                     Equals(l.LookupIndex, (double?)x.DisciplinaryIncident.DisciplinaryType))
+                                .LookupDescription
+                        },
+                        Type = ContactConstants.INCIDENT
+                    }).ToList();
+                discInmate.ForEach(item => { item.Count = GetIncidentCount(item, searchValue); });
+                contactHistoryDetail.AddRange(discInmate);
+            }
+
+            if (searchValue.IsGrievance)
+            {
+                List<ContactHistoryDetailVm> housingNumDetail = _context.GrievanceInmate
+                    .Where(x => x.Inmate.PersonId == searchValue.PersonId && (!searchValue.FromDate.HasValue
+                        || x.Grievance.DateOccured <= searchValue.FilterDate &&
+                        (x.Grievance.DateOccured >= searchValue.FromDate.Value.Date ||
+                            !x.Grievance.DateOccured.HasValue))).Select(s => new ContactHistoryDetailVm
+                            {
+                                Id = s.Grievance.GrievanceId,
+                                PersonId = s.Inmate.PersonId,
+                                FromDate = s.Grievance.DateOccured,
+                                ToDate = s.Grievance.DateOccured,
+                                Detail = new ContactDetail
+                                {
+                                    Detail1 = lookUpList
+                                        .SingleOrDefault(w =>
+                                            w.LookupType == LookupConstants.GRIEVTYPE && Equals(w.LookupIndex,
+                                                (double?)s.Grievance.GrievanceType))
+                                        .LookupDescription,
+                                },
+                                Type = ContactConstants.GRIEVANCE
+                            }).ToList();
+                housingNumDetail.ForEach(item => { item.Count = GetGrievanceCount(item, searchValue); });
+                contactHistoryDetail.AddRange(housingNumDetail);
+            }
+
+            if (searchValue.IsClassify)
+            {
+                ContactHistoryDetailVm housingNumDetail = _context.PersonClassification
+                    .Where(s => s.PersonId == searchValue.PersonId).Select(x => new ContactHistoryDetailVm
+                    {
+                        Id = x.PersonClassificationId,
+                        PersonId = x.PersonId,
+                        Detail = new ContactDetail
+                        {
+                            Detail1 = lookUpList.SingleOrDefault(f => f.LookupIndex == x.PersonClassificationTypeId &&
+                              f.LookupType == LookupConstants.CLASSGROUP).LookupDescription
+                        },
+                        Detail1Id = x.PersonClassificationTypeId,
+                    }).FirstOrDefault();
+                List<ContactHistoryDetailVm> lstDetail =
+                    _context.Incarceration.Where(x => x.Inmate.PersonId == searchValue.PersonId &&
+                        (!searchValue.FromDate.HasValue ||
+                            x.DateIn <= searchValue.FilterDate && (x.ReleaseOut >= searchValue.FromDate.Value.Date ||
+                                !x.ReleaseOut.HasValue))).Select(s =>
+                        new ContactHistoryDetailVm
+                        {
+                            PersonId = s.Inmate.PersonId,
+                            FromDate = s.DateIn,
+                            ToDate = s.ReleaseOut,
+                            Detail = new ContactDetail
+                            {Detail1 = housingNumDetail.Detail.Detail1},
+                            Detail1Id = housingNumDetail.Detail1Id,
+                            Type = ContactConstants.JMSCLASSIFY
+                        }).ToList();
+                lstDetail.ForEach(item => { item.Count = GetClassifyCount(item, searchValue); });
+
+                contactHistoryDetail.AddRange(lstDetail);
+            }
+
+            if (searchValue.IsKeepSep && searchValue.InmateId > 0)
+            {
+                List<ContactHistoryDetailVm> inmateTwo = _context.KeepSeparate
+                    .Where(x => x.KeepSeparateInmate2Id == searchValue.InmateId).Select(x => new ContactHistoryDetailVm
+                    {
+                        Type = x.KeepSeparateType,
+                        InmateId = x.KeepSeparateInmate1Id,
+                    }).ToList();
+                int[] keepSepTo = inmateTwo.Select(x => x.InmateId).ToArray();
+                List<ContactHistoryDetailVm> keepSepToInc = _context.Incarceration
+                    .Where(s => keepSepTo.Contains(s.Inmate.InmateId) && (!searchValue.FromDate.HasValue ||
+                              s.DateIn <= searchValue.FilterDate && (s.ReleaseOut >= searchValue.FromDate.Value.Date ||
+                                  !s.ReleaseOut.HasValue)))
+                    .Select(x => new ContactHistoryDetailVm
+                    {
+                        FromDate = x.DateIn,
+                        ToDate = x.ReleaseOut ?? DateTime.Now,
+                        InmateId = x.Inmate.InmateId,
+                        PersonId = x.Inmate.PersonId,
+                        Type = ContactConstants.JMSKEEPSEP,
+                        Detail =  new ContactDetail
+                        {
+                            Detail1 = inmateTwo.FirstOrDefault(s => s.InmateId == x.Inmate.InmateId).Type
+                        }
+                    }).ToList();
+
+                List<ContactHistoryDetailVm> inmateOne = _context.KeepSeparate
+                    .Where(x => x.KeepSeparateInmate1Id == searchValue.InmateId).Select(x => new ContactHistoryDetailVm
+                    {
+                        Type = x.KeepSeparateType,
+                        InmateId = x.KeepSeparateInmate1Id
+                    }).ToList();
+                int[] keepSepFrom = inmateOne.Select(x => x.InmateId).ToArray();
+
+                List<ContactHistoryDetailVm> keepSepFromInc = _context.Incarceration
+                    .Where(s => keepSepFrom.Contains(s.Inmate.InmateId) && (!searchValue.FromDate.HasValue ||
+                           s.DateIn <= searchValue.FilterDate && (s.ReleaseOut >= searchValue.FromDate.Value.Date ||
+                               s.ReleaseOut == null)))
+                    .Select(x => new ContactHistoryDetailVm
+                    {
+                        FromDate = x.DateIn,
+                        ToDate = x.ReleaseOut ?? DateTime.Now,
+                        InmateId = x.Inmate.InmateId,
+                        PersonId = x.Inmate.PersonId,
+                        Type = ContactConstants.JMSKEEPSEP,
+                        Detail = new ContactDetail
+                        {
+                            Detail1 = inmateTwo.FirstOrDefault(s => s.InmateId == x.Inmate.InmateId).Type
+                        }
+                    }).ToList();
+                keepSepToInc.AddRange(keepSepFromInc);
+                keepSepToInc.ForEach(item => { item.Count = GetKeepSepCount(item, searchValue); });
+                contactHistoryDetail.AddRange(keepSepToInc);
+            }
+
+            return contactHistoryDetail;
+        }
+        private int GetHousingCount(ContactHistoryDetailVm item, ContactHistoryVm searchValue)
+        {
+            item.ToDate = item.ToDate?.Date.AddHours(23).AddMinutes(59).AddSeconds(59) ?? DateTime.Now;
+            List<ContactHistoryDetailVm> housing = _context.HousingUnitMoveHistory.Where(s =>
+                s.Inmate.PersonId != item.PersonId && s.HousingUnitToId.HasValue
+                && (!searchValue.FromDate.HasValue || s.MoveDate <= searchValue.FilterDate &&
+                    (s.MoveDateThru >= searchValue.FromDate.Value.Date ||
+                        !s.MoveDateThru.HasValue)) && s.MoveDate <= item.ToDate &&
+                (s.MoveDateThru >= item.FromDate || !s.MoveDateThru.HasValue) &&
+                s.Inmate.Person.Address.Any(a => a.PersonId == s.Inmate.PersonId)).Select(x =>
+                  new ContactHistoryDetailVm
+                  {
+                      FromDate = x.MoveDate,
+                      ToDate = x.MoveDateThru,
+                      Detail = x.HousingUnitTo.HousingUnitId > 0 ? new ContactDetail
+                      {
+                          Detail1 = x.HousingUnitTo.HousingUnitLocation,
+                          Detail2 = x.HousingUnitTo.HousingUnitNumber,
+                          Detail3 = x.HousingUnitTo.HousingUnitBedNumber,
+                          Detail4 = x.HousingUnitTo.HousingUnitBedLocation
+                      } : new ContactDetail(),
+                  }).ToList();
+            if (item.Type == ContactConstants.HOUSINGNUMBER)
+            {
+                housing = housing
+                    .Where(x => !string.IsNullOrEmpty(x.Detail.Detail1) && !string.IsNullOrEmpty(x.Detail.Detail2) &&
+                                !string.IsNullOrEmpty(item.Detail.Detail1) && !string.IsNullOrEmpty(item.Detail.Detail2)
+                                && x.Detail.Detail1.Trim() == item.Detail.Detail1.Trim() &&
+                                x.Detail.Detail2.Trim() == item.Detail.Detail2.Trim())
+                    .ToList();
+            }
+
+           else 
+            {
+                housing = housing.Where(x =>
+                    !string.IsNullOrEmpty(x.Detail.Detail3) && !string.IsNullOrEmpty(item.Detail.Detail3) &&
+                    x.Detail.Detail3.Trim() == item.Detail.Detail3.Trim()).ToList();
+            }
+            return housing.Count;
+        }
+        private int GetIntakeCount(ContactHistoryDetailVm item, ContactHistoryVm searchValue)
+        {
+            List<ContactHistoryDetailVm> lstIncDetailVms = _context.Incarceration.Where(s =>
+                    s.Inmate.PersonId != item.PersonId
+                    && (!searchValue.FromDate.HasValue || s.DateIn <= searchValue.FilterDate &&
+                        (s.DateIn >= searchValue.FromDate.Value.Date || !s.DateIn.HasValue)) && 
+                    s.DateIn <= item.ToDate && s.DateIn >= item.FromDate &&
+                    s.Inmate.Person.Address.Any(a => a.PersonId == s.Inmate.PersonId))
+                .Select(x =>
+                    new ContactHistoryDetailVm
+                    {
+                        Id = x.IncarcerationId,
+                        InmateId = x.Inmate.InmateId,
+                        PersonId = x.Inmate.PersonId,
+                    }).ToList();
+            return lstIncDetailVms.Count;
+        }
+        private int GetVisitorCount(ContactHistoryDetailVm item, ContactHistoryVm searchValue)
+        {
+            item.ToDate = item.ToDate?.Date.AddHours(23).AddMinutes(59).AddSeconds(59) ?? DateTime.Now;
+            List<ContactHistoryDetailVm> schedule = _context.VisitToVisitor
+                .Where(x => x.Visit.InmateId != item.InmateId && x.Visit.StartDate!=null &&
+                            x.Visit.EndDate!=null && (!searchValue.FromDate.HasValue ||
+                        x.Visit.StartDate <= searchValue.FilterDate &&
+                        (x.Visit.EndDate >= searchValue.FromDate.Value.Date ||
+                            !x.Visit.EndDate.HasValue)) && x.Visit.StartDate <= item.ToDate &&
+                    (x.Visit.EndDate >= item.FromDate || !x.Visit.EndDate.HasValue) &&
+                    x.Visit.Inmate.Person.Address.Any(a => a.PersonId == x.Visit.Inmate.PersonId))
+                .Select(x => new ContactHistoryDetailVm
+                {
+                    Id = x.Visit.LocationId ?? 0,
+                    PersonId = x.Visit.Inmate.PersonId,
+                    InmateId = x.Visit.Inmate.InmateId,
+                    FromDate = x.Visit.StartDate,
+                    ToDate = x.Visit.EndDate,
+                    Type = ContactConstants.VISIT
+                }).ToList();
+            return schedule.Count;
+        }
+        private int GetIncidentCount(ContactHistoryDetailVm item, ContactHistoryVm searchValue)
+        {
+            item.ToDate = item.ToDate?.Date.AddHours(23).AddMinutes(59).AddSeconds(59) ?? DateTime.Now;
+            List<ContactHistoryDetailVm> discInmate = _context.DisciplinaryInmate
+                .Where(x => x.Inmate.PersonId != item.PersonId && (!searchValue.FromDate.HasValue ||
+                        x.DisciplinaryIncident.DisciplinaryIncidentDate <= searchValue.FilterDate &&
+                        (x.DisciplinaryIncident.DisciplinaryIncidentDate >= searchValue.FromDate.Value.Date ||
+                           ! x.DisciplinaryIncident.DisciplinaryIncidentDate.HasValue)) &&
+                    x.DisciplinaryIncident.DisciplinaryIncidentDate <= item.ToDate &&
+                    x.DisciplinaryIncident.DisciplinaryIncidentDate >= item.FromDate)
+                .Select(x => new ContactHistoryDetailVm
+                {
+                    PersonId = x.Inmate.PersonId,
+                    Id = x.DisciplinaryIncident.DisciplinaryIncidentId,
+                    FromDate = x.DisciplinaryIncident.DisciplinaryIncidentDate,
+                    ToDate = x.DisciplinaryIncident.DisciplinaryIncidentDate,
+                }).ToList();
+
+            return discInmate.Count;
+        }
+        private int GetGrievanceCount(ContactHistoryDetailVm item, ContactHistoryVm searchValue)
+        {
+            item.ToDate = item.ToDate?.Date.AddHours(23).AddMinutes(59).AddSeconds(59) ?? DateTime.Now;
+            List<ContactHistoryDetailVm> grievanceList = _context.GrievanceInmate
+                .Where(x => x.Inmate.PersonId != item.PersonId && (!searchValue.FromDate.HasValue ||
+                        x.Grievance.DateOccured <= searchValue.FilterDate &&
+                        (x.Grievance.DateOccured >= searchValue.FromDate.Value.Date ||
+                            !x.Grievance.DateOccured.HasValue)) &&
+                    x.Grievance.DateOccured <= item.ToDate && x.Grievance.DateOccured >= item.FromDate &&
+                    x.Inmate.Person.Address.Any(a => a.PersonId == x.Inmate.PersonId)).Select(
+                    s => new ContactHistoryDetailVm
+                    {
+                        Id = s.Grievance.GrievanceId,
+                        PersonId = s.Inmate.PersonId,
+                        FromDate = s.Grievance.DateOccured,
+                        ToDate = s.Grievance.DateOccured
+                    }).ToList();
+            return grievanceList.Count;
+        }
+        private int GetClassifyCount(ContactHistoryDetailVm item, ContactHistoryVm searchValue)
+        {
+            List<Lookup> lookupList = _context.Lookup.Where(w => w.LookupType == LookupConstants.CLASSGROUP).ToList();
+            item.ToDate = item.ToDate?.Date.AddHours(23).AddMinutes(59).AddSeconds(59) ?? DateTime.Now;
+            List<ContactHistoryDetailVm> lstClassify = _context.PersonClassification
+                .Where(s => s.PersonId != item.PersonId && s.PersonClassificationTypeId == item.Detail1Id).Select(
+                    x => new ContactHistoryDetailVm
+                    {
+                        Id = x.PersonClassificationId,
+                        PersonId = x.PersonId,
+                        Detail1 = lookupList.SingleOrDefault(f => f.LookupIndex == x.PersonClassificationTypeId).LookupDescription,
+                        Detail1Id = x.PersonClassificationTypeId,
+                    }).ToList();
+            int?[] perInt = lstClassify.Select(x => x.PersonId).ToArray();
+            List<ContactHistoryDetailVm> lstInc =
+                _context.Incarceration.Where(x => perInt.Contains(x.Inmate.PersonId) && (!searchValue.FromDate.HasValue ||
+                        x.DateIn <= searchValue.FilterDate && (x.ReleaseOut >= searchValue.FromDate.Value.Date ||
+                            x.ReleaseOut == null)) && x.DateIn <= item.ToDate && (x.ReleaseOut >=
+                        item.FromDate || !x.ReleaseOut.HasValue) &&
+                     x.Inmate.Person.Address.Any(a => a.PersonId == x.Inmate.PersonId))
+                    .Select(s => new ContactHistoryDetailVm
+                    {
+                        PersonId = s.Inmate.PersonId,
+                        FromDate = s.DateIn,
+                        ToDate = s.ReleaseOut,
+                    }).ToList();
+
+            return lstInc.Count;
+        }
+        private int GetKeepSepCount(ContactHistoryDetailVm item, ContactHistoryVm searchValue)
+        {
+            item.ToDate = item.ToDate?.Date.AddHours(23).AddMinutes(59).AddSeconds(59) ?? DateTime.Now;
+            List<ContactHistoryDetailVm> inmateTwo = _context.KeepSeparate
+                .Where(x => x.KeepSeparateInmate2Id == searchValue.InmateId).Select(x => new ContactHistoryDetailVm
+                {
+                    InmateId = x.KeepSeparateInmate1Id,
+                }).ToList();
+            int[] keepSepTo = inmateTwo.Select(x => x.InmateId).ToArray();
+            List<ContactHistoryDetailVm> keepSepToInc = _context.Incarceration
+                .Where(s => keepSepTo.Contains(s.Inmate.InmateId) && (!searchValue.FromDate.HasValue ||
+                     s.DateIn <= searchValue.FilterDate && (s.ReleaseOut >= searchValue.FromDate.Value.Date ||
+                         !s.ReleaseOut.HasValue)))
+                .Select(x => new ContactHistoryDetailVm
+                {
+                    FromDate = x.DateIn,
+                    ToDate = x.ReleaseOut,
+                    InmateId = x.Inmate.InmateId,
+                    PersonId = x.Inmate.PersonId,
+                    Type = ContactConstants.JMSKEEPSEP
+                }).ToList();
+
+            List<ContactHistoryDetailVm> inmateOne = _context.KeepSeparate
+                .Where(x => x.KeepSeparateInmate1Id == searchValue.InmateId).Select(x => new ContactHistoryDetailVm
+                {
+                    InmateId = x.KeepSeparateInmate1Id
+                }).ToList();
+            int[] keepSepFrom = inmateOne.Select(x => x.InmateId).ToArray();
+
+            List<ContactHistoryDetailVm> keepSepFromInc = _context.Incarceration
+                .Where(s => keepSepFrom.Contains(s.Inmate.InmateId) && (!searchValue.FromDate.HasValue ||
+                      s.DateIn <= searchValue.FilterDate && (s.ReleaseOut >= searchValue.FromDate.Value.Date ||
+                          s.ReleaseOut == null)))
+                .Select(x => new ContactHistoryDetailVm
+                {
+                    FromDate = x.DateIn,
+                    ToDate = x.ReleaseOut,
+                    InmateId = x.Inmate.InmateId,
+                    PersonId = x.Inmate.PersonId,
+                    Type = ContactConstants.JMSKEEPSEP
+                }).ToList();
+            keepSepToInc.AddRange(keepSepFromInc);
+            List<ContactHistoryDetailVm> lstInc = keepSepToInc.Where(x => x.FromDate <= item.ToDate &&
+                (x.ToDate >= item.FromDate ||
+                    !x.ToDate.HasValue)).Select(x =>
+                new ContactHistoryDetailVm
+                {
+                    PersonId = x.PersonId,
+                    FromDate = x.FromDate,
+                    ToDate = x.ToDate
+                }).ToList();
+
+            int?[] personId = lstInc.Select(x => x.PersonId).ToArray();
+            List<Address> addresses = _context.Address.Where(x => personId.Contains(x.PersonId)).ToList();
+            int?[] addPersonId = addresses.Select(x => x.PersonId).ToArray();
+            lstInc = lstInc.Where(x => addPersonId.Contains(x.PersonId)).ToList();
+            return lstInc.Count;
+        }
+        public List<ContactHistoryDetailVm> GetContactDetail(ContactHistoryModelVm modelVm)
+        {
+            List<LookupVm> lookUpList = _context.Lookup.Where(w => w.LookupInactive == 0 && (w.LookupType == LookupConstants.ARRTYPE ||
+                                                                    w.LookupType == LookupConstants.GRIEVTYPE ||
+                                                                    w.LookupType == LookupConstants.VISREAS)).Select(
+                x => new LookupVm
+                {
+                    LookupIndex = x.LookupIndex,
+                    LookupDescription = x.LookupDescription
+                }).ToList();
+            modelVm.FilterDate = modelVm.SearchToDate?.Date.AddHours(23).AddMinutes(59).AddSeconds(59) ?? DateTime.Now;
+            List<ContactHistoryDetailVm> contactDetails = new List<ContactHistoryDetailVm>();
+            if (modelVm.Type == ContactConstants.HOUSINGNUMBER)
+            {
+                contactDetails = _context.HousingUnitMoveHistory.Where(s =>
+                        s.Inmate.PersonId != modelVm.PersonId && s.HousingUnitToId.HasValue &&
+                        (!modelVm.SearchFromDate.HasValue || s.MoveDate <= modelVm.FilterDate &&
+                            (s.MoveDateThru >= modelVm.SearchFromDate.Value.Date ||
+                                !s.MoveDateThru.HasValue)) && s.MoveDate <= modelVm.ToDate &&
+                        (s.MoveDateThru >= modelVm.FromDate || !s.MoveDateThru.HasValue) &&
+                     s.Inmate.Person.Address.Any(a => a.PersonId == s.Inmate.PersonId))
+                    .Select(x =>
+                        new ContactHistoryDetailVm
+                        {
+                            Id = x.HousingUnitMoveHistoryId,
+                            InmateId = x.Inmate.InmateId,
+                            PersonId = x.Inmate.PersonId,
+                            InmateNumber = x.Inmate.InmateNumber,
+                            FromDate = x.MoveDate,
+                            ToDate = x.MoveDateThru,
+                            UnitId = x.HousingUnitTo.HousingUnitId,
+                            Type = modelVm.Type,
+                            Detail = x.HousingUnitTo.HousingUnitId > 0 ? new ContactDetail
+                            {
+                                Detail1 = x.HousingUnitTo.HousingUnitLocation,
+                                Detail2 = x.HousingUnitTo.HousingUnitNumber,
+                                Detail3 = x.HousingUnitTo.HousingUnitBedNumber,
+                                Detail4 = x.HousingUnitTo.HousingUnitBedLocation
+                            } : new ContactDetail(),
+                        }).ToList();
+              
+                contactDetails = contactDetails
+                    .Where(x => !string.IsNullOrEmpty(x.Detail.Detail1) && !string.IsNullOrEmpty(x.Detail.Detail2) &&
+                                !string.IsNullOrEmpty(modelVm.Detail1) && !string.IsNullOrEmpty(modelVm.Detail2)
+                                && x.Detail.Detail1.Trim() == modelVm.Detail1.Trim() && x.Detail.Detail2.Trim() == modelVm.Detail2.Trim())
+                    .ToList();
+                int?[] personId = contactDetails.Select(x => x.PersonId).ToArray();
+                List<Address> addresses = _context.Address.Where(x => personId.Contains(x.PersonId)).ToList();
+                int?[] addPersonId = addresses.Select(x => x.PersonId).ToArray();
+                contactDetails = contactDetails.Where(x => addPersonId.Contains(x.PersonId)).ToList();
+                contactDetails = GetPersonDetail(contactDetails, personId, addresses, modelVm.Type);
+            }
+
+            if(modelVm.Type==ContactConstants.HOUSINGBEDNUMBER)
+            {
+                contactDetails = _context.HousingUnitMoveHistory.Where(s =>
+                        s.Inmate.PersonId != modelVm.PersonId && s.HousingUnitToId.HasValue &&
+                        (!modelVm.SearchFromDate.HasValue || s.MoveDate <= modelVm.FilterDate &&
+                            (s.MoveDateThru >= modelVm.SearchFromDate.Value.Date ||
+                                !s.MoveDateThru.HasValue)) && s.MoveDate <= modelVm.ToDate &&
+                        (s.MoveDateThru >= modelVm.FromDate || !s.MoveDateThru.HasValue))
+                    .Select(x =>
+                        new ContactHistoryDetailVm
+                        {
+                            Id = x.HousingUnitMoveHistoryId,
+                            InmateId = x.Inmate.InmateId,
+                            PersonId = x.Inmate.PersonId,
+                            InmateNumber = x.Inmate.InmateNumber,
+                            FromDate = x.MoveDate,
+                            ToDate = x.MoveDateThru,
+                            UnitId = x.HousingUnitTo.HousingUnitId,
+                            Type = modelVm.Type,
+                            Detail = x.HousingUnitTo.HousingUnitId > 0 ? new ContactDetail
+                            {
+                                Detail1 = x.HousingUnitTo.HousingUnitLocation,
+                                Detail2 = x.HousingUnitTo.HousingUnitNumber,
+                                Detail3 = x.HousingUnitTo.HousingUnitBedNumber,
+                                Detail4 = x.HousingUnitTo.HousingUnitBedLocation
+                            } : new ContactDetail(),
+                        }).ToList();
+                 contactDetails = contactDetails.Where(x =>
+                     !string.IsNullOrEmpty(x.Detail.Detail3) && !string.IsNullOrEmpty(modelVm.Detail3) &&
+                     x.Detail.Detail3.Trim() == modelVm.Detail3.Trim()).ToList();
+
+                int?[] personId = contactDetails.Select(x => x.PersonId).ToArray();
+                List<Address> addresses = _context.Address.Where(x => personId.Contains(x.PersonId)).ToList();
+                int?[] addPersonId = addresses.Select(x => x.PersonId).ToArray();
+                contactDetails = contactDetails.Where(x => addPersonId.Contains(x.PersonId)).ToList();
+                contactDetails = GetPersonDetail(contactDetails, personId, addresses, modelVm.Type);
+            }
+            if (modelVm.Type == ContactConstants.INTAKE)
+            {
+                List<ContactHistoryDetailVm> lstIncDetailVms = _context.Incarceration.Where(s =>
+                        s.Inmate.PersonId != modelVm.PersonId && (!modelVm.SearchFromDate.HasValue ||
+                            s.DateIn <= modelVm.FilterDate &&
+                            (s.DateIn >= modelVm.SearchFromDate.Value.Date || s.DateIn == null)) &&
+                        s.DateIn <= modelVm.ToDate && s.DateIn >= modelVm.FromDate)
+                    .Select(x =>
+                        new ContactHistoryDetailVm
+                        {
+                            Id = x.IncarcerationId,
+                            InmateId = x.Inmate.InmateId,
+                            PersonId = x.Inmate.PersonId,
+                            FromDate = x.DateIn,
+                            ToDate = x.DateIn,
+                            Type = modelVm.Type
+                        }).ToList();
+                int[] inmateIds = lstIncDetailVms.Select(x => x.InmateId).ToArray();
+                List<BookingDataVm> booking = _context.IncarcerationArrestXref
+                    .Where(x => inmateIds.Contains(x.Arrest.InmateId ?? 0)).Select(x => new BookingDataVm
+                    {
+                        IncarcerationId = x.IncarcerationId,
+                        ArrestId = x.Arrest.ArrestId,
+                        ArrestBookingType = lookUpList
+                            .FirstOrDefault(l => l.LookupType == LookupConstants.ARRTYPE && 
+                                l.LookupIndex == Convert.ToInt32(x.Arrest.ArrestType)).LookupDescription,
+                        ArrestBookingNumber = x.Arrest.ArrestBookingNo,
+                    }).ToList();
+                lstIncDetailVms.ForEach(i =>
+                {
+                    BookingDataVm data = booking.FirstOrDefault(x => x.IncarcerationId == modelVm.Id);
+                    if (data != null)
+                    {
+                        i.Detail = new ContactDetail
+                        {
+                             Detail1 = data.ArrestBookingNumber,
+                             Detail2 = data.ArrestBookingType
+                        };
+                    }
+                });
+                int?[] personId = lstIncDetailVms.Select(x => x.PersonId).ToArray();
+                List<Address> addresses = _context.Address.Where(x => personId.Contains(x.PersonId)).ToList();
+                int?[] addPersonId = addresses.Select(x => x.PersonId).ToArray();
+                lstIncDetailVms = lstIncDetailVms.Where(x => addPersonId.Contains(x.PersonId)).ToList();
+                contactDetails = GetPersonDetail(lstIncDetailVms, personId, addresses, modelVm.Type);
+            }
+
+            if (modelVm.Type == ContactConstants.VISIT)
+            {
+                List<ContactHistoryDetailVm> schedule = _context.VisitToVisitor
+                    .Where(x => x.Visit.InmateId != modelVm.InmateId && (!modelVm.SearchFromDate.HasValue ||
+                            x.Visit.StartDate <= modelVm.FilterDate &&
+                            (x.Visit.EndDate >= modelVm.SearchFromDate.Value.Date ||
+                             !x.Visit.EndDate.HasValue)) && x.Visit.StartDate <= modelVm.ToDate &&
+                        (x.Visit.EndDate >= modelVm.FromDate || !x.Visit.EndDate.HasValue))
+                    .Select(x => new ContactHistoryDetailVm
+                    {
+                        Id = x.Visit.LocationId ?? 0,
+                        PersonId = x.Visit.Inmate.PersonId,
+                        InmateId = x.Visit.Inmate.InmateId,
+                        FromDate = x.Visit.StartDate,
+                        ToDate = x.Visit.EndDate,
+                        Type = ContactConstants.VISIT,
+                        Detail = new ContactDetail
+                        {
+                            Detail1 = x.Visit.Location.PrivilegeDescription,
+                            Detail3 = lookUpList.FirstOrDefault(l =>
+                                    l.LookupType == LookupConstants.VISREAS &&
+                                    Equals(l.LookupIndex, (double?)x.Visit.ReasonId))
+                                .LookupDescription
+                        }
+                    }).ToList();
+                int?[] personId = schedule.Select(x => x.PersonId).ToArray();
+                List<Address> addresses = _context.Address.Where(x => personId.Contains(x.PersonId)).ToList();
+                int?[] addPersonId = addresses.Select(x => x.PersonId).ToArray();
+                schedule = schedule.Where(x => addPersonId.Contains(x.PersonId)).ToList();
+                contactDetails = GetPersonDetail(schedule, personId, addresses, modelVm.Type);
+            }
+            if (modelVm.Type == ContactConstants.INCIDENT)
+            {
+                List<ContactHistoryDetailVm> discInmate = _context.DisciplinaryInmate
+                    .Where(x => x.Inmate.PersonId != modelVm.PersonId && (!modelVm.SearchFromDate.HasValue ||
+                      x.DisciplinaryIncident.DisciplinaryIncidentDate <= modelVm.FilterDate &&
+                      (x.DisciplinaryIncident.DisciplinaryIncidentDate >= modelVm.SearchFromDate.Value.Date ||
+                       !x.DisciplinaryIncident.DisciplinaryIncidentDate.HasValue)) && x.DisciplinaryIncident.DisciplinaryIncidentDate <= modelVm.ToDate
+                                && x.DisciplinaryIncident.DisciplinaryIncidentDate >= modelVm.FromDate)
+                    .Select(x => new ContactHistoryDetailVm
+                    {
+                        PersonId = x.Inmate.PersonId,
+                        Id = x.DisciplinaryIncident.DisciplinaryIncidentId,
+                        FromDate = x.DisciplinaryIncident.DisciplinaryIncidentDate,
+                        ToDate = x.DisciplinaryIncident.DisciplinaryIncidentDate,
+                        Type = modelVm.Type
+                    }).ToList();
+
+                int?[] personId = discInmate.Select(x => x.PersonId).ToArray();
+                List<Address> addresses = _context.Address.Where(x => personId.Contains(x.PersonId)).ToList();
+                int?[] addPersonId = addresses.Select(x => x.PersonId).ToArray();
+                discInmate = discInmate.Where(x => addPersonId.Contains(x.PersonId)).ToList();
+                contactDetails = GetPersonDetail(discInmate, personId, addresses, modelVm.Type);
+            }
+
+            if (modelVm.Type == ContactConstants.GRIEVANCE)
+            {
+                List<ContactHistoryDetailVm> grievanceList = _context.GrievanceInmate
+                    .Where(x => x.Inmate.PersonId != modelVm.PersonId && (!modelVm.SearchFromDate.HasValue ||
+                            x.Grievance.DateOccured <= modelVm.FilterDate &&
+                            (x.Grievance.DateOccured >= modelVm.SearchFromDate.Value.Date ||
+                                x.Grievance.DateOccured == null)) && x.Grievance.DateOccured <= modelVm.ToDate &&
+                        x.Grievance.DateOccured >= modelVm.FromDate)
+                    .Select(
+                        s => new ContactHistoryDetailVm
+                        {
+                            Id = s.Grievance.GrievanceId,
+                            PersonId = s.Inmate.PersonId,
+                            FromDate = s.Grievance.DateOccured,
+                            ToDate = s.Grievance.DateOccured,
+                            Type = modelVm.Type
+                        }).ToList();
+                int?[] personId = grievanceList.Select(x => x.PersonId).ToArray();
+                List<Address> addresses = _context.Address.Where(x => personId.Contains(x.PersonId)).ToList();
+                int?[] addPersonId = addresses.Select(x => x.PersonId).ToArray();
+                grievanceList = grievanceList.Where(x => addPersonId.Contains(x.PersonId)).ToList();
+                contactDetails = GetPersonDetail(grievanceList, personId, addresses, modelVm.Type);
+            }
+
+            if (modelVm.Type == ContactConstants.JMSCLASSIFY)
+            {
+                List<Lookup> lookupList = _context.Lookup.Where(w => w.LookupType == LookupConstants.CLASSGROUP).ToList();
+                List<ContactHistoryDetailVm> lstClassify = _context.PersonClassification
+                    .Where(s => s.PersonId != modelVm.PersonId && s.PersonClassificationTypeId == modelVm.Detail1Id)
+                    .Select(x => new ContactHistoryDetailVm
+                    {
+                        Id = x.PersonClassificationId,
+                        PersonId = x.PersonId,
+                        Detail = new ContactDetail
+                        {
+                            Detail1 = lookupList.SingleOrDefault(k => k.LookupIndex == x.PersonClassificationTypeId).LookupDescription,
+                        },
+                        Detail1Id = x.PersonClassificationTypeId
+                    }).ToList();
+                int?[] perInt = lstClassify.Select(x => x.PersonId).ToArray();
+                List<ContactHistoryDetailVm> lstInc =
+                    _context.Incarceration.Where(x => perInt.Contains(x.Inmate.PersonId) && (!modelVm.SearchFromDate.HasValue ||
+                            x.DateIn <= modelVm.FilterDate && (x.ReleaseOut >= modelVm.SearchFromDate.Value.Date ||
+                                !x.ReleaseOut.HasValue)) && x.DateIn <= modelVm.ToDate && 
+                            (x.ReleaseOut >= modelVm.FromDate || !x.ReleaseOut.HasValue))
+                        .Select(s => new ContactHistoryDetailVm
+                        {
+                            PersonId = s.Inmate.PersonId,
+                            FromDate = s.DateIn,
+                            ToDate = s.ReleaseOut,
+                            Type = modelVm.Type,
+                            Detail =  new ContactDetail
+                            {
+                                Detail1 = lstClassify.First(x => x.PersonId == s.Inmate.PersonId).Detail1
+                            }
+                        }).ToList();
+                int?[] personId = lstInc.Select(x => x.PersonId).ToArray();
+                List<Address> addresses = _context.Address.Where(x => personId.Contains(x.PersonId)).ToList();
+                int?[] addPersonId = addresses.Select(x => x.PersonId).ToArray();
+                lstInc = lstInc.Where(x => addPersonId.Contains(x.PersonId)).ToList();
+                contactDetails = GetPersonDetail(lstInc, personId, addresses, modelVm.Type);
+            }
+
+            if (modelVm.Type == ContactConstants.JMSKEEPSEP && modelVm.SearchInmateId > 0)
+            {
+                List<ContactHistoryDetailVm> inmateTwo = _context.KeepSeparate
+                    .Where(x => x.KeepSeparateInmate2Id == modelVm.InmateId).Select(x => new ContactHistoryDetailVm
+                    {
+                        Type = x.KeepSeparateType,
+                        InmateId = x.KeepSeparateInmate1Id,
+                    }).ToList();
+                int[] keepSepTo = inmateTwo.Select(x => x.InmateId).ToArray();
+                List<ContactHistoryDetailVm> keepSepToInc = _context.Incarceration
+                    .Where(s => keepSepTo.Contains(s.Inmate.InmateId) && (!modelVm.SearchFromDate.HasValue ||
+                          s.DateIn <= modelVm.FilterDate && (s.ReleaseOut >= modelVm.SearchFromDate.Value.Date ||
+                              s.ReleaseOut == null)))
+                    .Select(x => new ContactHistoryDetailVm
+                    {
+                        FromDate = x.DateIn,
+                        ToDate = x.ReleaseOut,
+                        InmateId = x.Inmate.InmateId,
+                        PersonId = x.Inmate.PersonId,
+                        Type = ContactConstants.JMSKEEPSEP,
+                        Detail = new ContactDetail
+                        {
+                            Detail1 = inmateTwo.FirstOrDefault(s => s.InmateId == x.Inmate.InmateId).Type
+                        }
+                    }).ToList();
+
+                List<ContactHistoryDetailVm> inmateOne = _context.KeepSeparate
+                    .Where(x => x.KeepSeparateInmate1Id == modelVm.InmateId).Select(x => new ContactHistoryDetailVm
+                    {
+                        Type = x.KeepSeparateType,
+                        InmateId = x.KeepSeparateInmate1Id
+                    }).ToList();
+                int[] keepSepFrom = inmateOne.Select(x => x.InmateId).ToArray();
+
+                List<ContactHistoryDetailVm> keepSepFromInc = _context.Incarceration
+                    .Where(s => keepSepFrom.Contains(s.Inmate.InmateId) && (!modelVm.SearchFromDate.HasValue ||
+                     s.DateIn <= modelVm.FilterDate && (s.ReleaseOut >= modelVm.SearchFromDate.Value.Date ||
+                         s.ReleaseOut == null)))
+                    .Select(x => new ContactHistoryDetailVm
+                    {
+                        FromDate = x.DateIn,
+                        ToDate = x.ReleaseOut,
+                        InmateId = x.Inmate.InmateId,
+                        PersonId = x.Inmate.PersonId,
+                        Type = ContactConstants.JMSKEEPSEP,
+                        Detail = new ContactDetail
+                        {
+                            Detail1 = inmateOne.FirstOrDefault(s => s.InmateId == x.Inmate.InmateId).Type
+                        }
+                    }).ToList();
+                keepSepToInc.AddRange(keepSepFromInc);
+                List<ContactHistoryDetailVm> lstInc = keepSepToInc.Where(x => x.FromDate <= modelVm.ToDate &&
+                    (x.ToDate >= modelVm.FromDate ||
+                        !x.ToDate.HasValue)).Select(x =>
+                    new ContactHistoryDetailVm
+                    {
+                        PersonId = x.PersonId,
+                        FromDate = x.FromDate,
+                        ToDate = x.ToDate
+                    }).ToList();
+
+                int?[] personId = lstInc.Select(x => x.PersonId).ToArray();
+                List<Address> addresses = _context.Address.Where(x => personId.Contains(x.PersonId)).ToList();
+                int?[] addPersonId = addresses.Select(x => x.PersonId).ToArray();
+                lstInc = lstInc.Where(x => addPersonId.Contains(x.PersonId)).ToList();
+                contactDetails = GetPersonDetail(lstInc, personId, addresses, modelVm.Type);
+            }
+
+            return contactDetails;
+        }
+        private List<ContactHistoryDetailVm> GetPersonDetail(List<ContactHistoryDetailVm> lstDetail, int?[] personId,
+            List<Address> addresses, string type)
+        {
+            string externalPath = _photosService.GetExternalPath();
+            string path = _photosService.GetPath();
+            List<Person> persons = _context.Person.Where(x => personId.Contains(x.PersonId)).Select(s => new Person
+            {
+                PersonId = s.PersonId,
+                PersonLastName = s.PersonLastName,
+                PersonFirstName = s.PersonFirstName,
+                PersonMiddleName = s.PersonMiddleName,
+                PersonEmail = s.PersonEmail,
+                PersonPhone = s.PersonPhone,
+                PersonBusinessPhone = s.PersonBusinessPhone
+            }).ToList();
+            List<Inmate> inmate = _context.Inmate.Where(x => personId.Contains(x.PersonId)).ToList();
+            List<Identifiers> identifiers = _context.Identifiers
+                .Where(idf => idf.DeleteFlag == 0 && personId.Any(s => s == idf.PersonId)).ToList();
+            if (persons.Count > 0)
+            {
+                lstDetail.ForEach(p =>
+                {
+                    Person per = persons.FirstOrDefault(x => x.PersonId == p.PersonId);
+                    if (per != null)
+                    {
+                        p.LastName = per.PersonLastName;
+                        p.FirstName = per.PersonFirstName;
+                        p.MiddleName = per.PersonMiddleName;
+                        p.Type = type;
+                        p.Email = per.PersonEmail;
+                        p.HomePhone = per.PersonPhone;
+                        p.BusinessPhone = per.PersonBusinessPhone;
+                        p.InmateNumber = inmate.FirstOrDefault(s => s.PersonId == per.PersonId)?.InmateNumber;
+                        p.PhotographRelativePath = identifiers.Where(d => d.PersonId == per.PersonId).Select(x =>
+                            x.PhotographRelativePath == null
+                                ? externalPath + x.PhotographPath
+                                : path + x.PhotographRelativePath).FirstOrDefault();
+                        p.IdentifierId = identifiers.FirstOrDefault(i => i.PersonId == per.PersonId)?.IdentifierId ?? 0;
+                    }
+
+                    p.AddressDetail = addresses.Where(x => x.PersonId == p.PersonId).Select(s => new PersonAddressVm
+                    {
+                        City = s.AddressCity,
+                        State = s.AddressState,
+                        Zip = s.AddressZip,
+                        Number = s.AddressNumber,
+                        Direction = s.AddressDirection,
+                        Street = s.AddressStreet,
+                        Suffix = s.AddressSuffix,
+                        DirectionSuffix = s.AddressDirectionSuffix,
+                        UnitType = s.AddressUnitType,
+                        UnitNo = s.AddressUnitNumber,
+                        Line2 = s.AddressLine2
+                    }).LastOrDefault();
+                });
+            }
+
+            return lstDetail;
+        }
+        #endregion
+
+        #region Personnel Contacts
+        public List<ContactHistoryDetailVm> GetPersonnelContacts(ContactHistoryVm searchValue)
+        {
+            List<LookupVm> lookUpList = _context.Lookup.Where(w => w.LookupInactive == 0 && (w.LookupType == LookupConstants.ARRTYPE ||
+                                                                   w.LookupType == LookupConstants.RELATIONS ||
+                                                                   w.LookupType == LookupConstants.DISCTYPE ||
+                                                                   w.LookupType == LookupConstants.GRIEVTYPE ||
+                                                                   w.LookupType == LookupConstants.DNADISPO ||
+                                                                   w.LookupType == LookupConstants.TESTTYPE)).Select(
+                x => new LookupVm
+                {
+                    LookupIndex = x.LookupIndex,
+                    LookupDescription = x.LookupDescription
+                }).ToList();
+            searchValue.FilterDate = searchValue.ToDate?.Date.AddHours(23).AddMinutes(59).AddSeconds(59) ?? DateTime.Now;
+            List<ContactHistoryDetailVm> contactHistoryDetail = new List<ContactHistoryDetailVm>();
+            if (searchValue.IsIntakeDate)
+            {
+                List<ContactHistoryDetailVm> incarceration = _context.Incarceration
+                    .Where(x => x.Inmate.PersonId == searchValue.PersonId && (!searchValue.FromDate.HasValue ||
+                        x.DateIn <= searchValue.FilterDate &&
+                        x.DateIn >= searchValue.FromDate.Value.Date)).Select(x => new ContactHistoryDetailVm
+                    {
+                        Id = x.IncarcerationId,
+                        PersonId = x.Inmate.PersonId,
+                        InmateId = x.Inmate.InmateId,
+                        FromDate = x.DateIn,
+                        Type = ContactConstants.INTAKE
+                    }).ToList();
+                int[] inmateIds = incarceration.Select(x => x.InmateId).ToArray();
+                List<BookingDataVm> booking = _context.IncarcerationArrestXref
+                    .Where(x => inmateIds.Contains(x.Arrest.InmateId ?? 0)).Select(x => new BookingDataVm
+                    {
+                        IncarcerationId = x.IncarcerationId,
+                        ArrestId = x.Arrest.ArrestId,
+                        ArrestBookingType = lookUpList
+                            .FirstOrDefault(l => l.LookupType == LookupConstants.ARRTYPE && 
+                                l.LookupIndex == Convert.ToInt32(x.Arrest.ArrestType)).LookupDescription,
+                        ArrestBookingNumber = x.Arrest.ArrestBookingNo,
+                    }).ToList();
+                incarceration.ForEach(item =>
+                {
+                    BookingDataVm data = booking.FirstOrDefault(x => x.IncarcerationId == item.Id);
+                    if (data != null)
+                    {
+                        item.Id = data.ArrestId;
+                        item.Detail = new ContactDetail
+                        {
+                            Detail1 = data.ArrestBookingNumber,
+                            Detail2 = data.ArrestBookingType
+                        };
+                    }
+                    item.Count = GetIntakePersonnelCount(item);
+                });
+                contactHistoryDetail.AddRange(incarceration);
+            }
+            if (searchValue.IsRelease)
+            {
+                List<ContactHistoryDetailVm> incRef = _context.IncarcerationArrestXref
+                    .Where(x => x.Arrest.Inmate.PersonId == searchValue.PersonId && (!searchValue.FromDate.HasValue ||
+                         x.ReleaseDate <= searchValue.FilterDate && x.ReleaseDate >= searchValue.FromDate.Value.Date))
+                    .Select(x => new ContactHistoryDetailVm
+                    {
+                        Id = x.Arrest.ArrestId,
+                        PersonId = x.Arrest.Inmate.PersonId,
+                        FromDate = x.ReleaseDate,
+                        Detail =  new ContactDetail {
+                            Detail1 = x.Arrest.ArrestBookingNo,
+                            Detail2 = lookUpList
+                                .FirstOrDefault(l => l.LookupType == LookupConstants.ARRTYPE &&
+                                 l.LookupIndex == Convert.ToInt32(x.Arrest.ArrestType)).LookupDescription
+                        },
+                        Type = ContactConstants.RELEASE
+                    }).ToList();
+                incRef.ForEach(item => { item.Count = GetReleasePersonnelCount(item); });
+                contactHistoryDetail.AddRange(incRef);
+            }
+            if (searchValue.IsHousingMove)
+            {
+                List<ContactHistoryDetailVm> historyDetail = _context.HousingUnitMoveHistory
+                     .Where(s => s.Inmate.PersonId == searchValue.PersonId && s.HousingUnitToId != null && (!searchValue.FromDate.HasValue ||
+                           s.MoveDate <= searchValue.FilterDate && (s.MoveDateThru >= searchValue.FromDate.Value.Date ||
+                               s.MoveDateThru == null)))
+                     .Select(x =>
+                         new ContactHistoryDetailVm
+                         {
+                             Id = x.HousingUnitMoveHistoryId,
+                             InmateId = x.Inmate.InmateId,
+                             PersonId = x.Inmate.PersonId,
+                             FromDate = x.MoveDate,
+                             ToDate = x.MoveDateThru,
+                             UnitId = x.HousingUnitTo.HousingUnitId,
+                             Detail = x.HousingUnitTo.HousingUnitId > 0 ? new ContactDetail
+                             {
+                                 Detail1 = x.HousingUnitTo.HousingUnitLocation,
+                                 Detail2 = x.HousingUnitTo.HousingUnitNumber,
+                                 Detail3 = x.HousingUnitTo.HousingUnitBedNumber,
+                                 Detail4 = x.HousingUnitTo.HousingUnitBedLocation
+                             } : new ContactDetail(),
+                             Type = ContactConstants.HOUSINGMOVE
+                         }).ToList();
+
+                historyDetail.ForEach(item =>
+                {
+                    item.Count = GetHousingPersonnelCount(item);
+                });
+                contactHistoryDetail.AddRange(historyDetail);
+            }
+            if (searchValue.IsPhoto)
+            {
+                List<ContactHistoryDetailVm> photo = _context.Identifiers.Where(x => x.PersonId == searchValue.PersonId
+                                                     && (!searchValue.FromDate.HasValue || x.CreateDate <= searchValue.FilterDate
+                                                         && x.CreateDate >= searchValue.FromDate.Value.Date))
+                    .Select(x => new ContactHistoryDetailVm
+                    {
+                        Id = x.IdentifierId,
+                        Type = ContactConstants.PHOTO,
+                        PersonId = x.PersonId,
+                        FromDate = x.CreateDate,
+                        Detail = new ContactDetail
+                        {
+                            Detail1 = "TAKEN BY"
+                        }
+                    }).ToList();
+                photo.ForEach(item => { item.Count = GetPhotoCount(item); });
+                contactHistoryDetail.AddRange(photo);
+            }
+            if (searchValue.IsClassify)
+            {
+                List<ContactHistoryDetailVm> classify = _context.InmateClassification.Where(x =>
+                        x.InmateNavigation.PersonId == searchValue.PersonId
+                        && (!searchValue.FromDate.HasValue || x.CreateDate <= searchValue.FilterDate
+                            && x.CreateDate >= searchValue.FromDate.Value.Date))
+                    .Select(x => new ContactHistoryDetailVm
+                    {
+                        Id = x.InmateClassificationId,
+                        Type = ContactConstants.CLASSIFY,
+                        PersonId = x.InmateNavigation.PersonId,
+                        FromDate = x.CreateDate,
+                        Detail = new ContactDetail
+                        {
+                            Detail1 = x.InmateClassificationType,
+                            Detail2 = x.InmateClassificationReason
+                        }
+                    }).ToList();
+                classify.ForEach(item => { item.Count = GetClassifyPersonnelCount(item); });
+                contactHistoryDetail.AddRange(classify);
+            }
+            if (searchValue.IsJmsIncident)
+            {
+                List<ContactHistoryDetailVm> discInmate = _context.DisciplinaryInmate
+                    .Where(x => x.Inmate.PersonId == searchValue.PersonId
+                       && (!searchValue.FromDate.HasValue || x.DisciplinaryIncident.DisciplinaryIncidentDate <= searchValue.FilterDate
+                           && x.DisciplinaryIncident.DisciplinaryIncidentDate >= searchValue.FromDate.Value.Date))
+                    .Select(x => new ContactHistoryDetailVm
+                    {
+                        PersonId = x.Inmate.PersonId,
+                        Id = x.DisciplinaryIncident.DisciplinaryIncidentId,
+                        FromDate = x.DisciplinaryIncident.DisciplinaryIncidentDate,
+                        Detail = new ContactDetail
+                        {
+                            Detail1 = lookUpList.FirstOrDefault(l => l.LookupType == LookupConstants.DISCTYPE &&
+                                  Equals(l.LookupIndex, (double?)x.DisciplinaryIncident.DisciplinaryType))
+                                .LookupDescription,
+                        },
+                        Type = ContactConstants.INCIDENT
+                    }).ToList();
+                discInmate.ForEach(item => { item.Count = GetIncidentPersonnelCount(item); });
+                contactHistoryDetail.AddRange(discInmate);
+            }
+            if (searchValue.IsGrievance)
+            {
+                List<ContactHistoryDetailVm> grievance = _context.GrievanceInmate
+                    .Where(x => x.Inmate.PersonId == searchValue.PersonId && (!searchValue.FromDate.HasValue ||
+                        x.Grievance.DateOccured <= searchValue.FilterDate
+                        && x.Grievance.DateOccured >= searchValue.FromDate.Value.Date)).Select(s =>
+                        new ContactHistoryDetailVm
+                        {
+                            Id = s.Grievance.GrievanceId,
+                            PersonId = s.Inmate.PersonId,
+                            FromDate = s.Grievance.DateOccured,
+                            Detail = new ContactDetail
+                            {
+                                Detail1 = lookUpList
+                                    .SingleOrDefault(w =>
+                                        w.LookupType == LookupConstants.GRIEVTYPE && Equals(w.LookupIndex,
+                                            (double?)s.Grievance.GrievanceType))
+                                    .LookupDescription,
+                                Detail2 = s.Grievance.Department
+                            },
+                            Type = ContactConstants.GRIEVANCE
+                        }).ToList();
+                grievance.AddRange(_context.Grievance
+                    .Where(x => x.Inmate.PersonId == searchValue.PersonId && (!searchValue.FromDate.HasValue ||
+                        x.DateOccured <= searchValue.FilterDate
+                        && x.DateOccured >= searchValue.FromDate.Value.Date)).Select(s => new ContactHistoryDetailVm
+                    {
+                        Id = s.GrievanceId,
+                        PersonId = s.Inmate.PersonId,
+                        FromDate = s.DateOccured,
+                        Detail = new ContactDetail
+                        {
+                            Detail1 = lookUpList
+                                .SingleOrDefault(w =>
+                                    w.LookupType == LookupConstants.GRIEVTYPE &&
+                                    Equals(w.LookupIndex, (double?)s.GrievanceType))
+                                .LookupDescription,
+                            Detail2 = s.Department
+                        },
+                        Type = ContactConstants.GRIEVANCE
+                    }).ToList());
+                grievance.ForEach(item => { item.Count = GetGrievancePersonnelCount(item); });
+                contactHistoryDetail.AddRange(grievance);
+            }
+            if (searchValue.IsFloorNote)
+            {
+                List<ContactHistoryDetailVm> floor = _context.FloorNoteXref
+                    .Where(x => x.Inmate.PersonId == searchValue.PersonId && (!searchValue.FromDate.HasValue || x.FloorNote.FloorNoteDate <= searchValue.FilterDate
+                        && x.FloorNote.FloorNoteDate >= searchValue.FromDate.Value.Date)).Select(s => new ContactHistoryDetailVm
+                              {
+                                  Id = s.FloorNote.FloorNoteId,
+                                  PersonId = s.Inmate.PersonId,
+                                  FromDate = s.FloorNote.FloorNoteDate,
+                                  Type = ContactConstants.FLOORNOTE
+                              }).ToList();
+                floor.ForEach(item => item.Count = GetFloorPersonnelCount(item));
+                contactHistoryDetail.AddRange(floor);
+            }
+            if (searchValue.IsDna)
+            {
+                List<ContactHistoryDetailVm> dna = _context.PersonDna.Where(x => x.PersonId == searchValue.PersonId
+                        && (!searchValue.FromDate.HasValue || x.DnaDateGathered <= searchValue.FilterDate
+                            && x.DnaDateGathered >= searchValue.FromDate.Value.Date ||
+                            x.DnaDateRequired <= searchValue.FilterDate
+                            && x.DnaDateRequired >= searchValue.FromDate.Value.Date))
+                    .Select(x => new ContactHistoryDetailVm
+                    {
+                        Id = x.PersonDnaId,
+                        Type = ContactConstants.DNA,
+                        PersonId = x.PersonId,
+                        FromDate = x.DnaDateGathered ?? x.DnaDateRequired,
+                        Detail = new ContactDetail
+                        {
+                            Detail1 = lookUpList
+                                .FirstOrDefault(l =>
+                                    l.LookupType == LookupConstants.DNADISPO &&
+                                    Equals(l.LookupIndex, (double?)x.DnaDisposition)).LookupDescription,
+                        }
+                    }).ToList();
+                dna.ForEach(item => { item.Count = GetDnaPersonnelCount(item); });
+                contactHistoryDetail.AddRange(dna);
+            }
+            if (!searchValue.IsTesting)
+            {
+                List<ContactHistoryDetailVm> testing = _context.PersonTesting.Where(x => x.PersonId == searchValue.PersonId
+                         && (!searchValue.FromDate.HasValue ||x.TestingDateGathered <=searchValue.FilterDate
+                         && x.TestingDateGathered >=searchValue.FromDate.Value.Date ||
+                          x.TestingDateRequired <=searchValue.FilterDate&& x.TestingDateRequired >=
+                         searchValue.FromDate.Value.Date))
+                    .Select(x => new ContactHistoryDetailVm
+                    {
+                        Id = x.PersonTestingId,
+                        Type = ContactConstants.TESTING,
+                        PersonId = x.PersonId,
+                        FromDate = x.TestingDateGathered ?? x.TestingDateRequired,
+                        Detail = new ContactDetail
+                        {
+                            Detail1 = lookUpList
+                                .FirstOrDefault(l =>
+                                    l.LookupType == LookupConstants.TESTTYPE &&
+                                    Equals(l.LookupIndex, (double?) x.TestingType))
+                                .LookupDescription
+                        }
+                    }).ToList();
+                testing.ForEach(item => { item.Count = GetTestingPersonnelCount(item); });
+                contactHistoryDetail.AddRange(testing);
+            }
+            return contactHistoryDetail;
+        }
+
+        private int GetIntakePersonnelCount(ContactHistoryDetailVm item)
+        {
+            List<ContactHistoryDetailVm> person = _context.Personnel.Select(x => new ContactHistoryDetailVm
+            {
+                Detail1 = x.PersonNavigation.PersonLastName,
+                PersonId = x.PersonnelId
+            }).ToList();
+            int?[] perId = person.Select(x => x.PersonId).ToArray();
+            List<Arrest> count = _context.Arrest
+                .Where(s => s.ArrestId == item.Id && perId.Contains(s.ArrestOfficerId)).ToList();
+            count.AddRange(_context.Arrest
+                .Where(s => s.ArrestId == item.Id && perId.Contains(s.ArrestTransportingOfficerId)).ToList());
+            count.AddRange(_context.Arrest
+                .Where(s => s.ArrestId == item.Id && perId.Contains(s.ArrestReceivingOfficerId)).ToList());
+            count.AddRange(_context.Arrest
+                .Where(s => s.ArrestId == item.Id && perId.Contains(s.ArrestSearchOfficerId)).ToList());
+            count.AddRange(_context.Arrest
+                .Where(s => s.ArrestId == item.Id && perId.Contains(s.ArrestBookingSupervisorId)).ToList());
+            count.AddRange(_context.Arrest
+                .Where(s => s.ArrestId == item.Id && perId.Contains(s.ArrestBookingOfficerId)).ToList());
+
+            return count.Count;
+        }
+        private int GetReleasePersonnelCount(ContactHistoryDetailVm item)
+        {
+            List<ContactHistoryDetailVm> person = _context.Personnel.Select(x => new ContactHistoryDetailVm
+            {
+                Detail1 = x.PersonNavigation.PersonLastName,
+                PersonId = x.PersonId,
+                PersonnelId = x.PersonnelId,
+            }).ToList();
+            int?[] perId = person.Select(x => x.PersonnelId).ToArray();
+            List<ContactHistoryDetailVm> contactDetails = _context.Arrest
+                .Where(s => s.ArrestId == item.Id && perId.Contains(s.ArrestReleaseClearedId ?? 0)).Select(x => new ContactHistoryDetailVm
+                {
+                    Id = x.ArrestId
+                }).ToList();
+            contactDetails.AddRange(_context.IncarcerationArrestXref
+                .Where(s => s.Arrest.ArrestId == item.Id && perId.Contains(s.ReleaseOfficerId)).Select(x => new ContactHistoryDetailVm
+                {
+                    Id = x.Arrest.ArrestId
+                }).ToList());
+
+            return contactDetails.Count;
+        }
+        private int GetHousingPersonnelCount(ContactHistoryDetailVm item)
+        {
+            List<ContactHistoryDetailVm> person = _context.Personnel.Select(x => new ContactHistoryDetailVm
+            {
+                Detail1 = x.PersonNavigation.PersonLastName,
+                PersonId = x.PersonId,
+                PersonnelId = x.PersonnelId
+            }).ToList();
+            int?[] perId = person.Select(x => x.PersonnelId).ToArray();
+            List<HousingUnitMoveHistory> contactDetails = _context.HousingUnitMoveHistory
+                .Where(s => s.HousingUnitMoveHistoryId == item.Id && perId.Contains(s.MoveOfficerId)).ToList();
+            return contactDetails.Count;
+        }
+        private int GetPhotoCount(ContactHistoryDetailVm item)
+        {
+            List<ContactHistoryDetailVm> person = _context.Personnel.Select(x => new ContactHistoryDetailVm
+            {
+                Detail1 = x.PersonNavigation.PersonLastName,
+                PersonId = x.PersonId,
+                PersonnelId = x.PersonnelId
+            }).ToList();
+            int?[] perId = person.Select(x => x.PersonnelId).ToArray();
+            List<Identifiers> photo = _context.Identifiers.Where(x => x.IdentifierId == item.Id && perId.Contains(x.PhotographTakenBy)).ToList();
+            return photo.Count;
+        }
+        private int GetClassifyPersonnelCount(ContactHistoryDetailVm item)
+        {
+            List<ContactHistoryDetailVm> person = _context.Personnel.Select(x => new ContactHistoryDetailVm
+            {
+                Detail1 = x.PersonNavigation.PersonLastName,
+                PersonId = x.PersonId,
+                PersonnelId = x.PersonnelId
+            }).ToList();
+            int?[] perId = person.Select(x => x.PersonnelId).ToArray();
+            List<InmateClassification> classify = _context.InmateClassification.Where(x => x.InmateClassificationId == item.Id && perId.Contains(x.ClassificationOfficerId)).ToList();
+            return classify.Count;
+        }
+        private int GetIncidentPersonnelCount(ContactHistoryDetailVm item)
+        {
+            List<ContactHistoryDetailVm> person = _context.Personnel.Select(x => new ContactHistoryDetailVm
+            {
+                Detail1 = x.PersonNavigation.PersonLastName,
+                PersonId = x.PersonId,
+                PersonnelId = x.PersonnelId
+            }).ToList();
+            int?[] perId = person.Select(x => x.PersonnelId).ToArray();
+            List<DisciplinaryInmate> classify = _context.DisciplinaryInmate.Where(x =>
+                x.DisciplinaryIncident.DisciplinaryIncidentId == item.Id &&
+                perId.Contains(x.DisciplinaryHearingOfficer2)).Select(x => new DisciplinaryInmate
+                {
+                    InmateId = x.Inmate.InmateId
+                }).ToList();
+            classify.AddRange(_context.DisciplinaryInmate.Where(x =>
+               x.DisciplinaryIncident.DisciplinaryIncidentId == item.Id &&
+               perId.Contains(x.DisciplinaryHearingOfficer1)).Select(x => new DisciplinaryInmate
+               {
+                   InmateId = x.Inmate.InmateId
+               }).ToList());
+            classify.AddRange(_context.DisciplinaryInmate.Where(x =>
+                 x.DisciplinaryIncident.DisciplinaryIncidentId == item.Id &&
+                 perId.Contains(x.DisciplinaryIncident.DisciplinaryOfficerId)).Select(x => new DisciplinaryInmate
+                 {
+                     InmateId = x.Inmate.InmateId
+                 }).ToList());
+            return classify.Count;
+        }
+        private int GetGrievancePersonnelCount(ContactHistoryDetailVm item)
+        {
+            List<ContactHistoryDetailVm> person = _context.Personnel.Select(x => new ContactHistoryDetailVm
+            {
+                Detail1 = x.PersonNavigation.PersonLastName,
+                PersonId = x.PersonId,
+                PersonnelId = x.PersonnelId
+            }).ToList();
+            int?[] perId = person.Select(x => x.PersonnelId).ToArray();
+            List<GrievancePersonnel> grievance = _context.GrievancePersonnel.Where(x => x.Grievance.GrievanceId == item.Id && perId.Contains(x.PersonnelId)).ToList();
+            return grievance.Count;
+        }
+        private int GetFloorPersonnelCount(ContactHistoryDetailVm item)
+        {
+            List<ContactHistoryDetailVm> person = _context.Personnel.Select(x => new ContactHistoryDetailVm
+            {
+                Detail1 = x.PersonNavigation.PersonLastName,
+                PersonId = x.PersonId,
+                PersonnelId = x.PersonnelId
+            }).ToList();
+            int?[] perId = person.Select(x => x.PersonnelId).ToArray();
+            List<FloorNotes> floor = _context.FloorNotes.Where(x => x.FloorNoteId == item.Id && perId.Contains(x.FloorNoteOfficerId)).ToList();
+            return floor.Count;
+        }
+        private int GetDnaPersonnelCount(ContactHistoryDetailVm item)
+        {
+            List<ContactHistoryDetailVm> person = _context.Personnel.Select(x => new ContactHistoryDetailVm
+            {
+                Detail1 = x.PersonNavigation.PersonLastName,
+                PersonId = x.PersonId,
+                PersonnelId = x.PersonnelId
+            }).ToList();
+            int?[] perId = person.Select(x => x.PersonnelId).ToArray();
+            List<PersonDna> dna = _context.PersonDna.Where(x => x.PersonDnaId == item.Id && perId.Contains(x.PersonnelId)).ToList();
+            return dna.Count;
+        }
+        private int GetTestingPersonnelCount(ContactHistoryDetailVm item)
+        {
+            List<ContactHistoryDetailVm> person = _context.Personnel.Select(x => new ContactHistoryDetailVm
+            {
+                Detail1 = x.PersonNavigation.PersonLastName,
+                PersonId = x.PersonId,
+                PersonnelId = x.PersonnelId
+            }).ToList();
+            int?[] perId = person.Select(x => x.PersonnelId).ToArray();
+            List<PersonTesting> testings = _context.PersonTesting.Where(x => x.PersonTestingId == item.Id && perId.Contains(x.PersonnelId)).ToList();
+            return testings.Count;
+        }
+        public List<ContactHistoryDetailVm> GetPersonnelDetail(ContactHistoryDetailVm item)
+        {
+            List<ContactHistoryDetailVm> contactDetails = new List<ContactHistoryDetailVm>();
+            if (item.Type == ContactConstants.INTAKE)
+            {
+                List<ContactHistoryDetailVm> person = _context.Personnel.Select(x => new ContactHistoryDetailVm
+                {
+                    Detail1 = x.PersonNavigation.PersonLastName,
+                    PersonId = x.PersonId,
+                    PersonnelId = x.PersonnelId,
+                    Detail2 = x.OfficerBadgeNumber
+                }).ToList();
+                int?[] perId = person.Select(x => x.PersonnelId).ToArray();
+                contactDetails = _context.Arrest
+                    .Where(s => s.ArrestId == item.Id && perId.Contains(s.ArrestOfficerId)).Select(s =>
+                        new ContactHistoryDetailVm
+                        {
+                            PersonId = s.ArrestOfficerId,
+                            FromDate = s.ArrestDate,
+                            Detail1 = $"ARRESTING {s.ArrestOfficerText} {s.ArrestBookingNo}",
+                            Type = ContactConstants.INTAKE
+                        }).ToList();
+                contactDetails.AddRange(_context.Arrest
+                    .Where(s => s.ArrestId == item.Id && perId.Contains(s.ArrestTransportingOfficerId)).Select(s =>
+                        new ContactHistoryDetailVm
+                        {
+                            PersonId = s.ArrestTransportingOfficerId,
+                            FromDate = s.ArrestBookingDate,
+                            Detail1 = $"TRANSPORT {s.ArrestTransportingOfficerText} {s.ArrestBookingNo}",
+                            Type = ContactConstants.INTAKE
+                        }).ToList());
+                contactDetails.AddRange(_context.Arrest
+                    .Where(s => s.ArrestId == item.Id && perId.Contains(s.ArrestReceivingOfficerId)).Select(s =>
+                        new ContactHistoryDetailVm
+                        {
+                            PersonId = s.ArrestReceivingOfficerId,
+                            FromDate = s.ArrestBookingDate,
+                            Detail1 = $"RECEIVING  {s.ArrestBookingNo}",
+                            Type = ContactConstants.INTAKE
+                        }).ToList());
+                contactDetails.AddRange(_context.Arrest
+                    .Where(s => s.ArrestId == item.Id && perId.Contains(s.ArrestSearchOfficerId)).Select(s =>
+                        new ContactHistoryDetailVm
+                        {
+                            PersonId = s.ArrestSearchOfficerId,
+                            FromDate = s.ArrestBookingDate,
+                            Detail1 = $"SEARCH {s.ArrestBookingNo}",
+                            Type = ContactConstants.INTAKE
+                        }).ToList());
+                contactDetails.AddRange(_context.Arrest
+                    .Where(s => s.ArrestId == item.Id && perId.Contains(s.ArrestBookingSupervisorId)).Select(s =>
+                        new ContactHistoryDetailVm
+                        {
+                            PersonId = s.ArrestBookingSupervisorId,
+                            FromDate = s.ArrestBookingDate,
+                            Detail1 = $"SUPERVISOR {s.ArrestBookingNo}",
+                            Type = ContactConstants.INTAKE
+                        }).ToList());
+                contactDetails.AddRange(_context.Arrest
+                    .Where(s => s.ArrestId == item.Id && perId.Contains(s.ArrestBookingOfficerId)).Select(s =>
+                        new ContactHistoryDetailVm
+                        {
+                            PersonId = s.ArrestBookingOfficerId,
+                            FromDate = s.ArrestBookingDate,
+                            Detail1 = $"BOOKING {s.ArrestBookingNo}",
+                            Type = ContactConstants.INTAKE
+                        }).ToList());
+                int?[] personId = contactDetails.Select(x => x.PersonId).ToArray();
+                contactDetails = GetPersonnelDetail(contactDetails, personId, item.Type);
+            }
+            if (item.Type == ContactConstants.RELEASE)
+            {
+                List<ContactHistoryDetailVm> person = _context.Personnel.Select(x => new ContactHistoryDetailVm
+                {
+                    Detail1 = x.PersonNavigation.PersonLastName,
+                    PersonId = x.PersonId,
+                    PersonnelId = x.PersonnelId,
+                }).ToList();
+                int?[] perId = person.Select(x => x.PersonnelId).ToArray();
+                contactDetails = _context.Arrest
+                    .Where(s => s.ArrestId == item.Id && perId.Contains(s.ArrestReleaseClearedId)).Select(s =>
+                        new ContactHistoryDetailVm
+                        {
+                            PersonId = s.ArrestReleaseClearedId,
+                            FromDate = s.ArrestReleaseClearedDate,
+                            Detail1 = $"CLEARED BY {s.ArrestBookingNo}",
+                            Type = ContactConstants.RELEASE
+                        }).ToList();
+                contactDetails.AddRange(_context.IncarcerationArrestXref
+                    .Where(s => s.Arrest.ArrestId == item.Id && perId.Contains(s.ReleaseOfficerId)).Select(s =>
+                        new ContactHistoryDetailVm
+                        {
+                            PersonId = s.ReleaseOfficerId,
+                            FromDate = s.ReleaseDate,
+                            Detail1 = $"RELEASED BY {s.Arrest.ArrestBookingNo}",
+                            Type = ContactConstants.RELEASE
+                        }).ToList());
+                int?[] personId = contactDetails.Select(x => x.PersonId).ToArray();
+                contactDetails = GetPersonnelDetail(contactDetails, personId, item.Type);
+            }
+            if (item.Type == ContactConstants.HOUSINGMOVE)
+            {
+                List<ContactHistoryDetailVm> person = _context.Personnel.Select(x => new ContactHistoryDetailVm
+                {
+                    Detail1 = x.PersonNavigation.PersonLastName,
+                    PersonId = x.PersonId,
+                    PersonnelId = x.PersonnelId
+                }).ToList();
+                int?[] perId = person.Select(x => x.PersonnelId).ToArray();
+                List<ContactHistoryDetailVm> detail = _context.HousingUnitMoveHistory
+                    .Where(s => s.HousingUnitMoveHistoryId == item.Id && perId.Contains(s.MoveOfficerId)).Select(x => new ContactHistoryDetailVm
+                    {
+                        PersonId = x.MoveOfficerId,
+                        FromDate = x.MoveDate,
+                        ToDate = x.MoveDateThru,
+                        Detail1 = x.MoveReason,
+                        Type = item.Type
+                    }).ToList();
+                int?[] personId = detail.Select(x => x.PersonId).ToArray();
+                contactDetails = GetPersonnelDetail(detail, personId, item.Type);
+            }
+            if (item.Type == ContactConstants.PHOTO)
+            {
+                List<ContactHistoryDetailVm> person = _context.Personnel.Select(x => new ContactHistoryDetailVm
+                {
+                    Detail1 = x.PersonNavigation.PersonLastName,
+                    PersonId = x.PersonId,
+                    PersonnelId = x.PersonnelId
+                }).ToList();
+                int?[] perId = person.Select(x => x.PersonnelId).ToArray();
+                List<ContactHistoryDetailVm> photo = _context.Identifiers
+                    .Where(x => x.IdentifierId == item.Id && perId.Contains(x.PhotographTakenBy)).Select(x =>
+                        new ContactHistoryDetailVm
+                        {
+                            FromDate = x.CreateDate,
+                            Detail1 = "TAKEN BY",
+                            PersonId = x.PhotographTakenBy,
+                            Type = item.Type
+                        }).ToList();
+                int?[] personId = photo.Select(x => x.PersonId).ToArray();
+                contactDetails = GetPersonnelDetail(photo, personId, item.Type);
+            }
+            if (item.Type == ContactConstants.CLASSIFY)
+            {
+                List<ContactHistoryDetailVm> person = _context.Personnel.Select(x => new ContactHistoryDetailVm
+                {
+                    Detail1 = x.PersonNavigation.PersonLastName,
+                    PersonId = x.PersonId,
+                    PersonnelId = x.PersonnelId
+                }).ToList();
+                int?[] perId = person.Select(x => x.PersonnelId).ToArray();
+                List<ContactHistoryDetailVm> classify = _context.InmateClassification
+                    .Where(x => x.InmateClassificationId == item.Id && perId.Contains(x.ClassificationOfficerId))
+                    .Select(x => new ContactHistoryDetailVm
+                    {
+                        PersonId = x.ClassificationOfficerId,
+                        FromDate = x.CreateDate,
+                        Detail1 = x.InmateClassificationType,
+                        Detail2 = x.InmateClassificationReason,
+                        Type = item.Type
+                    }).ToList();
+                int?[] personId = classify.Select(x => x.PersonId).ToArray();
+                contactDetails = GetPersonnelDetail(classify, personId, item.Type);
+            }
+            if (item.Type == ContactConstants.INTAKE)
+            {
+                List<ContactHistoryDetailVm> person = _context.Personnel.Select(x => new ContactHistoryDetailVm
+                {
+                    Detail1 = x.PersonNavigation.PersonLastName,
+                    PersonId = x.PersonId,
+                    PersonnelId = x.PersonnelId
+                }).ToList();
+                int?[] perId = person.Select(x => x.PersonnelId).ToArray();
+                List<ContactHistoryDetailVm> discInc = _context.DisciplinaryInmate.Where(x =>
+                    x.DisciplinaryIncident.DisciplinaryIncidentId == item.Id &&
+                    perId.Contains(x.DisciplinaryHearingOfficer2)).Select(x => new ContactHistoryDetailVm
+                    {
+                        PersonId = x.DisciplinaryHearingOfficer2,
+                        Type = item.Type,
+                        FromDate = x.DisciplinaryHearingDate ?? x.DisciplinaryIncident.DisciplinaryIncidentDate,
+                        Detail1 = "HEARING2"
+                    }).ToList();
+                discInc.AddRange(_context.DisciplinaryInmate.Where(x =>
+                    x.DisciplinaryIncident.DisciplinaryIncidentId == item.Id &&
+                    perId.Contains(x.DisciplinaryHearingOfficer1)).Select(x => new ContactHistoryDetailVm
+                    {
+                        PersonId = x.DisciplinaryHearingOfficer1,
+                        Type = item.Type,
+                        FromDate = x.DisciplinaryHearingDate ?? x.DisciplinaryIncident.DisciplinaryIncidentDate,
+                        Detail1 = "HEARING1"
+                    }).ToList());
+                discInc.AddRange(_context.DisciplinaryInmate.Where(x =>
+                    x.DisciplinaryIncident.DisciplinaryIncidentId == item.Id &&
+                    perId.Contains(x.DisciplinaryIncident.DisciplinaryOfficerId)).Select(x => new ContactHistoryDetailVm
+                    {
+                        PersonId = x.DisciplinaryIncident.DisciplinaryOfficerId,
+                        Type = item.Type,
+                        FromDate = x.DisciplinaryHearingDate ?? x.DisciplinaryIncident.DisciplinaryIncidentDate,
+                        Detail1 = "REPORTING"
+                    }).ToList());
+                int?[] personId = discInc.Select(x => x.PersonId).ToArray();
+                contactDetails = GetPersonnelDetail(discInc, personId, item.Type);
+            }
+            if (item.Type == ContactConstants.GRIEVANCE)
+            {
+                List<LookupVm> lookup = _context.Lookup.Where(x => x.LookupType == LookupConstants.GRIEVTYPE).Select(
+                    s => new LookupVm
+                    {
+                        LookupIndex = s.LookupIndex,
+                        LookupDescription = s.LookupDescription
+                    }).ToList();
+                List<ContactHistoryDetailVm> person = _context.Personnel.Select(x => new ContactHistoryDetailVm
+                {
+                    Detail1 = x.PersonNavigation.PersonLastName,
+                    PersonId = x.PersonId,
+                    PersonnelId = x.PersonnelId
+                }).ToList();
+                int?[] perId = person.Select(x => x.PersonnelId).ToArray();
+                List<ContactHistoryDetailVm> grievance = _context.GrievancePersonnel.Where(x => x.Grievance.GrievanceId == item.Id && perId.Contains(x.PersonnelId)).Select(x => new ContactHistoryDetailVm
+                {
+                    PersonId = x.PersonnelId,
+                    Type = item.Type,
+                    FromDate = x.Grievance.DateOccured,
+                    Detail1 = lookup
+                        .SingleOrDefault(w => Equals(w.LookupIndex, (double?)x.Grievance.GrievanceType))
+                        .LookupDescription,
+                    Detail2 = x.Grievance.Department,
+                }).ToList();
+                int?[] personId = grievance.Select(x => x.PersonId).ToArray();
+                contactDetails = GetPersonnelDetail(grievance, personId, item.Type);
+            }
+            if (item.Type == ContactConstants.FLOORNOTE)
+            {
+                List<ContactHistoryDetailVm> person = _context.Personnel.Select(x => new ContactHistoryDetailVm
+                {
+                    Detail1 = x.PersonNavigation.PersonLastName,
+                    PersonId = x.PersonId,
+                    PersonnelId = x.PersonnelId
+                }).ToList();
+                int?[] perId = person.Select(x => x.PersonnelId).ToArray();
+                List<ContactHistoryDetailVm> floor = _context.FloorNotes
+                    .Where(x => x.FloorNoteId == item.Id && perId.Contains(x.FloorNoteOfficerId)).Select(x =>
+                        new ContactHistoryDetailVm
+                        {
+                            PersonId = x.FloorNoteOfficerId,
+                            FromDate = x.FloorNoteDate,
+                            Type = item.Type
+                        }).ToList();
+                int?[] personId = floor.Select(x => x.PersonId).ToArray();
+                contactDetails = GetPersonnelDetail(floor, personId, item.Type);
+            }
+            if (item.Type == ContactConstants.DNA)
+            {
+                List<ContactHistoryDetailVm> person = _context.Personnel.Select(x => new ContactHistoryDetailVm
+                {
+                    Detail1 = x.PersonNavigation.PersonLastName,
+                    PersonId = x.PersonId,
+                    PersonnelId = x.PersonnelId
+                }).ToList();
+                int?[] perId = person.Select(x => x.PersonnelId).ToArray();
+                List<ContactHistoryDetailVm> dna = _context.PersonDna
+                    .Where(x => x.PersonDnaId == item.Id && perId.Contains(x.PersonnelId)).Select(x =>
+                        new ContactHistoryDetailVm
+                        {
+                            Id = x.PersonnelId,
+                            Type = item.Type,
+                            PersonId = x.PersonId,
+                            FromDate = x.DnaDateGathered ?? x.DnaDateRequired,
+                            Detail1 = x.DnaTestBy != null ? $"BY: {x.DnaTestBy}" : "NONE"
+                        }).ToList();
+                int?[] personId = dna.Select(x => x.PersonId).ToArray();
+                contactDetails = GetPersonnelDetail(dna, personId, item.Type);
+            }
+            if (item.Type == ContactConstants.TESTING)
+            {
+                List<ContactHistoryDetailVm> person = _context.Personnel.Select(x => new ContactHistoryDetailVm
+                {
+                    Detail1 = x.PersonNavigation.PersonLastName,
+                    PersonId = x.PersonId,
+                    PersonnelId = x.PersonnelId
+                }).ToList();
+                int?[] perId = person.Select(x => x.PersonnelId).ToArray();
+                List<ContactHistoryDetailVm> test = _context.PersonTesting
+                    .Where(x => x.PersonTestingId == item.Id && perId.Contains(x.PersonnelId)).Select(x =>
+                        new ContactHistoryDetailVm
+                        {
+                            Id = x.PersonnelId,
+                            Type = item.Type,
+                            PersonId = x.PersonId,
+                            FromDate = x.TestingDateGathered ?? x.TestingDateRequired,
+                            //Detail1 = x.dn != null ? $"BY: {x.DnaTestBy}" : "NONE"
+                        }).ToList();
+                int?[] personId = test.Select(x => x.PersonId).ToArray();
+                contactDetails = GetPersonnelDetail(test, personId, item.Type);
+            }
+            return contactDetails;
+        }
+        private List<ContactHistoryDetailVm> GetPersonnelDetail(List<ContactHistoryDetailVm> lstDetail, int?[] personId, string type)
+        {
+            List<Person> persons = _context.Personnel.Where(x => personId.Contains(x.PersonId)).Select(s => new Person
+            {
+                PersonId = s.PersonId,
+                PersonNumber = s.OfficerBadgeNumber,
+                PersonLastName = s.PersonNavigation.PersonLastName,
+                PersonFirstName = s.PersonNavigation.PersonFirstName,
+                PersonMiddleName = s.PersonNavigation.PersonMiddleName,
+                PersonEmail = s.PersonNavigation.PersonEmail,
+                PersonPhone = s.PersonNavigation.PersonPhone,
+                PersonBusinessPhone = s.PersonNavigation.PersonBusinessPhone
+            }).ToList();
+            lstDetail.ForEach(p =>
+            {
+                Person per = persons.FirstOrDefault(x => x.PersonId == p.PersonId);
+                if (per != null)
+                {
+                    p.LastName = per.PersonLastName;
+                    p.FirstName = per.PersonFirstName;
+                    p.MiddleName = per.PersonMiddleName;
+                    p.Type = type;
+                    p.Email = per.PersonEmail;
+                    p.InmateNumber = per.PersonNumber;
+                }
+            });
+            return lstDetail;
+        }
+        #endregion
+    }
+}

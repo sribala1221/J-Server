@@ -1,0 +1,119 @@
+using System;
+using GenerateTables.Models;
+using ServerAPI.ViewModels;
+using System.Collections.Generic;
+using System.Linq;
+using ServerAPI.Utilities;
+using Microsoft.AspNetCore.Http;
+
+// ReSharper disable once CheckNamespace
+namespace ServerAPI.Services
+{
+    public class MoneyDepositVerifyService : IMoneyDepositVerifyService
+    {
+        private readonly AAtims _context;
+        private readonly int _personnelId;
+        private readonly IMoneyBalanceDebitCheck _moneyBalanceDebitCheck;
+
+        private readonly IMoneyService _moneyService;
+
+        private readonly IMoneyBalanceInmateService _moneyBalanceInmateService;
+
+
+
+        public MoneyDepositVerifyService(AAtims context, IHttpContextAccessor httpContextAccessor, IMoneyBalanceDebitCheck moneyBalanceDebitCheck, IMoneyService moneyService, IMoneyBalanceInmateService moneyBalanceInmateService)
+        {
+            _context = context;
+            _personnelId = Convert.ToInt32(httpContextAccessor.HttpContext.User.FindFirst("personnelId")?.Value);
+            _moneyBalanceDebitCheck = moneyBalanceDebitCheck;
+            _moneyService = moneyService;
+            _moneyBalanceInmateService = moneyBalanceInmateService;
+        }
+
+        public MoneyDepositoryDetailVm GetMoneyDepositoryVerifyDetails(int bankId, int accountAoDepositoryId, int fundId, int personnelId)
+        {
+
+            MoneyDepositoryDetailVm moneyDepositoryVerifyDetailVm = new MoneyDepositoryDetailVm();
+            {
+                moneyDepositoryVerifyDetailVm.MoneyDepositoryDetail = _context.AccountAoReceive
+                .Where(w => w.AccountAoFund.AccountAoBankId == bankId &&
+                           w.AccountAoDepositoryId == accountAoDepositoryId
+                           && !w.TransactionVerified.HasValue &&
+                           (w.TransactionVoidFlag==0 ||!w.TransactionVoidFlag.HasValue) &&
+                            (fundId == 0 || w.AccountAoFundId == fundId) &&
+                            (personnelId == 0 || w.TransactionVerifiedBy == personnelId))
+                   .Select(s => new MoneyDepositoryVm
+                   {
+                       TransactionNo = s.AccountAoReceiveId,
+                       TransactionDate = s.TransactionDate,
+                       Description = s.TransactionDescription,
+                       TransactionReceipt = s.TransactionReceipt,
+                       InmateNumber = s.Inmate.InmateNumber,
+                       Amount = s.TransactionAmount ?? 0,
+                       VerifyFlag = s.AccountAoFund.FundBlindVerify == 1,
+                       FundId = s.AccountAoFund.AccountAoFundId,
+                       InmateId = s.Inmate.InmateId,
+                       PersonId = s.Inmate.Person.PersonId,
+                       VoidFlag = s.TransactionVoidFlag == 1,
+                       PersonDetails = new PersonInfoVm
+                       {
+                           PersonLastName = s.Inmate.Person.PersonLastName,
+                           PersonFirstName = s.Inmate.Person.PersonFirstName,
+                           PersonMiddleName = s.Inmate.Person.PersonMiddleName,
+                           PersonSuffix = s.Inmate.Person.PersonSuffix,
+                       },
+                       PersonnelDetails = new PersonnelVm
+                       {
+                           OfficerBadgeNumber = s.TransactionOfficer.OfficerBadgeNumber,
+                           PersonLastName = s.TransactionOfficer.PersonNavigation.PersonLastName,
+                           PersonFirstName = s.TransactionOfficer.PersonNavigation.PersonFirstName,
+                           PersonMiddleName = s.TransactionOfficer.PersonNavigation.PersonMiddleName,
+                           PersonnelId=s.TransactionOfficer.PersonNavigation.PersonId
+                       }
+                   }).OrderByDescending(o => o.TransactionNo).ToList();
+
+                moneyDepositoryVerifyDetailVm.BankDetails = _moneyService.MoneyGetBank();
+                moneyDepositoryVerifyDetailVm.FundDetails = _moneyService.MoneyGetFund();
+                moneyDepositoryVerifyDetailVm.DepositoryDetails = _moneyService.MoneyGetDeposit();
+                moneyDepositoryVerifyDetailVm.DepositoryFacilityDetails = _context.Facility
+                .Select(s => new DepositoryFacilityDetailVm
+                {
+                    FacilityId = s.FacilityId,
+                    CashDrawerBalance = s.CashDrawerBalance ?? 0,
+                    CashDrawerMinimumBalance = s.CashDrawerMin ?? 0
+                }).ToList();
+
+                moneyDepositoryVerifyDetailVm.PersonnelCountDetails = moneyDepositoryVerifyDetailVm.MoneyDepositoryDetail
+                .GroupBy(g => new { g.PersonnelDetails.PersonnelId,g.PersonnelDetails.PersonFirstName,g.PersonnelDetails.PersonLastName,g.PersonnelDetails.OfficerBadgeNumber})
+                .Select(s => new PersonnelCountVm
+                {
+                    PersonnelId=s.Key.PersonnelId,
+                    PersonnelFirstName=s.Key.PersonFirstName,
+                    PersonnelLastName=s.Key.PersonLastName,
+                    OfficerBadgeNumber=s.Key.OfficerBadgeNumber,
+                    Count=s.Count()
+                    
+                     
+                }).ToList();
+
+
+                return moneyDepositoryVerifyDetailVm;
+
+            }
+
+
+
+        }
+    }
+}
+
+
+
+
+
+
+
+
+
+
+

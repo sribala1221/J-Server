@@ -1,0 +1,40 @@
+using Microsoft.AspNetCore.Mvc;
+using ServerAPI.Services;
+using ServerAPI.ViewModels;
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    public class MoneyDepositoryController : Controller
+    {
+
+        private readonly IMoneyDepositVerifyService _moneyDepositVerifyService;
+
+        public MoneyDepositoryController(IMoneyDepositVerifyService moneyDepositVerifyService)
+
+        {
+
+            _moneyDepositVerifyService = moneyDepositVerifyService;
+        }
+
+
+        //To Get the Depository Verify details 
+        [HttpGet("GetMoneyDepositoryDetails")]
+        public IActionResult GetMoneyDepositoryDetails(int bankId,int accountAoDepositoryId,int fundId,int personnelId)
+        {
+            return Ok(_moneyDepositVerifyService.GetMoneyDepositoryVerifyDetails(bankId,accountAoDepositoryId,fundId,personnelId));
+        }
+
+
+      
+
+
+        
+    }
+}
+
+
+
+
+
+
+

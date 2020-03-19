@@ -1,0 +1,382 @@
+﻿using Microsoft.AspNetCore.Mvc;
+using ServerAPI.Services;
+using ServerAPI.ViewModels;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+using ServerAPI.Authorization;
+using Newtonsoft.Json;
+using jsreport.Client;
+using Microsoft.Extensions.Configuration;
+using jsreport.Types;
+using System;
+using ServerAPI.Utilities;
+using Newtonsoft.Json.Linq;
+
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    public class SentenceController : ControllerBase
+    {
+        private readonly ISentenceService _sentenceService;
+        private readonly IConfiguration _configuration;
+        private readonly ICommonService _commonService;
+        private readonly ISentenceAdjustmentService _sentenceAdjustmentService;
+
+        public SentenceController(ISentenceService sentenceService, IConfiguration configuration,
+            ICommonService commonService, ISentenceAdjustmentService sentenceAdjustmentService)
+        {
+            _sentenceService = sentenceService;
+            _configuration = configuration;
+            _commonService = commonService;
+            _sentenceAdjustmentService = sentenceAdjustmentService;
+        }
+
+        [HttpGet("GetSentenceViewerList")]
+        public IActionResult GetSentenceViewerList(int arrestId, int incarcerationId)
+        {
+            return Ok(_sentenceService.GetSentenceViewerList(arrestId, incarcerationId));
+        }
+
+        [FuncPermission(488, FuncPermissionType.Edit)]
+        [HttpGet("GetOverallSentenceList")]
+        public IActionResult GetOverallSentenceList(int arrestId, int incarcerationId)
+        {
+            return Ok(_sentenceService.GetSentenceViewerList(arrestId, incarcerationId));
+        }
+
+        [HttpGet("GetChargeSentenceViewerList")]
+        public IActionResult GetChargeSentenceViewerList(int arrestId, int incarcerationId)
+        {
+            return Ok(_sentenceService.GetChargeSentenceViewerList(arrestId, incarcerationId));
+        }
+
+        [HttpGet("GetBookingStatusHistory")]
+        public IActionResult GetBookingStatusHistory(int arrestId)
+        {
+            return Ok(_sentenceService.GetBookingStatusHistory(arrestId));
+        }
+
+        [FuncPermission(501, FuncPermissionType.Delete)]
+        [HttpPost("DeleteArrestBookingStatus")]
+        public async Task<IActionResult> DeleteArrestBookingStatus([FromBody] BookingStatusVm value)
+        {
+            return Ok(await _sentenceService.UpdateArrestBookingStatus(value));
+        }
+
+        [FuncPermission(471, FuncPermissionType.Edit)]
+        [HttpPost("UpdateArrestBookingStatus")]
+        public async Task<IActionResult> UpdateArrestBookingStatus([FromBody] BookingStatusVm value)
+        {
+            return Ok(await _sentenceService.UpdateArrestBookingStatus(value));
+        }
+
+        [HttpGet("GetSentenceCreditServed")]
+        public IActionResult GetSentenceCreditServed(int inmateId, int incarcerationArrestXrefId, string courtDocket)
+        {
+            return Ok(_sentenceService.GetSentenceCreditServed(inmateId, incarcerationArrestXrefId, courtDocket));
+        }
+
+        [HttpGet("GetSentenceAdditionalFlags")]
+        public IActionResult GetSentenceAdditionalFlags(int arrestId)
+        {
+            return Ok(_sentenceService.GetSentenceAdditionalFlags(arrestId));
+        }
+    [FuncPermission(472, FuncPermissionType.Add)]
+        [HttpPost("InsertArrestSentFlag")]
+        public async Task<IActionResult> InsertArrestSentFlag(
+            [FromBody] List<SentenceAdditionalFlagsVm> additionalFlagsList)
+        {
+            return Ok(await _sentenceService.InsertArrestSentFlag(additionalFlagsList));
+        }
+
+        [HttpPost("DeleteArrestSentFlag")]
+        public async Task<IActionResult> DeleteArrestSentFlag([FromBody] int arrestSentFlagId)
+        {
+            return Ok(await _sentenceService.DeleteArrestSentFlag(arrestSentFlagId));
+        }
+
+        [HttpGet("GetSentenceDetailsArrest")]
+        public IActionResult GetSentenceDetailsArrest(int arrestId)
+        {
+            return Ok(_sentenceService.GetSentenceDetailsArrest(arrestId));
+        }
+
+        [HttpGet("GetSentenceMethod")]
+        public IActionResult GetSentenceMethod(int sentenceMethodId)
+        {
+            return Ok(_sentenceService.GetSentenceMethod(sentenceMethodId));
+        }
+
+        [FuncPermission(473, FuncPermissionType.Edit)]
+        [HttpGet("GetSentSentenceMethod")]
+        public IActionResult GetSentSentenceMethod(int sentenceMethodId)
+        {
+            return Ok(_sentenceService.GetSentenceMethod(sentenceMethodId));
+        }
+
+        [FuncPermission(475, FuncPermissionType.Edit)]
+        [HttpGet("GetAltSentSentenceMethod")]
+        public IActionResult GetAltSentSentenceMethod(int sentenceMethodId)
+        {
+            return Ok(_sentenceService.GetSentenceMethod(sentenceMethodId));
+        }
+
+        [HttpPost("ClearArrestSentence")]
+        public async Task<IActionResult> ClearArrestSentence([FromBody] int arrestId)
+        {
+            return Ok(await _sentenceService.ClearArrestSentence(arrestId));
+        }
+
+        [HttpPost("ClearCrimeSentence")]
+        public async Task<IActionResult> ClearCrimeSentence([FromBody] int crimeId)
+        {
+            return Ok(await _sentenceService.ClearCrimeSentence(crimeId));
+        }
+        [FuncPermission(471,FuncPermissionType.Edit)]
+        [HttpPost("UpdateSentence")]
+        public IActionResult UpdateSentence()
+        {
+            return Ok();
+        }
+        [FuncPermission(471,FuncPermissionType.Access)]
+        [HttpPut("AccessSentence")]
+        public IActionResult AccessSentence()
+        {
+            return Ok();
+        }
+        [FuncPermission(472,FuncPermissionType.Edit)]
+        [HttpGet("EditUnsentencePermission")]
+        public IActionResult EditUnsentencePermission()
+        {
+            return Ok();
+        }
+        [FuncPermission(473,FuncPermissionType.Edit)]
+        [HttpPut("EditSentencePermission")]
+        public IActionResult EditSentencePermission()
+        {
+            return Ok();
+        }
+        [FuncPermission(474,FuncPermissionType.Edit)]
+        [HttpPut("EditHoldPermission")]
+        public IActionResult EditHoldPermission()
+        {
+            return Ok();
+        }
+        [FuncPermission(475,FuncPermissionType.Edit)]
+        [HttpPut("EditAltSentPermission")]
+        public IActionResult EditAltSentPermission()
+        {
+            return Ok();
+        }
+        [FuncPermission(472, FuncPermissionType.Edit)]
+        [HttpPost("UpdateUnSentArrestSentence")]
+        public async Task<IActionResult> UpdateUnSentArrestSentence([FromBody] SentenceDetailsVm obj)
+        {
+            return Ok(await _sentenceService.UpdateArrestSentence(obj));
+        }
+
+        [FuncPermission(473, FuncPermissionType.Edit)]
+        [HttpPost("UpdateSentArrestSentence")]
+        public async Task<IActionResult> UpdateSentArrestSentence([FromBody] SentenceDetailsVm obj)
+        {
+            return Ok(await _sentenceService.UpdateArrestSentence(obj));
+        }
+
+        [FuncPermission(474, FuncPermissionType.Edit)]
+        [HttpPost("UpdateHoldArrestSentence")]
+        public async Task<IActionResult> UpdateHoldArrestSentence([FromBody] SentenceDetailsVm obj)
+        {
+            return Ok(await _sentenceService.UpdateArrestSentence(obj));
+        }
+
+        [FuncPermission(475, FuncPermissionType.Edit)]
+        [HttpPost("UpdateAltSentArrestSentence")]
+        public async Task<IActionResult> UpdateAltSentArrestSentence([FromBody] SentenceDetailsVm obj)
+        {
+            return Ok(await _sentenceService.UpdateArrestSentence(obj));
+        }
+
+        [HttpPost("UpdateArrestSentence")]
+        public async Task<IActionResult> UpdateArrestSentence([FromBody] SentenceDetailsVm obj)
+        {
+            return Ok(await _sentenceService.UpdateArrestSentence(obj));
+        }
+
+        [HttpGet("GetDisciplinaryDays")]
+        public IActionResult GetDisciplinaryDays(int arrestId)
+        {
+            return Ok(_sentenceService.GetDisciplinaryDays(arrestId));
+        }
+
+        [HttpPost("UpdateArrestSentenceGap")]
+        public async Task<IActionResult> UpdateArrestSentenceGap([FromBody] List<SentenceDetailsVm> obj)
+        {
+            return Ok(await _sentenceService.UpdateArrestSentenceGap(obj));
+        }
+
+        [HttpPost("UpdateCrimeSentenceGap")]
+        public async Task<IActionResult> UpdateCrimeSentenceGap([FromBody] List<ChargeSentenceVm> obj)
+        {
+            return Ok(await _sentenceService.UpdateCrimeSentenceGap(obj));
+        }
+
+        [HttpPost("UpdateChargeSentence")]
+        public async Task<IActionResult> UpdateChargeSentence([FromBody] SentenceDetailsVm obj)
+        {
+            return Ok(await _sentenceService.UpdateChargeSentence(obj));
+        }
+
+        [HttpPost("UpdateChargeSentenceList")]
+        public async Task<IActionResult> UpdateChargeSentenceList([FromBody] SentenceDetailsVm obj, List<int> crimeIds)
+        {
+            return Ok(await _sentenceService.UpdateChargeSentenceList(obj, crimeIds));
+        }
+
+        [HttpGet("GetSentenceDetailsCrime")]
+        public IActionResult GetSentenceDetailsCrime(int crimeId)
+        {
+            return Ok(_sentenceService.GetSentenceDetailsCrime(crimeId));
+        }
+
+        [HttpGet("GetAllArrestSentenceDetailsCrime")]
+        public IActionResult GetAllArrestSentenceDetailsCrime(int incarcerationId)
+        {
+            return Ok(_sentenceService.GetAllArrestSentenceDetailsCrime(incarcerationId));
+        }
+
+        [FuncPermission(488, FuncPermissionType.Edit)]
+        [HttpPost("UpdateOverallSentence")]
+        public async Task<IActionResult> UpdateOverallSentence([FromBody] OverallSentenceVm obj)
+        {
+            return Ok(await _sentenceService.UpdateOverallSentence(obj));
+        }
+
+        [FuncPermission(489, FuncPermissionType.Edit)]
+        [HttpPost("UpdateManualOverallSentence")]
+        public async Task<IActionResult> UpdateManualOverallSentence([FromBody] OverallSentenceVm obj)
+        {
+            return Ok(await _sentenceService.UpdateOverallSentence(obj));
+        }
+
+        [HttpGet("GetOverallSentence")]
+        public IActionResult GetOverallSentence(int incarcerationId)
+        {
+            return Ok(_sentenceService.GetOverallSentence(incarcerationId));
+        }
+
+        [HttpGet("GetArrestSentenceSetting")]
+        public IActionResult GetArrestSentenceSetting()
+        {
+            return Ok(_sentenceService.GetArrestSentenceSetting());
+        }
+
+        [HttpGet("GetSentenceDetailsIncarceration")]
+        public IActionResult GetSentenceDetailsIncarceration(int incarcerationId)
+        {
+            return Ok(_sentenceService.GetSentenceDetailsIncarceration(incarcerationId));
+        }
+
+        [HttpGet("GetOverallIncarcerationHistory")]
+        public IActionResult GetOverallIncarcerationHistory(int incarcerationId)
+        {
+            return Ok(_sentenceService.GetOverallIncarcerationHistory(incarcerationId));
+        }
+
+        [HttpGet("GetArrestSentenceHistory")]
+        public IActionResult GetArrestSentenceHistory(int arrestId, int crimeId)
+        {
+            return Ok(_sentenceService.GetArrestSentenceHistory(arrestId, crimeId));
+        }
+        [FuncPermission(488,FuncPermissionType.Access)]
+         [HttpGet("OverallSentenceAccess")]
+        public IActionResult OverallSentenceAccess()
+        {
+            return Ok();
+        }
+        [HttpGet("GetSentencePdfViewerList")]
+        public async Task<IActionResult> GetSentencePdfViewerList(int incarcerationId, int arrestId,
+            SentenceSummaryType reportType, int crimeId)
+        {
+            SentencePdfViewerVm summaryPdfDetails =
+            _sentenceService.GetSentencePdfViewerList(incarcerationId, arrestId, reportType, crimeId);
+
+             JObject customLabel = _commonService.GetCustomMapping();
+
+             summaryPdfDetails.CustomLabel = customLabel;
+            
+            string json = JsonConvert.SerializeObject(summaryPdfDetails);
+
+            ReportingService rs = new ReportingService(_configuration.GetSection("SiteVariables")["ReportUrl"]);
+            //try catch used for to handle 2 exceptions (10061 & 404) from jsreport.
+            try
+            {
+                _commonService.atimsReportsContentLog(InventoryQueueConstants.SENTENCE, json);
+                Report report = await rs.RenderByNameAsync(InventoryQueueConstants.SENTENCE, json);
+                FileContentResult result =
+                    new FileContentResult(_commonService.ConvertStreamToByte(report.Content), "application/pdf");
+                return result;
+            }
+            catch (Exception ex)
+            {
+                //10061 is status code for no connection could be made because the target machine actively refused it
+                //404 for file not found in jsreport
+                return ex.InnerException != null ? Ok(10061) : Ok(404);
+            }
+        }
+
+        [HttpGet("GetCaseConviction")]
+        public IActionResult GetCaseConviction(int arrestId)
+        {
+            return Ok(_sentenceService.GetCaseConviction(arrestId));
+        }
+
+        #region SentAdj_DiscDays
+        [HttpGet("GetDiscDaysCount")]
+        public IActionResult GetDiscDaysCount(bool showRemoved)
+        {
+            return Ok(_sentenceAdjustmentService.GetDiscDaysCount(showRemoved));
+        }
+        [HttpGet("GetDiscDaysDetails")]
+        public IActionResult GetDiscDaysDetails(bool isApply,bool showRemoved)
+        {
+            return Ok(_sentenceAdjustmentService.GetDiscDaysDetails(isApply,showRemoved));
+        }
+        [HttpPut("UpdateDiscInmateRemoveFlag")]
+        public IActionResult UpdateDiscInmateRemoveFlag(int discInmateId, bool isUndo)
+        {
+            return Ok(_sentenceAdjustmentService.UpdateDiscInmateRemoveFlag(discInmateId, isUndo));
+        }
+       
+        [HttpGet("GetIncarcerationForSentence")]
+        public int GetIncarcerationForSentence(int inmateId, int arrestId)
+        {
+            return _sentenceAdjustmentService.GetIncarcerationForSentence(inmateId, arrestId);
+        }
+        #endregion
+        //Newly added for Functionality Permision
+        [FuncPermission(955,FuncPermissionType.Edit)]
+        [HttpPut("EditApplyCases")]
+        public IActionResult EditApplyCases()
+        {
+            return Ok();
+        }
+        [FuncPermission(952,FuncPermissionType.Edit)]
+        [HttpPut("EditAttendeeAttandence")]
+        public IActionResult EditAttendeeAttandence()
+        {
+            return Ok();
+        }
+         [FuncPermission(952,FuncPermissionType.Add)]
+        [HttpPut("AddAttendeeAttandence")]
+        public IActionResult AddAttendeeAttandence()
+        {
+            return Ok();
+        }
+         [FuncPermission(952,FuncPermissionType.Delete)]
+        [HttpDelete("DeleteAttendeeAttandence")]
+        public IActionResult DeleteAttendeeAttandence()
+        {
+            return Ok();
+        }
+    }
+}

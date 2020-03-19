@@ -1,0 +1,16 @@
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using ServerAPI.ViewModels;
+
+namespace ServerAPI.Services
+{
+    public interface IMoneyClearService
+    {
+        MoneyClearVm GetMoneyClearClearDetails(MoneyAccountFilterVm searchValue);
+        List<MoneyAccountTransactionVm> GetMoneyClearHistoryDetails(MoneyAccountFilterVm searchValue);
+
+        int UpdateMoneyClearClearTransaction(List<int> checkedTransIdList);
+
+        Task<int> InsertReturnCheck(List<int> value);
+    }
+}

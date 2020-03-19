@@ -1,0 +1,203 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Security.Policy;
+
+namespace ServerAPI.ViewModels
+{
+    public class ClosetVm
+    {
+        public int HousingSupplyModuleId { get; set; }
+        public string ClosetBelongsTo { get; set; }
+        public string ClosetName { get; set; }
+        public int FacilityId { get; set; }
+        public bool DeleteFlag { get; set; }
+    }
+    public class CheckListVm
+    {
+        public int CheckListId { get; set; }
+        public int SupplyModuleId { get; set; }
+        public string ClosetName { get; set; }
+        public DateTime? ChecklistDate { get; set; }
+        public PersonnelVm LstPersonnel { get; set; }
+        public int? ActualCount { get; set; }
+        public int? CheckCount { get; set; }
+        public string CheckListNote { get; set; }
+        public int? DeleteFlag { get; set; }
+        public int CheckList { get; set; }
+        public int? CheckListBy { get; set; }
+    }
+    public class HousingSupplyVm
+    {
+        public List<SupplyItemsVm> LstAvailableItems { get; set; }
+        public List<SupplyItemsVm> LstCheckoutItems { get; set; }
+        public List<KeyValuePair<int, string>> LocationList { get; set; }
+        public List<KeyValuePair<int, string>> HousingList { get; set; }
+    }
+    public class SupplyItemsVm
+    {
+        public int FacilityId { get; set; }
+        public string FacilityAbbr { get; set; }
+        public int HousingSupplyItemId { get; set; }
+        public int HousingSupplyItemLookupId { get; set; }
+        public int HousingSupplyModuleId { get; set; }
+        public string SupplyNumber { get; set; }
+        public bool AllowCheckoutToHousing { get; set; }
+        public bool AllowCheckoutToInmate { get; set; }
+        public bool AllowCheckoutToLocation { get; set; }
+        public string CurrentCheckoutLocation { get; set; }
+        public string CurrentCheckoutHousing { get; set; }
+        public int? CurrentCheckoutInmateId { get; set; }
+        public bool DeleteFlag { get; set; }
+        public DateTime? DeleteDate { get; set; }
+        public string ItemName { get; set; }
+        public DateTime? CurrentCheckoutDateTime { get; set; }
+        public int? FlagDurationMin { get; set; }
+        public string HousingUnitLocation { get; set; }
+        public string HousingUnitNumber { get; set; }
+        public PersonInfoVm PersonDetails { get; set; }
+        public string SupplyDescription { get; set; }
+        public string ClosetName { get; set; }
+        public int Quantity { get; set; }
+        public DateTime? CheckoutDate { get; set; }
+        public DateTime? CheckInDate { get; set; }
+        public DateTime? MoveDate { get; set; }
+        public int? CheckoutBy { get; set; }
+        public int? CheckInBy { get; set; }
+        public string ActionType { get; set; }
+        public int? MoveBy { get; set; }
+        public PersonnelVm PersonnelCheckoutDetails { get; set; }
+        public PersonnelVm PersonnelCheckInDetails { get; set; }
+        public PersonnelVm PersonnelMoveDetails { get; set; }
+        public PersonnelVm PersonnelCheckListDetails { get; set; }
+        public PersonVm InmateDetails { get; set; }
+        public string CheckoutLocation { get; set; }
+        public string CheckoutNote { get; set; }
+        public string FromLocation { get; set; }
+        public string FromNumber { get; set; }
+        public string ToLocation { get; set; }
+        public string ToNumber { get; set; }
+        public string CheckInNote { get; set; }
+        public string MoveNote { get; set; }
+        public DateTime? CheckListDate { get; set; }
+        public int? CheckListFlag { get; set; }
+        public string CheckListNote { get; set; }
+        public int? CheckListBy { get; set; }
+        public string CheckoutInmateId { get; set; }
+        public int? FromModuleId { get; set; }
+        public int? ToModuleId { get; set; }
+        public bool ConsumedFlag { get; set; }
+        public DateTime? ConsumedDate { get; set; }
+        public bool DamageFlag { get; set; }
+        public DateTime? DamageDate { get; set; }
+        public bool AddQuantity { get; set; }
+        public int? ItemFlag { get; set; }
+        public List<int> LstSupplyItemId { get; set; }
+        public string HousingSupplyItemHistoryList { get; set; }
+        public string HousingSupplyItemHistoryReplaceList { get; set; }
+        public int ConsumedFlagCount { get; set; }
+        public int DamagedFlagCount { get; set; }
+        public bool OneItemOnlyFlag { get; set; }
+        public List<KeyValuePair<int, int>> LstCheckoutItemIdPair { get; set; }
+
+        public int? InOutCount { get; set; }
+        public int Hour { get; set; }
+        public int Minute { get; set; }
+        public int Second { get; set; }
+        public DateTime? CheckedoutDate { get; set; }
+        public bool Last12hours { get; set; }
+        public bool DateRange { get; set; }
+        public string InmateId { get; set; }
+        public int Location { get; set; }
+        public int OfficerId { get; set; }
+        public DateTime? FromDate { get; set; }
+        public DateTime? ToDate { get; set; }
+        public int Hours { get; set; }
+        public int? CheckOutFlag { get; set; }
+        public int? CheckInFlag { get; set; }
+        public int? MoveFlag { get; set; }
+        public int[] ListModuleId { get; set; }
+        public bool HousingItemFlag { get; set; }
+        public bool HousingSupplyCountFlag { get; set; }
+        public int SearchTextValue { get; set; }
+        public bool DeletedHistory { get; set; }
+        public bool Checked { get; set; }
+        public List<SupplyItemsVm> SupplyList { get; set; }
+        public int? CheckoutLocationId { get; set; }
+
+    }
+    public class SupplyVm
+    {
+        public int HousingSupplyItemId { get; set; }
+        public int? CheckoutInmateId { get; set; }
+        public string CheckoutNote { get; set; }
+        public string CheckoutHousing { get; set; }
+        public string CheckoutLocation { get; set; }
+        public int? CheckoutLocationId { get; set; }
+        public int? CheckoutModuleId { get; set; }
+        public DateTime LastMoveDate { get; set; }
+        public DateTime? CheckoutDateTime { get; set; }
+        public string CheckInNote { get; set; }
+        public int DamageFlag { get; set; }
+        public string DamageNote { get; set; }
+        public int? DamageFlagBy { get; set; }
+        public DateTime? DamageFlagDate { get; set; }
+        public int HousingSupplyCheckoutId { get; set; }
+    }
+    public class WareHouseItemVm
+    {
+        public string ItemName { get; set; }
+        public int WareHouseItemId { get; set; }
+        public int WareHouseRequestId { get; set; }
+        public string HousingBuilding { get; set; }
+        public string HousingNumber { get; set; }
+        public DateTime? RequestedDate { get; set; }
+        public string ItemCategory { get; set; }
+        public int? RequestedQty { get; set; }
+        public string RequestNote { get; set; }
+        public int? TotalDeliveredQty { get; set; }
+        public string DeliveryDispo { get; set; }
+        public string DeliveryNote { get; set; }
+        public int? CompleteFlag { get; set; }
+        public int? InProgressFlag { get; set; }
+        public int? DeleteFlag { get; set; }
+        public int? RequestedBy { get; set; }
+        public PersonnelVm RequestedByPerson { get; set; }
+        public DateTime? CompleteDate { get; set; }
+        public PersonnelVm CompleteByPerson { get; set; }
+        public int FacilityId { get; set; }
+        public int? CompleteBy { get; set; }
+        public int HousingUnitListId { get; set; }
+    }
+    public class WareHouseLookup
+    {
+        public List<HousingDetail> ListHousingDetail { get; set; }
+        public List<WareHouseItemVm> ListWareHouseItem { get; set; }
+        public List<LookupVm> ListLookup { get; set; }
+    }
+
+    public class HousingSupplyInput
+    {
+        public int? FacilityId { get; set; }
+        public int PersonnelId { get; set; }
+        public int? Last { get; set; }
+        public DateTime? StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
+        public List<int> HousingSupplyModuleId { get; set; }
+    }
+
+    public class HousingSupplyItemHistoryVm : SupplyItemsVm
+    {
+        public int HistoryId { get; set; }
+        public DateTime? CreateDate { get; set; }
+        public int PersonnelId { get; set; }
+        public string PersonLastName { get; set; }
+        public string OfficerBadgeNumber { get; set; }
+        public List<PersonHeader> HistoryList { get; set; }
+    }
+    public class HousingSupplyHistoryLocation
+    {
+        public string PrivilegeDescription { get; set; }
+        public int PrivilegeId { get; set; }
+        public int FacilityId { get; set; }
+    }
+}

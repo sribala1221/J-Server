@@ -1,0 +1,67 @@
+﻿using System;
+using System.Collections.Generic;
+
+namespace ServerAPI.ViewModels
+{
+	
+	public class KeepSeparateVm
+	{
+		public int PersonId { get; set; }
+		public int? LocationId { get; set; }
+		public int? HousingUnitId { get; set; }
+		public int? HousingUnitListId { get; set; }
+		
+		public int KeepSeparateId { get; set; }
+		public int KeepSepInmateId { get; set; }
+		public int KeepSepInmate2Id { get; set; }
+		public int KeepSepAssocInmateId { get; set; }
+		public int KeepSepSubsetInmateId { get; set; }
+		public int KeepSeparateOfficerId { get; set; }
+
+		public string PersonLastName { get; set; }
+		public string PersonFirstName { get; set; }
+		public string PersonMiddleName { get; set; }
+		public string InmateNumber { get; set; }
+		public string KeepSepLabel { get; set; }
+		public string Assoc { get; set; }
+		public string Subset { get; set; }
+		public string KeepSepAssoc { get; set; }
+		public string KeepSepSubset { get; set; }
+		public string KeepSepAssocSubset { get; set; }
+		public string KeepSepType { get; set; }
+		public string KeepSepReason { get; set; }
+		public string KeepSepTypeName { get; set; }
+		public KeepSepType Type { get; set; }
+		public PersonVm KeepSepInmateDetail { get; set; }
+		public HousingDetail HousingDetail { get; set; }
+		public string Reason { get; set; }
+		public string KeepSeparateNote { get; set; }
+		public string KeepSepHistoryList { get; set; }
+		public string FacilityAbbr { get; set; }
+		public bool InmateActive { get; set; }
+		public bool IsDeleted { get; set; }
+		public DateTime KeepSeparateDate { get; set; }
+		public int? KeepSepAssoc1SubsetId {get;set;}
+		public int? KeepSepAssoc1Id {get;set;}
+	}
+
+	public class KeepSeparateAlertVm
+	{
+		public List<KeepSeparateVm> KeepSeparateAssocList { get; set; }
+		public List<KeepSeparateVm> KeepSeparateInmateList { get; set; }
+	}
+
+	public class KeepSepInmateDetailsVm
+	{
+		public int PeronId { get; set; }
+		public int InmateId { get; set; }
+		public int FacilityId { get; set; }
+		public int HousingUnitId { get; set; }
+		public string FirstName { get; set; }
+		public string LastName { get; set; }
+		public string Location { get; set; }
+		public string InmateNumber { get; set; }
+		public string ConflictType { get; set; }
+		public HousingDetail Housing { get; set; }
+	}
+}

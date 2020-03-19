@@ -1,0 +1,800 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using GenerateTables.Models;
+using Microsoft.AspNetCore.Http;
+using ServerAPI.Utilities;
+using ServerAPI.ViewModels;
+using Microsoft.EntityFrameworkCore;
+
+namespace ServerAPI.Services
+{
+    public class IncidentWizardService : IIncidentWizardService
+    {
+        private readonly AAtims _context;
+        private readonly ICommonService _commonService;
+        private readonly int _personnelId;
+        private readonly IIncidentService _incidentService;
+        private readonly IAppointmentViewerService _appointmentViewerService;
+        private readonly IInterfaceEngineService _interfaceEngineService;
+
+        public IncidentWizardService(AAtims context,
+            IHttpContextAccessor httpContextAccessor,
+            ICommonService commonService,
+            IIncidentService incidentService,
+            IInterfaceEngineService interfaceEngineService,
+            IAppointmentViewerService iAppointmentViewerService)
+        {
+            _context = context;
+            _commonService = commonService;
+            _incidentService = incidentService;
+            string facilitId = httpContextAccessor.HttpContext.User.FindFirst(AuthDetailConstants.FACILITYID)?.Value;
+            if (!string.IsNullOrEmpty(facilitId))
+            {
+            }
+
+            _personnelId = Convert.ToInt32(httpContextAccessor.HttpContext.User.FindFirst("personnelId")?.Value);
+            _appointmentViewerService = iAppointmentViewerService;
+            _interfaceEngineService = interfaceEngineService;
+        }
+
+        //for Drop downs Step-2
+        public List<IncidentViolationVm> DisciplinaryLookUpDetails(string code = "", string description = "")
+        {
+            IQueryable<DisciplinaryControlLookup> disciplinaryControlLookup = _context.DisciplinaryControlLookup.
+            Where(w => !w.InactiveFlag.HasValue || w.InactiveFlag == 0);
+
+            disciplinaryControlLookup = disciplinaryControlLookup.Where(w =>
+             w.DisciplinaryControlLookupType == (int?) DisciplinaryLookup.DISCVIOL && 
+             (string.IsNullOrEmpty(code) || w.DisciplinaryControlLookupName.StartsWith(code)) && 
+             (string.IsNullOrEmpty(description) || w.DisciplinaryControlLookupDescription.StartsWith(description)) ||
+              w.DisciplinaryControlLookupType == (int?) DisciplinaryLookup.DISCWAIV ||
+              w.DisciplinaryControlLookupType == (int?) DisciplinaryLookup.DISCFIND ||
+              w.DisciplinaryControlLookupType == (int?) DisciplinaryLookup.DISCPLEA ||
+              w.DisciplinaryControlLookupType == (int?) DisciplinaryLookup.DISCSANC);
+
+            return disciplinaryControlLookup.Select(s => new IncidentViolationVm
+            {
+                DisciplinaryControlLookupId = s.DisciplinaryControlLookupId,
+                DisciplinaryControlLookupDescription = s.DisciplinaryControlLookupDescription,
+                DisciplinaryControlLookupName = s.DisciplinaryControlLookupName,
+                DisciplinaryControlLookupType = s.DisciplinaryControlLookupType,
+                DisciplinaryControlLevel = s.DisciplinaryControlLookupLevel,
+            }).OrderBy(o => o.DisciplinaryControlLookupName).ToList();
+        }
+
+        //For Grid Details Step-2
+        public List<IncicentViolationSaveVm> ViolationDetails(int diciplinaryInmateId)
+        {
+            List<IncidentViolationVm> lookupDetails = DisciplinaryLookUpDetails();
+            List<int> id = _context.DisciplinaryControlLookup.Where(w => !w.InactiveFlag.HasValue || w.InactiveFlag == 0)
+                .Select(s => s.DisciplinaryControlLookupId).ToList();
+
+            List<IncicentViolationSaveVm> result = _context.DisciplinaryControlXref.Where(w =>
+            w.DisciplinaryInmate.DisciplinaryInmateId == diciplinaryInmateId
+            && id.Contains(w.DisciplinaryControlViolationId.GetValueOrDefault())).Select(s =>
+            new IncicentViolationSaveVm
+            {
+                DisciplinaryControlXrefId = s.DisciplinaryControlXrefId,
+                DisciplinaryControlViolationId = s.DisciplinaryControlViolationId,
+                DisciplinaryControlNotes = s.DisciplinaryControlNotes,
+                DisciplinaryControlLevelId = s.DisciplinaryControlLevelId,
+                DisciplinaryControlFindingId = s.DisciplinaryControlFindingId,
+                DisciplinaryControlSanctionId = s.DisciplinaryControlSanctionId,
+                DisciplinaryControlPleaId = s.DisciplinaryControlPleaId,
+                LookupDetails = lookupDetails,
+                DisciplinaryControlSanctionDays = s.DisciplinaryControlSanctionDays,
+                DisciplinaryControlSysRecSanctionid = s.DisciplinaryControlSysRecSanctionId,
+                DisciplinaryControlSysRecSanctionDays = s.DisciplinaryControlSysRecSanctionDays,
+                DisciplinaryControlSysRecPriorCount = s.DisciplinaryControlSysRecPriorCount
+            }).ToList();
+
+            result.ForEach(value =>
+            {
+                value.Violation = lookupDetails.Where(w => w.DisciplinaryControlLookupType == (int?) DisciplinaryLookup.DISCVIOL &&
+                w.DisciplinaryControlLookupId == value.DisciplinaryControlViolationId).Select(s => s.DisciplinaryControlLookupName
+                + " " + s.DisciplinaryControlLookupDescription).FirstOrDefault();
+
+                value.Level = lookupDetails.Where(w => w.DisciplinaryControlLookupType == (int?) DisciplinaryLookup.DISCVIOL &&
+                w.DisciplinaryControlLookupId == value.DisciplinaryControlLevelId).Select(s =>
+                s.DisciplinaryControlLevel).FirstOrDefault();                
+
+                value.Finding = lookupDetails.Where(w => w.DisciplinaryControlLookupType == (int?) DisciplinaryLookup.DISCFIND &&
+                w.DisciplinaryControlLookupId == value.DisciplinaryControlFindingId).Select(s =>
+                s.DisciplinaryControlLookupDescription).FirstOrDefault();
+
+                value.Sanction = lookupDetails.Where(w => w.DisciplinaryControlLookupType == (int?) DisciplinaryLookup.DISCSANC &&
+                w.DisciplinaryControlLookupId == value.DisciplinaryControlSanctionId).Select(s =>
+                s.DisciplinaryControlLookupDescription).FirstOrDefault();
+
+                value.Plea = lookupDetails.Where(w => w.DisciplinaryControlLookupType == (int?) DisciplinaryLookup.DISCPLEA &&
+                w.DisciplinaryControlLookupId == value.DisciplinaryControlPleaId).Select(s =>
+                s.DisciplinaryControlLookupDescription).FirstOrDefault();
+            });
+            return result;
+        }
+
+        //for Post Method Step-2
+        public async Task<int> DisciplinaryControlInsertUpdate(IncicentViolationSaveVm details)
+        {
+            switch (details.Operation)
+            {
+                case DisciplinaryOperation.Add:
+                    {
+                        DisciplinaryControlXref value = new DisciplinaryControlXref
+                        {
+                            DisciplinaryControlViolationId = details.DisciplinaryControlViolationId,
+                            DisciplinaryControlFindingId = details.DisciplinaryControlFindingId,
+                            DisciplinaryControlSanctionId = details.DisciplinaryControlSanctionId,
+                            DisciplinaryControlSanctionDays = details.DisciplinaryControlSanctionDays,
+                            DisciplinaryControlSysRecSanctionId = details.DisciplinaryControlSysRecSanctionid,
+                            DisciplinaryControlSysRecSanctionDays = details.DisciplinaryControlSysRecSanctionDays,
+                            DisciplinaryControlSysRecPriorCount = details.DisciplinaryControlSysRecPriorCount,
+                            DisciplinaryControlNotes = details.DisciplinaryControlNotes,
+                            DisciplinaryInmateId = details.DisciplinaryInmateId,
+                            DisciplinaryControlLevelId = details.DisciplinaryControlLevelId
+                        };
+                        _context.Add(value);
+                        break;
+                    }
+                case DisciplinaryOperation.Edit:
+                    {
+                        DisciplinaryControlXref result = _context.DisciplinaryControlXref.Single(s =>
+                            s.DisciplinaryControlXrefId == details.DisciplinaryControlXrefId);
+                        result.DisciplinaryControlViolationId = details.DisciplinaryControlViolationId;
+                        result.DisciplinaryControlFindingId = details.DisciplinaryControlFindingId;
+                        result.DisciplinaryControlSanctionId = details.DisciplinaryControlSanctionId;
+                        result.DisciplinaryControlSysRecSanctionId = details.DisciplinaryControlSysRecSanctionid;
+                        result.DisciplinaryControlSysRecSanctionDays = details.DisciplinaryControlSysRecSanctionDays;
+                        result.DisciplinaryControlSysRecPriorCount = details.DisciplinaryControlSysRecPriorCount;
+                        result.DisciplinaryControlNotes = details.DisciplinaryControlNotes;
+                        result.DisciplinaryControlLevelId = details.DisciplinaryControlLevelId;
+                        result.DisciplinaryControlPleaId = details.DisciplinaryControlPleaId;
+                        result.DisciplinaryControlSanctionDays = details.DisciplinaryControlSanctionDays;
+                        break;
+                    }
+                case DisciplinaryOperation.Delete:
+                    {
+                        DisciplinaryControlXref result = _context.DisciplinaryControlXref.Single(s =>
+                            s.DisciplinaryControlXrefId == details.DisciplinaryControlXrefId);
+                        _context.DisciplinaryControlXref.Remove(result);
+                        break;
+                    }
+            }
+
+            return await _context.SaveChangesAsync();
+        }
+
+        public async Task<int> DisciplinaryInmateUpdate(IncidentInmateVm value)
+        {
+            DisciplinaryInmate isExist = _context.DisciplinaryInmate.Single(s => s.DisciplinaryInmateId == value.InmateId);
+                isExist.DisciplinaryReviewNotes = value.ReviewNotes;
+                isExist.DisciplinaryReviewOfficer = value.ReviewOfficerId;
+                isExist.DisciplinaryReviewDate = value.ReviewDate;
+            return await _context.SaveChangesAsync();
+        }
+
+        public DisciplinaryHearing GetScheduleHearing(int disciplinaryInmateId)
+        {
+            DisciplinaryHearing disciplinaryHearing = _context.DisciplinaryInmate.Where(x => x.DisciplinaryInmateId == disciplinaryInmateId)
+             .Select(s => new DisciplinaryHearing
+             {
+                 ScheduleHearingLoc = s.DisciplinaryScheduleHearingLocation,
+                 FindingNotes = s.DisciplinaryFindingNotes,
+                 DisciplinaryRecommedations = s.DisciplinaryRecommendations,
+                 HearingOfficer1 = _context.Personnel.Where(d => d.PersonnelId == s.DisciplinaryHearingOfficer1).Select(i => new PersonnelVm
+                 {
+                     PersonLastName = i.PersonNavigation.PersonLastName,
+                     PersonFirstName = i.PersonNavigation.PersonFirstName,
+                     PersonnelNumber = i.PersonnelNumber
+                 }).SingleOrDefault(),
+                 HearingOfficer2 = _context.Personnel.Where(d => d.PersonnelId == s.DisciplinaryHearingOfficer2).Select(i => new PersonnelVm
+                 {
+                     PersonLastName = i.PersonNavigation.PersonLastName,
+                     PersonFirstName = i.PersonNavigation.PersonFirstName,
+                     PersonnelNumber = i.PersonnelNumber
+                 }).SingleOrDefault(),
+                 ReviewOfficer = _context.Personnel.Where(d => d.PersonnelId == s.DisciplinaryReviewOfficer).Select(i => new PersonnelVm
+                 {
+                     PersonLastName = i.PersonNavigation.PersonLastName,
+                     PersonFirstName = i.PersonNavigation.PersonFirstName,
+                     PersonnelNumber = i.PersonnelNumber
+                 }).SingleOrDefault(),
+                 ReviewCompleteOfficer = _context.Personnel.Where(d => d.PersonnelId == s.DisciplinaryReviewCompleteOfficer).Select(i => new PersonnelVm
+                 {
+                     PersonLastName = i.PersonNavigation.PersonLastName,
+                     PersonFirstName = i.PersonNavigation.PersonFirstName,
+                     PersonnelNumber = i.PersonnelNumber
+                 }).SingleOrDefault(),
+                 DisciplinaryHearingDate = s.DisciplinaryHearingDate,
+                 ScheduleHearingDate = s.DisciplinaryScheduleHearingDate,
+                 DisciplinaryIncidentDate = s.DisciplinaryIncident.DisciplinaryIncidentDate,
+                 DisciplinaryFindingDate = s.DisciplinaryFindingDate,
+                 DisciplinaryReviewDate = s.DisciplinaryReviewDate,
+                 DisciplinaryReviewCompleteDate = s.DisciplinaryReviewCompleteDate,
+                 AppealDueDate = s.AppealDueDate,
+                 DisciplinarySanction = s.DisciplinarySanction,
+                 InmateInterview = s.InmateInterview,
+                 HearingComplete = s.HearingComplete == 1,
+                 InmatePresent = s.DisciplinaryInmatePresent == 1,
+                 HearingOfficerId1 = s.DisciplinaryHearingOfficer1 ?? 0,
+                 HearingOfficerId2 = s.DisciplinaryHearingOfficer2 ?? 0,
+                 DisciplinaryInmateId = s.DisciplinaryInmateId,
+                 DisciplinaryReviewNotes = s.DisciplinaryReviewNotes,
+                 ReviewOfficerId = s.DisciplinaryReviewOfficer ?? 0,
+                 DisciplinaryHearingHold=s.DisciplinaryHearingHold,
+                 DisciplinaryHearingHoldReason=s.DisciplinaryHearingHoldReason
+             }).SingleOrDefault();
+            return disciplinaryHearing;
+        }
+
+        #region Involved Party Entry
+
+        //Get method for involved party details depend on disciplinaryInmateId
+        public ClassifyInvPartyDetailsVm GetInvPartyEntryDetails(int disciplinaryInmateId)
+        {
+            ClassifyInvPartyDetailsVm invParty = _context.DisciplinaryInmate
+                .Where(w => w.DisciplinaryInmateId == disciplinaryInmateId).Select(s => new ClassifyInvPartyDetailsVm
+                {
+                    DisciplinaryIncidentId = s.DisciplinaryIncidentId,
+                    InmateId = s.InmateId ?? 0,
+                    DisciplinaryInmateId = s.DisciplinaryInmateId,
+                    IncidentNum = s.DisciplinaryIncident.DisciplinaryNumber,
+                    HearingComplete = s.HearingComplete ?? 0,
+                    ByPassHearing = s.DisciplinaryInmateBypassHearing == 1,
+                    DisciplinaryOtherName = s.DisciplinaryOtherName,
+                    InvolvedType = s.DisciplinaryInmateType,
+                    ViolationDescription = s.DisciplinaryViolationDescription,
+                    DisciplinaryDamage = s.DisciplinaryDamage,
+                    Active = s.DisciplinaryIncident.DisciplinaryActive == 1,
+                    NarrativeFlag = s.PersonnelId.HasValue && s.NarrativeFlag == true,
+                    PersonnelId = s.PersonnelId,
+                    NarrativeFlagNote =s.NarrativeFlagNote
+                }).Single();
+            LookupInterface lookupInterface = _context.LookupInterface
+                .FirstOrDefault(a => a.LookupType == LookupConstants.DISCTYPE);
+            invParty.FlagFixedName6 = lookupInterface?.FlagFixedName6;
+            invParty.FlagFixedName7 = lookupInterface?.FlagFixedName7;
+            return invParty;
+        }
+
+        //Insert and update for Involved Party Details
+        public async Task<int> InsertUpdateInvolvedParty(ClassifyInvPartyDetailsVm invParty)
+        {
+            DisciplinaryInmate inmate =
+                _context.DisciplinaryInmate.SingleOrDefault(
+                    d => d.DisciplinaryInmateId == invParty.DisciplinaryInmateId) ?? new DisciplinaryInmate
+                    {
+                        //Insert For Involved Party Details
+                        DisciplinaryIncidentId = invParty.DisciplinaryIncidentId,
+                        CreateDate = DateTime.Now,
+                        UpdateDate = DateTime.Now
+                    };
+            //Common Fields For Insert and Update
+            inmate.DisciplinaryInmateType = invParty.InvolvedType;
+            inmate.DisciplinaryInmateBypassHearing = invParty.ByPassHearing ? 1 : 0;
+            inmate.DisciplinaryViolationDescription = invParty.ViolationDescription;
+            inmate.DisciplinaryDamage = invParty.DisciplinaryDamage;
+            inmate.DisciplinaryOtherName = invParty.DisciplinaryOtherName;
+            inmate.InmateId = invParty.InmateId > 0 ? invParty.InmateId : null;
+            inmate.PersonnelId = invParty.PersonnelId > 0 ? invParty.PersonnelId : null;
+            if (inmate.DisciplinaryInmateId == 0)
+            {
+                _context.DisciplinaryInmate.Add(inmate);
+                await _context.SaveChangesAsync();
+            }
+            inmate.NarrativeFlag = invParty.NarrativeFlag;
+            inmate.NarrativeFlagNote = invParty.NarrativeFlagNote;
+            await _context.SaveChangesAsync();
+            DisciplinaryIncident dispIncident = _context.DisciplinaryIncident
+                .Single(a => a.DisciplinaryIncidentId == invParty.DisciplinaryIncidentId);
+            int count = _context.DisciplinaryInmate
+                .Count(a => a.DisciplinaryIncidentId == invParty.DisciplinaryIncidentId
+                            && a.NarrativeFlag == true && a.PersonnelId > 0 && (!a.DeleteFlag.HasValue || a.DeleteFlag == 0));
+            dispIncident.ExpectedNarrativeCount = dispIncident.DisciplinaryOfficerNarrativeFlag == true ?
+                   count + 1 : count;
+            await _context.SaveChangesAsync();
+            return inmate.DisciplinaryInmateId;
+        }
+
+        #endregion
+
+        //Step-4
+        public async Task<int> IncidentHearingUpdate(DisciplinaryHearing value)
+        {
+            DisciplinaryInmate result = _context.DisciplinaryInmate.Single(s => s.DisciplinaryInmateId == value.DisciplinaryInmateId);
+                result.DisciplinaryInmatePresent = value.InmatePresent ? 1 : 0;
+                result.DisciplinaryHearingDate = value.DisciplinaryHearingDate;
+                result.DisciplinaryHearingOfficer1 = value.HearingOfficerId1;
+                result.DisciplinaryHearingOfficer2 = value.HearingOfficerId2;
+                result.DisciplinaryFindingDate = value.DisciplinaryFindingDate;
+                result.DisciplinaryFindingNotes = value.FindingNotes;
+                result.DisciplinaryRecommendations = value.DisciplinaryRecommedations;
+                result.HearingComplete = value.HearingComplete ? 1 : 0;
+                result.InmateInterview = value.InmateInterview;
+                return await _context.SaveChangesAsync();
+        }
+
+        //Step-4(PopUp)
+        public async Task<int> DisciplinaryControlXrefUpdate(IncicentViolationSaveVm value)
+        {
+            DisciplinaryControlXref result = _context.DisciplinaryControlXref.Find(value.DisciplinaryControlXrefId);
+            result.DisciplinaryControlFindingId = value.DisciplinaryControlFindingId;
+            result.DisciplinaryControlSanctionId = value.DisciplinaryControlSysRecSanctionid;
+            result.DisciplinaryControlNotes = value.DisciplinaryControlNotes;
+            result.DisciplinaryControlWaiverId = value.DisciplinaryControlWaiverId;
+            result.DisciplinaryControlPleaId = value.DisciplinaryControlPleaId;
+            result.DisciplinaryControlSanctionDays = value.DisciplinaryControlSanctionDays;
+            result.DisciplinaryControlSysRecSanctionId = value.DisciplinaryControlSysRecSanctionid;
+            result.DisciplinaryControlSysRecSanctionDays = value.DisciplinaryControlSysRecSanctionDays;
+            result.DisciplinaryControlSysRecPriorCount = value.DisciplinaryControlSysRecPriorCount;
+            return await _context.SaveChangesAsync();
+        }
+
+
+        #region Shedule Hearing
+        public bool CheckIncidentComplete(int incidentId) =>
+            _context.DisciplinaryIncident.SingleOrDefault(di => di.DisciplinaryIncidentId == incidentId
+                 && di.DisciplinaryActive != 1)?.DisciplinaryIncidentId > 0;
+
+        private InmateDetailsList LoadInmateDetails(int inmateId)
+        {
+            //To get Inmate Details
+            InmateDetailsList inmateDetails = _context.Inmate.Where(i => i.InmateId == inmateId).Select(i =>
+                new InmateDetailsList
+                {
+                    FacilityId = i.FacilityId,
+                    FacilityAbbr = i.Facility.FacilityAbbr,
+                    InmateNumber = i.InmateNumber,
+                    PersonFirstName = i.Person.PersonFirstName,
+                    PersonLastName = i.Person.PersonLastName,
+                    PersonMiddleName = i.Person.PersonMiddleName,
+                    HousingUnitId = i.HousingUnitId ?? 0,
+                    PersonDob = i.Person.PersonDob,
+                    HousingLocation = i.HousingUnit.HousingUnitLocation,
+                    HousingNumber = i.HousingUnit.HousingUnitNumber,
+                    HousingUnitBedLocation = i.HousingUnit.HousingUnitBedLocation,
+                    HousingUnitBedNumber = i.HousingUnit.HousingUnitBedNumber,
+                    HousingUnitListId = i.HousingUnit.HousingUnitId > 0 ? i.HousingUnit.HousingUnitListId : 0,
+                    PersonId = i.PersonId,
+                    InmateActive = i.InmateActive,
+                    ClassificationReason = i.InmateClassification.InmateClassificationReason,
+                    TrackLocation = i.InmateCurrentTrackNavigation.PrivilegeDescription
+                }).SingleOrDefault();
+            return inmateDetails;
+        }
+
+        public List<AoAppointmentVm> GetAppointmentSchedule(int facilityId, int locationId, DateTime fromDate, DateTime toDate)
+        {
+            CalendarInputs inputs = new CalendarInputs
+            {
+                FromDate = fromDate,
+                ToDate = toDate,
+                LocationId = locationId,
+                FacilityId = facilityId
+            };
+            //List<AoAppointmentVm> listAllAppointments =
+            //    _appointmentViewerService.AppointmentViewer(inputs).ToList();
+
+            List<AoAppointmentVm> listAllAppointments =
+                _appointmentViewerService.CheckAppointment(inputs).ToList();
+
+            List<ScheduleInvolvedParty> schListInv = _context.ScheduleIncident.Include(ii => ii.Location)
+                .Where(a => !a.DeleteFlag && a.LocationId == locationId && a.StartDate.Date == fromDate.Date).ToList();
+
+            List<KeyValuePair<int, int>> inmateIds = _context.DisciplinaryInmate.Select(ii => new KeyValuePair<int, int>
+            (ii.DisciplinaryInmateId, ii.InmateId ?? 0
+            )).ToList();
+
+            List<AoAppointmentVm> lstScheduleVm = schListInv.Select(sch => new AoAppointmentVm
+            {
+                StartDate = sch.StartDate,
+                EndDate = sch.EndDate,
+                LocationId = sch.LocationId ?? 0,
+                ScheduleId = sch.ScheduleId,
+                DispInmateId = sch.DisciplinaryInmateId,
+                Duration = sch.Duration,
+                DeleteReason = sch.DeleteReason,
+                IsSingleOccurrence = sch.IsSingleOccurrence,
+                Location = sch.Location.PrivilegeDescription,
+                InmateId = inmateIds.Single(ii => ii.Key == sch.DisciplinaryInmateId).Value
+            }).ToList();
+
+            lstScheduleVm.ForEach(ii => { ii.InmateDetails = LoadInmateDetails(ii.InmateId ?? 0); });
+            lstScheduleVm.AddRange(listAllAppointments);
+
+            return lstScheduleVm;
+        }
+
+
+        public List<IncidentAppointmentVm> GetAppointmentRooms(DateTime? date, int locationId)
+        {
+            List<IncidentAppointmentVm> appointmentDetails = _context.ScheduleInmate.Where(app =>
+                !app.DeleteFlag && (app.StartDate.Date == date.Value.Date)
+                                && (locationId <= 0 || app.LocationId == locationId)).Select(ap =>
+                new IncidentAppointmentVm
+                {
+                    ApptStartDate = ap.StartDate,
+                    ApptEndDate = ap.EndDate,
+                    PersonDetail = new PersonDetailVM
+                    {
+                        Number = ap.Inmate.InmateNumber,
+                        LastName = ap.Inmate.Person.PersonLastName,
+                        FirstName = ap.Inmate.Person.PersonFirstName,
+                        MiddleName = ap.Inmate.Person.PersonMiddleName
+                    },
+                }).ToList();
+
+            return appointmentDetails;
+        }
+
+        //AWAITING SUPERVISOR APPROVAL
+        public bool CheckIncidentHearing(int incidentId) =>
+            _context.DisciplinaryIncident.SingleOrDefault(di => di.DisciplinaryIncidentId == incidentId)?.AllowHearingFlag == 1;
+
+        //The Appointment date/time and Location already exists. Do You Want To Update? warn
+        public List<int> GetDuplicateAppointments(int inmateId, string location, DateTime fromDate, DateTime todate) =>
+            _context.ScheduleIncident.Where(app =>
+                app.DisciplinaryInmateId == inmateId && !app.DeleteFlag && app.StartDate == fromDate &&
+                app.EndDate == todate).Select(ii => ii.ScheduleId).Distinct().ToList();
+
+        public async Task<int> UpdateScheduleHearingLocation(IncidentAppointmentVm incidentAppointment)
+        {
+            DisciplinaryInmate dbDisciplinaryInmate = _context.DisciplinaryInmate.SingleOrDefault(dim => 
+                dim.DisciplinaryInmateId == incidentAppointment.DisciplinaryInmateId);
+
+            if (dbDisciplinaryInmate == null) return 0;
+            if (incidentAppointment.ScheduleHearingDate.HasValue)
+            {
+                //EventVm eventVm = new EventVm
+                //{
+                //    PersonId = incidentAppointment.PersonDetail.PersonId ?? 0,
+                //    CorresId = incidentAppointment.DisciplinaryInmateId,
+                //    EventName = EventNameConstants.INCIDENTHEARINGSCHEDULED
+                //};
+                //_commonService.EventHandle(eventVm);
+                _interfaceEngineService.Export(new ExportRequestVm
+                {
+                    EventName = EventNameConstants.INCIDENTHEARINGSCHEDULED,
+                    PersonnelId = _personnelId,
+                    Param1 = (incidentAppointment.PersonDetail.PersonId ?? 0).ToString(),
+                    Param2 = incidentAppointment.DisciplinaryInmateId.ToString()
+                });
+            }
+            dbDisciplinaryInmate.DisciplinaryScheduleHearingDate = incidentAppointment.ScheduleHearingDate;
+            dbDisciplinaryInmate.DisciplinaryScheduleHearingLocation = incidentAppointment.Location;
+            dbDisciplinaryInmate.DisciplinaryHearingHold = incidentAppointment.DisciplinaryHearingHold;
+            dbDisciplinaryInmate.DisciplinaryHearingHoldReason = incidentAppointment.DisciplinaryHearingHoldReason;
+            dbDisciplinaryInmate.DisciplinaryHearingHoldDate = incidentAppointment.DisciplinaryHearingHold ? DateTime.Now : (DateTime?)null;
+            dbDisciplinaryInmate.DisciplinaryHearingHoldBy = incidentAppointment.DisciplinaryHearingHold ? _personnelId : (int?)null;
+            if (incidentAppointment.DisciplinaryHearingHold)
+            {
+                dbDisciplinaryInmate.IncidentWizardStep = (int?) AoComponents.IpScheduleHearingComponent;
+                dbDisciplinaryInmate.DisciplinaryHearingDate = null;
+                dbDisciplinaryInmate.HearingComplete = 0;
+            }
+
+            return await _context.SaveChangesAsync();
+        }
+
+        #endregion
+        public List<AppliedBooking> GetAppliedBookings(int dispInmateId, int arrestId = 0)
+        {
+            List<AppliedBooking> appliedBookings = _context.DisciplinarySentDayXref.Where(a => a.DisciplinaryInmateId == dispInmateId
+            && !a.CrimeId.HasValue && (!a.DeleteFlag.HasValue || a.DeleteFlag == 0)
+             && (arrestId == 0 || a.ArrestId == arrestId))
+            .Select(a => new AppliedBooking
+            {
+                DispSentDayXrefid = a.DisciplinarySentDayXrefId,
+                ArrestId = a.ArrestId,
+                DispInmateId = a.DisciplinaryInmateId,
+                DeleteFlag = a.DeleteFlag
+            }).ToList();
+            int[] arrestIds = appliedBookings.Select(x => x.ArrestId ?? 0).ToArray();
+            List<Arrest> arrests = _context.Arrest.Where(a => arrestIds.Contains(a.ArrestId)).ToList();
+            appliedBookings.ForEach(a =>
+            {
+                a.BookingNumber = arrests.Single(x => x.ArrestId == a.ArrestId).ArrestBookingNo;
+                a.DisciplinaryDaysFlag = arrests.Single(x => x.ArrestId == a.ArrestId)
+                .ArrestSentenceDisciplinaryDaysFlag;
+                a.ArrestSentenceCode = arrests.Single(x => x.ArrestId == a.ArrestId).ArrestSentenceCode;
+            });
+            return appliedBookings;
+        }
+
+        public List<AppliedCharge> GetAppliedCharges(int dispInmateId, int crimeId = 0)
+        {
+            IQueryable<Crime> crimes = _context.Crime.SelectMany(a => _context.IncarcerationArrestXref
+            .Where(x => x.ArrestId == a.ArrestId), (a, x) => a);
+            IQueryable<DisciplinarySentDayXref> disciplinarySentDayXrefs = _context.DisciplinarySentDayXref
+                .Where(a => a.DisciplinaryInmateId == dispInmateId && (a.DeleteFlag == 0
+                || !a.DeleteFlag.HasValue) && (crimeId == 0 || a.CrimeId == crimeId));
+            List<AppliedCharge> appliedCharges= disciplinarySentDayXrefs.SelectMany(a => crimes.Where(x => x.CrimeId == a.CrimeId),
+                (a, x) => new AppliedCharge
+                {
+                    DispSentDayXrefid = a.DisciplinarySentDayXrefId,
+                    ArrestId = x.ArrestId,
+                    DispInmateId = a.DisciplinaryInmateId,
+                    DeleteFlag = a.DeleteFlag,
+                    DisciplinaryDaysFlag = x.ArrestSentenceDisciplinaryDaysFlag,
+                    CrimeId = x.CrimeId,
+                    BookingNumber = x.Arrest.ArrestBookingNo,
+                    CrimeNumber = x.CrimeNumber,
+                    CrimeCount = x.CrimeCount,
+                    CrimeCodeType = x.CrimeLookup.CrimeCodeType,
+                    ChargeQualifierLookup = x.ChargeQualifierLookup,
+                    CrimeSection = x.CrimeLookup.CrimeSection,
+                    CrimeDescription = x.CrimeLookup.CrimeDescription,
+                    CrimeStatuteCode = x.CrimeLookup.CrimeStatuteCode,
+                    ArrestSentenceCode = x.Arrest.ArrestSentenceCode
+                }).ToList();
+            List<LookupVm> lookupVms = _commonService.GetLookups(new[] { LookupConstants.CHARGEQUALIFIER });
+            appliedCharges.ForEach(a =>
+            {
+                a.LookupDescription = lookupVms.Where(x => x.LookupIndex == Convert.ToInt32(a.ChargeQualifierLookup))
+                .Select(x => x.LookupDescription).SingleOrDefault();
+            });
+            return appliedCharges;
+        }
+
+        public async Task<int> ReviewComplete(ReviewComplete reviewComplete)
+        {
+            DisciplinaryInmate disciplinaryInmate = _context.DisciplinaryInmate
+                .Single(a => a.DisciplinaryInmateId == reviewComplete.DisciplinaryInmateId);
+            disciplinaryInmate.DisciplinaryReviewCompleteDate = reviewComplete.CompleteDate;
+            disciplinaryInmate.DisciplinaryReviewCompleteOfficer = reviewComplete.CompleteOfficer;
+            disciplinaryInmate.DisciplinarySanction = reviewComplete.Sanction;
+            if (!disciplinaryInmate.DisciplinaryDays.Equals(reviewComplete.DisciplinaryDays))
+            {
+                if (reviewComplete.DisciplinaryDays == 0)
+                {
+                    List<DisciplinarySentDayXref> disciplinarySentDayXrefs;
+                    if (reviewComplete.AppliedBookings.Any())
+                    {
+                        disciplinarySentDayXrefs = _context.DisciplinarySentDayXref
+                            .Where(a => reviewComplete.AppliedBookings.Select(x => x.DispSentDayXrefid).Contains(a.DisciplinarySentDayXrefId))
+                            .ToList();
+                        disciplinarySentDayXrefs.ForEach(a =>
+                        {
+                            a.DeleteFlag = 1;
+                            a.DeleteDate = DateTime.Now;
+                            a.DeleteBy = _personnelId;
+                        });
+                        List<Arrest> arrests = _context.Arrest.Where(a => reviewComplete.AppliedBookings
+                        .Select(x => x.ArrestId).Contains(a.ArrestId)).ToList();
+                        arrests.ForEach(a => a.ArrestSentenceDisciplinaryDaysFlag = 1);
+                    }
+                    if (reviewComplete.AppliedCharges.Any())
+                    {
+                        disciplinarySentDayXrefs = _context.DisciplinarySentDayXref.Where(a => reviewComplete.AppliedCharges
+                        .Select(x => x.DispSentDayXrefid).Contains(a.DisciplinarySentDayXrefId)).ToList();
+                        int crimeId;
+                        disciplinarySentDayXrefs.ForEach(a =>
+                        {
+                            a.DeleteFlag = 1;
+                            a.DeleteDate = DateTime.Now;
+                            a.DeleteBy = _personnelId;
+                            crimeId = reviewComplete.AppliedCharges.Single(x => x.DispSentDayXrefid == a.DisciplinarySentDayXrefId).CrimeId;
+                            if (crimeId > 0)
+                            {
+                                a.CrimeId = crimeId;
+                            }
+                        });
+                        List<Crime> crimes = _context.Crime.Where(a => reviewComplete.AppliedCharges
+                        .Select(x => x.CrimeId).Contains(a.CrimeId)).ToList();
+                        crimes.ForEach(a => a.ArrestSentenceDisciplinaryDaysFlag = 1);
+                    }
+                    if (!reviewComplete.AppliedBookings.Any() && !reviewComplete.AppliedCharges.Any())
+                    {
+                        UpdateDispInmateDispDaysSentFlag(disciplinaryInmate, reviewComplete.AppealDueDate);
+                    }
+                }
+                else
+                {
+                    UpdateDispInmateDispDaysSentFlag(disciplinaryInmate, reviewComplete.AppealDueDate, 1);
+                    IQueryable<Incarceration> incarcerations = _context.Incarceration.Where(a => a.InmateId == reviewComplete.InmateId);
+                    int incarcerationId = incarcerations.Any(a => !a.ReleaseOut.HasValue)
+                        ? incarcerations.First(a => !a.ReleaseOut.HasValue).IncarcerationId
+                        : incarcerations.OrderByDescending(a => a.IncarcerationId).FirstOrDefault()?
+                              .IncarcerationId ?? 0;
+                    if (incarcerationId > 0)
+                    {
+                        int[] arrestIds = _context.IncarcerationArrestXref
+                            .Where(a => a.Incarceration.IncarcerationId == incarcerationId && a.ArrestId > 0)
+                            .OrderBy(a => a.Arrest.ArrestBookingNo)
+                            .Select(a => a.ArrestId.Value).ToArray();
+                        if (arrestIds.Any())
+                        {
+                            List<Arrest> arrests = _context.Arrest.Where(a => arrestIds.Contains(a.ArrestId)).ToList();
+                            arrests.ForEach(a =>
+                            {
+                                a.ArrestSentenceDisciplinaryDaysFlag = 1;
+                            });
+                            if (reviewComplete.AppliedBookings.Any() && !reviewComplete.AppliedCharges.Any())
+                            {
+                                UpdateDispInmateDispDaysSentFlag(disciplinaryInmate, reviewComplete.AppealDueDate);
+                            }
+                        }
+                    }
+                }
+            }
+            else
+            {
+                if (disciplinaryInmate.DisciplinaryDays == 0 && reviewComplete.DisciplinaryDays == 0)
+                {
+                    UpdateDispInmateDispDaysSentFlag(disciplinaryInmate, reviewComplete.AppealDueDate);
+                }
+            }
+            disciplinaryInmate.DisciplinaryDays = reviewComplete.DisciplinaryDays;
+            return await _context.SaveChangesAsync();
+        }
+
+        private void UpdateDispInmateDispDaysSentFlag(DisciplinaryInmate disciplinaryInmate, DateTime? appealDueDate, int flag = 0)
+        {
+            disciplinaryInmate.DisciplinaryDaysSentFlag = flag;
+            disciplinaryInmate.AppealDueDate = appealDueDate;
+        }
+
+        #region Wizard Complete
+
+        public IncidentWizardCompleteDetails GetIncidentWizardCompleteDetails(int incidentId)
+        {
+            //Get Incident details for wizard complete
+            IncidentWizardCompleteDetails incidentCompleteDetails = new IncidentWizardCompleteDetails
+            {
+                DisciplinaryInmateDetails = _context.DisciplinaryInmate
+                    .Where(d => d.DisciplinaryIncidentId == incidentId
+                                && (!d.DeleteFlag.HasValue || d.DeleteFlag == 0)
+                    ).Select(d => new ClassifyInvPartyDetailsVm
+                    {
+                        DisciplinaryIncidentId = d.DisciplinaryIncidentId,
+                        InmateId = d.InmateId,
+                        PersonId = d.InmateId > 0 ? d.Inmate.PersonId :
+                        d.PersonnelId > 0 ? d.Personnel.PersonId : default,
+                        PersonnelId = d.PersonnelId,
+                        ByPassHearing = d.DisciplinaryInmateBypassHearing == 1,
+                        CompleteDate = d.DisciplinaryReviewCompleteDate,
+                        PersonLastName = d.InmateId > 0 ? d.Inmate.Person.PersonLastName :
+                        d.PersonnelId > 0 ? d.Personnel.PersonNavigation.PersonLastName : default,
+                        PersonFirstName = d.InmateId > 0 ? d.Inmate.Person.PersonFirstName :
+                        d.PersonnelId > 0 ? d.Personnel.PersonNavigation.PersonFirstName : default,
+                        PersonMiddleName = d.InmateId > 0 ? d.Inmate.Person.PersonMiddleName :
+                        d.PersonnelId > 0 ? d.Personnel.PersonNavigation.PersonMiddleName : default,
+                        InmateNumber = d.Inmate.InmateNumber,
+                        Active = d.DisciplinaryIncident.DisciplinaryActive == 1,
+                        IncidentNum = d.DisciplinaryIncident.DisciplinaryNumber,
+                        InvolvedType = d.DisciplinaryIncident.DisciplinaryType,
+                        DisciplinaryInmateId = d.DisciplinaryInmateId,
+                        HearingComplete = d.HearingComplete ?? 0,
+                        DisciplinaryOtherName = d.DisciplinaryOtherName,
+                        HearingHold = d.DisciplinaryHearingHold
+                    }).ToList(),
+
+                NarrativeReviewCount = _context.DisciplinaryIncidentNarrative.Count(d =>
+                    (!d.DeleteFlag.HasValue || d.DeleteFlag == 0)
+                    && (!d.SupervisorReviewFlag.HasValue || d.SupervisorReviewFlag == 0) &&
+                    d.DisciplinaryIncidentId == incidentId),
+
+                ActiveIncident = _context.DisciplinaryInmateAppeal
+                    .Count(d => (d.DisciplinaryInmate.DisciplinaryIncident.DisciplinaryActive == 0 ||
+                                 !d.DisciplinaryInmate.DisciplinaryIncident.DisciplinaryActive.HasValue)
+                                && d.DisciplinaryInmate.DisciplinaryIncidentId == incidentId)
+            };
+
+            List<AoWizardProgressVm> incidentWizardProgresses =
+                _incidentService.GetIncidentWizardProgress(incidentCompleteDetails.DisciplinaryInmateDetails
+                    .Select(a => a.DisciplinaryInmateId).ToArray());
+
+            incidentCompleteDetails.DisciplinaryInmateDetails.ForEach(f =>
+            {
+                f.DisciplinaryType = _context.Lookup.Where(l => l.LookupIndex == f.InvolvedType
+                                                                && l.LookupType == LookupConstants.DISCTYPE)
+                    .Select(s => s.LookupDescription).SingleOrDefault();
+
+                f.ActiveIncidentProgress =
+                    incidentWizardProgresses.SingleOrDefault(x => x.DisciplinaryInmateId == f.DisciplinaryInmateId);
+            });
+
+            return incidentCompleteDetails;
+        }
+
+        public async Task<int> UpdateIncidentWizardComplete(IncidentWizardCompleteDetails incidentDetails)
+        {
+            //Update the Disciplinary Incident details for wizard complete
+            DisciplinaryIncident updateDisciplinaryIncident = _context.DisciplinaryIncident
+                .Find(incidentDetails.IncidentId);
+            updateDisciplinaryIncident.DisciplinaryActive = incidentDetails.Active ? 0 : 1;
+            int[] stepProgressId = incidentDetails.WizardStepProgresses.Where(a => a.WizardStepProgressId > 0)
+                .Select(a => a.WizardStepProgressId).ToArray();
+            _context.AoWizardStepProgress
+           .Where(a => stepProgressId.Contains(a.AoWizardStepProgressId)).ToList()
+           .ForEach(a =>
+           {
+               AoWizardStepProgressVm stepProgressVm = incidentDetails.WizardStepProgresses
+                .Single(x => x.WizardStepProgressId == a.AoWizardStepProgressId);
+               a.StepComplete = stepProgressVm.StepComplete;
+               a.StepCompleteById = _personnelId;
+               a.StepCompleteDate = DateTime.Now;
+           });
+            await _context.AoWizardStepProgress.AddRangeAsync(incidentDetails.
+                WizardStepProgresses.Where(a => a.WizardStepProgressId <= 0)
+                .Select(a => new AoWizardStepProgress
+                {
+                    AoWizardFacilityStepId = a.AoWizardFacilityStepId,
+                    AoWizardProgressId = a.WizardProgressId,
+                    AoComponentId = a.ComponentId,
+                    StepComplete = a.StepComplete,
+                    StepCompleteById = _personnelId,
+                    StepCompleteDate = DateTime.Now
+                }));
+            return await _context.SaveChangesAsync();
+        }
+
+        #endregion
+
+        #region Involved Party Notice
+
+        //Update Method For Involved Party Notice Wizard Step
+        public void UpdateDisciplinaryInmateNotice(int disciplinaryInmateId, DisciplinaryInmateNotice notice)
+        {
+            DisciplinaryInmate disciplinary = _context.DisciplinaryInmate.Find(disciplinaryInmateId);
+            if (disciplinary == null) return;
+            disciplinary.NoticeFlag = notice.NoticeFlag;
+            disciplinary.NoticeNote = notice.NoticeNote;
+            disciplinary.NoticeDate = notice.NoticeDate;
+            disciplinary.NoticePersonnelId = notice.NoticePersonnelId;
+            disciplinary.NoticeWavierId = notice.NoticeWavierId;
+            _context.SaveChangesAsync();
+        }
+
+        //Get Method For Involved Party Notice Wizard Step
+        public DisciplinaryInmateNotice GetDisciplinaryInmateNotice(int disciplinaryInmateId) =>
+            _context.DisciplinaryInmate.Where(w => w.DisciplinaryInmateId == disciplinaryInmateId)
+            .Select(s => new DisciplinaryInmateNotice
+            {
+                NoticeFlag=s.NoticeFlag,
+                NoticeDate = s.NoticeDate,
+                NoticeNote = s.NoticeNote,
+                NoticePersonnelId = s.NoticePersonnelId,
+                NoticeWavierId = s.NoticeWavierId
+            }).Single();
+
+        public bool CheckRecommendedFlag(int violationId, int findingId) => _context.DisciplinaryControlLookup
+                .SingleOrDefault(a => a.DisciplinaryControlLookupId == violationId &&
+                a.RecommendFindingId == findingId)?.RecommendFlag > 0;
+
+        public int GetPriorCount(int inmateId, int findingId, int violationId, int incidentId) => 
+            _context.DisciplinaryControlXref.Count(a => a.DisciplinaryControlViolationId == violationId
+            && a.DisciplinaryControlFindingId == findingId && a.DisciplinaryInmate.InmateId == inmateId
+            && a.DisciplinaryInmate.DisciplinaryIncidentId != incidentId && a.DisciplinaryInmate
+            .Inmate.Incarceration.Any(x => !x.ReleaseOut.HasValue && x.DateIn <= a.DisciplinaryInmate
+            .DisciplinaryIncident.DisciplinaryIncidentDate && a.DisciplinaryInmate.DisciplinaryIncident
+            .DisciplinaryIncidentDate <= DateTime.Now));
+
+        public KeyValuePair<int, int> GetSanction(int violationId, bool isRecSancOne)
+        {
+            KeyValuePair<int, int> recommendedSanction = isRecSancOne ? _context.DisciplinaryControlLookup
+                .Where(a => a.DisciplinaryControlLookupId == violationId)
+                .Select(a => new KeyValuePair<int, int>(a.Recommend1SanctionId ?? 0,
+                a.Recommend1Days ?? 0)).Single()
+            : _context.DisciplinaryControlLookup.Where(a => a.DisciplinaryControlLookupId == violationId)
+                .Select(a => new KeyValuePair<int, int>(a.Recommend2SanctionId ?? 0,
+                a.Recommend2Days ?? 0)).Single();
+            return recommendedSanction;
+        }
+
+        public async Task<int> InsertFlagEntry(IncidentViewer incidentViewer)
+        {
+            DisciplinaryIncident disciplinaryIncident = _context.DisciplinaryIncident.
+                Single(s => s.DisciplinaryIncidentId == incidentViewer.DisciplinaryIncidentId);
+            disciplinaryIncident.InitialEntryFlag = incidentViewer.InitialEntryFlag;
+            await _context.SaveChangesAsync();
+
+            return disciplinaryIncident.DisciplinaryIncidentId;
+        }
+
+        #endregion
+
+    }
+}

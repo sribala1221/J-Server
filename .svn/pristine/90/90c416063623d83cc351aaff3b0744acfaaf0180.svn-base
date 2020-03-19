@@ -1,0 +1,144 @@
+﻿using System;
+using System.Collections.Generic;
+
+namespace ServerAPI.ViewModels
+{
+
+    public class TrackHousingLocationVm
+    {
+        public int InmateId { get; set; }
+        public int LocationId { get; set; }
+        public string Location { get; set; }
+        public string TrakLocation { get; set; }
+        public HousingCapacityVm HousingDetail { get; set; }
+        public PersonInfoVm Person { get; set; }
+        public AppointmentTracking AppointmentTracking { get; set; }
+        public string InmateNumber { get; set; }
+        public int? TransferFlag { get; set; }
+        public string ImageName { get; set; }
+        public string FacilityAbbr { get; set; }
+        public string TrakNotes { get; set; }
+        public bool ApptAlertEndDate { get; set; }
+        public int? TransferFacilityId { get; set; }
+        public bool IsIncompleteTasks { get; set; }
+        public string ApptEndDate { get; set; }
+        public bool VisitFlag { get; set; }
+        public DateTime? DateOut { get; set; }
+        public int? EnrouteLocationId { get; set; }
+        public string Destination { get; set; }
+        public int ScheduleId { get; set; }
+        public DateTime? EnrouteStartOut { get; set; }
+        public  int FacilityId { get; set; }
+
+    }
+
+    public class TrackHousingCountVm
+    {
+        public int LocationId { get; set; }
+        public string TrakLocation { get; set; }
+        public int Count { get; set; }
+        public string HousingUnitLocation { get; set; }
+        public string HousingUnitNumber { get; set; }
+        public int Assigned { get; set; }
+        public int CurrentCapacity { get; set; }
+        public int OutofService { get; set; }
+        public bool DisplayFlag { get; set; }
+        public DateTime? AppointmentEndDate { get; set; }
+        public string ApptStartDate { get; set; }
+        public bool EndDateFlag { get; set; }
+        public DateTime? AllDayApptEndDate { get; set; }
+        public bool ApptAlertEndDate { get; set; }
+        public bool ReoccurFlag { get; set; }
+        public int HousingUnitListId { get; set; }
+        public bool EnrouteFlag { get; set; }
+    }
+
+    public class TrackHousingDetailVm
+    {
+        public List<TrackHousingLocationVm> LstTrackCheckedOut { get; set; }
+        public List<TrackHousingCountVm> LstTrackCheckedOutCount { get; set; }
+        public List<TrackHousingLocationVm> LstTrackTransfer { get; set; }
+        public List<TrackHousingCountVm> LstTrackTransferCount { get; set; }
+        public List<TrackHousingLocationVm> LstExternalCheckedOut { get; set; }
+        public List<TrackHousingCountVm> LstExternalCheckedOutCount { get; set; }
+        public List<TrackHousingLocationVm> LstInternalPod { get; set; }
+        public List<TrackHousingCountVm> LstInternalPodCount { get; set; }
+        public List<PrivilegeDetailsVm> LstPrivileges { get; set; }
+        public List<KeyValuePair<int, string>> RefusalReasonList { get; set; }
+        public List<TrackHousingCountVm> LstProgramOnlyCount { get; set; }
+        public List<TrackHousingLocationVm> LstProgramOnly { get; internal set; }
+        public List<TrackHousingCountVm> LstHearingOnlyCount { get; set; }
+        public List<TrackHousingLocationVm> LstHearingOnly { get; internal set; }
+    }
+
+    public class TrackingFacilityVm
+    {
+        public List<PrivilegeDetailsVm> LstPrivileges { get; set; }
+        public List<TrackHousingLocationVm> LstTrackFacility { get; set; }
+        public List<TrackHousingCountVm> LstTrackFacilityCount { get; set; }
+        public List<KeyValuePair<int, string>> RefusalReasonList { get; set; }
+        public List<HousingDetail> HousingLockdownList { get; set; }
+        public List<HousingDetail> HousingBuildingLockdownList { get; set; }
+        public List<HousingGroupAssignVm> HousingUnitGroup { get; set;}
+    }
+
+    public class HousingGroupAssignVm
+    {
+        public int HousingGroupId { get; set; }
+        public string HousingGroupName { get; set; } 
+        public int[] LstHousingUnitIds { get; set; }
+    }
+
+    public class EnrouteLocationInmate
+    {
+        public int InmateId { get; set; }
+        public string InmateNumber { get; set; }
+        public int? LocationId { get; set; }
+        public string Location { get; set; }
+        public int RefusalFlag { get; set; }
+        public int? DestinationId { get; set; }
+        public string Destination { get; set; }
+        public bool EnrouteFinalFlag { get; set; }
+        public bool EnrouteInFlag { get; set; }
+        public bool EnrouteOutFlag { get; set; }
+        public DateTime? DateOut { get; set; }
+        public HousingUnitVm HousingDetail { get; set; }
+        public PersonInfoVm Person { get; set; }
+        public string FacilityAbbr { get; set; }
+        public string ImageName { get; set; }
+        public int ScheduleId { get; set; }
+        public DateTime? EnrouteStartOut { get; set; }
+        public string TrackNotes { get; set; }
+        public bool ApptAlertEndDate { get; set; }
+        public DateTime? AppointmentEndDate { get; set; }
+        public bool ReoccurFlag { get; set; }
+        public bool VisitFlag { get; set; }
+        public int? ApptLocationId { get; set; }
+    }
+
+    public class EnrouteLocationCount
+    {
+        public int? LocationId { get; set; }
+        public string Location { get; set; }
+        public int Count { get; set; }
+        public List<EnrouteLocationCount> LstEnrouteLocationCount { get; set; }
+    }
+
+    public class EnrouteLocationVm
+    {
+        public List<EnrouteLocationInmate> LstEnrouteLocationInmate { get; set; }
+        public List<EnrouteLocationCount> LstDestinationLocationCount { get; set; }
+        public List<KeyValuePair<int, string>> RefusalReasonList { get; set; }
+        public List<PrivilegeDetailsVm> EnrouteLocationList { get; set; }
+    }
+
+    public class AppointmentTracking
+    {
+        public DateTime? AppointmentEndDate { get; set; }
+        public int ScheduleId { get; set; }
+        public int? ApptLocationId { get; set; }
+        public string ApptStartDate { get; set; }
+        public bool ReoccurFlag { get; set; }
+        public int InmateId { get; set; }
+    }
+}

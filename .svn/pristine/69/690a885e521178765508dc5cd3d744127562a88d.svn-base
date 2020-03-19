@@ -1,0 +1,266 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace ServerAPI.ViewModels
+{
+    public class PersonCountVm
+    {
+        //Person
+        public int Identity { get; set; }
+        public int Aka { get; set; }
+        public int Address { get; set; }
+        public int Char { get; set; }
+        public int Descriptor { get; set; }
+        public int Photo { get; set; }
+        public int Contact { get; set; }
+        public int Profile { get; set; }
+        public int Dna { get; set; }
+        public int Testing { get; set; }
+        public int Military { get; set; }
+        public int BioMetrics { get; set; }
+    }
+
+    public class InmateAlertsCountVm
+    {
+        //Alerts
+        public int Message { get; set; }
+        public int Flag { get; set; }
+        public int KeepSep { get; set; }
+        public int Assoc { get; set; }
+        public int Privilege { get; set; }
+        public int Observation { get; set; }
+    }
+
+    public class InmateBookingCountVm
+    {
+        //Booking
+        public int Incarceration { get; set; }
+        public int Booking { get; set; }
+    }
+
+    public class InmateBookingDetailsCountVm
+    {
+        public int Info { get; set; }
+        public int Charges { get; set; }
+        public int Warrant { get; set; }
+        public int Sheet { get; set; }
+        public int Bail { get; set; }
+        public int Sentence { get; set; }
+        public int Note { get; set; }
+        public int Clear { get; set; }
+        public int Overall { get; set; }
+        public int Transport { get; set; }
+        public int Prebook { get; set; }
+        public int Forms { get; set; }
+        public int Attach { get; set; }
+        public int Caseforms { get; set; }
+        public int Caseattach { get; set; }
+        public int Casehistory { get; set; }
+    }
+
+    public class InmateCountVm
+    {
+        //Inmate
+        public int Housing { get; set; }
+        public int Tracking { get; set; }
+        public int Appoint { get; set; }
+        public int Visit { get; set; }
+        public int Classify { get; set; }
+        public int Notes { get; set; }
+        public int Request { get; set; }
+        public int Incident { get; set; }
+        public int Grievance { get; set; }
+        public int Workcrew { get; set; }
+        public int Workfurlough { get; set; }
+    }
+
+    public class InmateMiscCountVm
+    {
+        //MISC
+        public int Inventory { get; set; }
+        public int Phone { get; set; }
+        public int Label { get; set; }
+        public int Ncic { get; set; }
+        public int Recchk { get; set; }
+        public int Attendee { get; set; }
+        public int Issuedprop { get; set; }
+        public int Library { get; set; }
+        public int Altsent { get; set; }
+    }
+
+    public class InmateProgramCountVm
+    {
+        //Program
+        public int Case { get; set; }
+        public int Assign { get; set; }
+        public int Track { get; set; }
+        public int Attend { get; set; }
+        public int Request { get; set; }
+    }
+
+    public class InmateMoneyCountVm
+    {
+        //Money
+        public int Ledger { get; set; }
+    }
+
+    public class InmateDetailsCountVm
+    {
+        public PersonCountVm PersonCountVm { get; set; }
+
+        public InmateAlertsCountVm AlertsCountVm { get; set; }
+
+        public InmateBookingCountVm BookingCountVm { get; set; }
+
+        public InmateCountVm InmateCountVm { get; set; }
+
+        public InmateMiscCountVm MiscCountVm { get; set; }
+
+        public InmateProgramCountVm ProgramCountVm { get; set; }
+
+        public InmateMoneyCountVm MoneyCountVm { get; set; }
+
+        //To get BookingNo for Booking dropdown
+        public List<InmateBookingNumberDetails> ListBookingNumber { get; set; }
+
+        //To get Inmate details SubModule 
+        public List<DetailVm> ListDetailChild { get; set; }
+        public PersonVm PersonDetails { get; set; }
+    }
+
+    public class InmateBookingNumberDetails
+    {
+        public string ArrestBookingNumber { get; set; }
+        public DateTime? BookingDate { get; set; }
+        public int? ArrestId { get; set; }
+        public int? IncarcerationId { get; set; }
+        public int IncarcerationArrestXrefId { get; set; }
+        public string ArrestType { get; set; }
+        public int PersonId { get; set; }
+        public int InmateId { get; set; }
+        public InmateBookingDetailsCountVm InmateBookingDetailsCountVm { get; set; }
+        public string BookingType { get; set; }
+        public string ArrestAbbrevation { get; set; }
+        public string CourtDocket { get; set; }
+        public DateTime? ArrestDate { get; set; }
+        public string ArrestCaseNumber { get; set; }
+        public DateTime? ClearDate { get; set; }
+        public string ClearReason { get; set; }
+        public string ArrestBookingType { get; set; }
+        public string Court { get; set; }
+        public string ArrestDisposition { get; set; }
+    }
+
+    public class DetailVm
+    {
+        public int DetailId { get; set; }
+        public string DetailName { get; set; }
+        public int DetailParentId { get; set; }
+        public bool DetailVisible { get; set; }
+        public string DetailToolTip { get; set; }
+    }
+
+    public class InmateFileDetailVm
+    {
+
+        public PersonVm PersonDetails { get; set; }
+        public InmateFileCountVm InmateFileCount { get; set; }
+
+        public List<BookingDetailCountVm> ListBookingNumber { get; set; }
+
+        public List<InmateBookingNumberDetails> ListBookingCasesNumber { get; set; }
+        public List<DetailVm> ListDetailChild { get; set; }
+        public int CourtCommitCnt { get; set; }
+    }
+
+    public class InmateFileCountVm
+    {
+
+        public int Identity { get; set; }
+        public int Aka { get; set; }
+        public int Address { get; set; }
+        public int Char { get; set; }
+        public int Descriptor { get; set; }
+        public int Photo { get; set; }
+        public int Contact { get; set; }
+        public int Profile { get; set; }
+        public int Dna { get; set; }
+        public int Testing { get; set; }
+        public int Military { get; set; }
+        public int BioMetrics { get; set; }
+        //Alerts
+        public int Message { get; set; }
+        public int Flag { get; set; }
+        public int Keepsep { get; set; }
+        public int Assoc { get; set; }
+        public int Privilege { get; set; }
+        public int Observation { get; set; }
+        //Inmate
+        public int Housing { get; set; }
+        public int Tracking { get; set; }
+        public int Appoint { get; set; }
+        public int Visit { get; set; }
+        public int Classify { get; set; }
+        public int Notes { get; set; }
+        public int Incident { get; set; }
+        public int Grievance { get; set; }
+        public int Workcrew { get; set; }
+        public int Workfurlough { get; set; }
+        public int Inmaterequest { get; set; }
+        //MISC
+        public int Inventory { get; set; }
+        public int Phone { get; set; }
+        public int Label { get; set; }
+        public int Ncic { get; set; }
+        public int Recchk { get; set; }
+        public int Attendee { get; set; }
+        public int Issuedprop { get; set; }
+        public int Library { get; set; }
+        public int Altsent { get; set; }
+        public int Tasks { get; set; }
+        public int Mail { get; set; }
+        //Program
+        public int Casemanagement { get; set; }
+        public int Classenrollment { get; set; }
+        public int Classattendance { get; set; }
+        public int Requesthistory { get; set; }
+        //Money
+        public int Ledger { get; set; }
+
+    }
+
+    public class BookingCountVm
+    {
+        public int Overall { get; set; }
+        public int Transport { get; set; }
+        public int Bookingforms { get; set; }
+        public int Bookingattach { get; set; }
+        public int Background { get; set; }
+        public int Livescan { get; set; }
+        public int Prebook { get; set; }
+        public int Intakecurrency { get; set; }
+        public int Bookinghistory { get; set; }
+        public int Keeper { get; set; }
+        public int Bookingsheetforms { get; set; }
+    }
+
+
+    public class BookingDetailCountVm
+    {
+        public string ArrestBookingNumber { get; set; }
+        public int? IncarcerationId { get; set; }
+        public DateTime? ReleaseOut { get; set; }
+        public DateTime? DateIn { get; set; }
+        public BookingCountVm BookingCountVm { get; set; }
+        public List<InmateBookingNumberDetails> InmateBookingNumberDetails { get; set; }
+        public int VerifyId { get; set; }
+    }
+
+    public class BookingHistoryVm
+    {
+        public List<BookingDetailCountVm> BookingDetailCount { get; set; }
+
+    }
+}

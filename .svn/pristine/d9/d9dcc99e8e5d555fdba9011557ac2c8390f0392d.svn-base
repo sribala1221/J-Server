@@ -1,0 +1,233 @@
+﻿using System;
+using System.Collections.Generic;
+
+namespace ServerAPI.ViewModels
+{
+    public class PersonAlertVm
+    {
+        public int PersonId { get; set; }
+        public int AlertId { get; set; }
+        public string AlertMessage { get; set; }
+        public string HistoryValue { get; set; }
+        public int CreatedBy { get; set; }
+        public int UpdateBy { get; set; }
+        public bool ActiveAlertFlag { get; set; }
+        public DateTime? ExpireDate { get; set; }
+        public DateTime CreateDate { get; set; }
+        public DateTime UpdateDate { get; set; }
+    }
+
+    public class FlagAlertVm : LookupVm
+    {
+        public int PersonId { get; set; }
+        public int PersonFlagId { get; set; }
+        public int PersonFlagIndex { get; set; }
+        public int InmateFlagIndex { get; set; }
+        public int DietFlagIndex { get; set; }
+        public string FlagNote { get; set; }
+        public bool DeleteFlag { get; set; }
+        public DateTime? FlagExpire { get; set; }
+        public int HistoryCount { get; set; }
+        public int? LookupSubListId { get; set; }
+        public string LookupSubListName { get; set; }
+        public int MedicalFlagIndex{ get; set; }
+        public List<KeyValuePair<int,string>> LookupSubList { get; set; }
+        public DateTime? CreateDate { get; set; }
+        //below property used for PREAReview scenario
+        public int PREAFlagIndex { get; set; }
+    }
+
+    public class PrivilegeAlertVm
+    {
+        public int InmateId { get; set; }
+
+        public int InmatePrivilegeXrefId { get; set; }
+        public DateTime? PrivilegeDate { get; set; }
+        public DateTime? PrivilegeRemoveDateTime { get; set; }
+        public DateTime? PrivilegeExpires { get; set; }
+        public DateTime? PrivilegeNextReview { get; set; }
+        public bool PrivilegeReviewFlag { get; set; }
+        public int? PrivilegeReviewInterval { get; set; }
+        public int PrivilegeId { get; set; }
+        public string PrivilegeType { get; set; }
+        public string PrivilegeDescription { get; set; }
+        public string PrivilegeNote { get; set; }
+        public int? PrivilegeRemoveOfficerId { get; set; }
+        public string DisciplinaryNumber { get; set; }
+        public int? PrivilegeDiscLinkId { get; set; }
+        public int FlagLookupId { get; set; }
+        public int? FlagValue { get; set; }
+        public Boolean IsRemove { get; set; }
+        public string PrivilegeRemoveNote { get; set; }
+        public string PrivilegeXrefHistoryList { get; set; }
+        public List<PrivilegeFlagVm> PrivilegeFlagList { get; set; }
+        public PersonnelVm PersonnelDetails { get; set; }
+        public PersonInfoVm PersonInfoVm { get; set; }
+        public int Count { get; set; }
+        public List<PrivilegeAlertVm> GroupPrivilegeList { get; set; }
+        public string HousingUnitLocation{ get;set;}
+        public string HousingUnitNumber{ get;set;}
+        public int HousingUnitId {get;set;}
+    }
+
+    public class ClassifyAlertsPrivilegeVm
+    {
+        public List<PrivilegeAlertVm> PrivilegeAlertDetail { get; set; }
+        public List<PrivilegeGroupFlagVm> PrivilegeGroupDetail { get; set; }
+        public List<PrivilegeGroupFlagVm> HousingGroupDetail { get; set; }
+    }
+    public class PrivilegeGroupFlagVm
+    {
+        public int PrivilegeId { get; set; }
+        public string PrivilegeDescription { get; set; }
+        public string HousingUnitLocation {get;set;}
+        public string HousingUnitNumber {get;set;}
+        public string Type { get; set; }
+        public int Count { get; set; }
+    }
+
+    public class PrivilegeFlagVm
+    {
+        public int PrivilegeFlagLookupId { get; set; }
+        public int PrivilegeId { get; set; }
+        public string FlagName { get; set; }
+        public Boolean IsFlag { get; set; }
+    }
+
+    public class PrivilegeIncidentDetailsVm
+    {
+        public List<PrivilegeDetailsVm> PrivilegeList { get; set; }
+        public List<DisciplinaryIncidentDetails> DisciplinaryIncidentList { get; set; }
+        public List<PrivilegeFlagVm> PrivilegeLookupList { get; set; }
+    }
+
+    public class FlagAlertHistoryVm : HistoryVm
+    {
+        public int CreateBy { get; set; }
+        public string FlagNote { get; set; }
+        public DateTime? FlagExpire { get; set; }
+        public bool DeleteFlag { get; set; }
+        public string LookupDescription { get; set; }
+        public int PersonFlagIndex { get; set; }
+        public int InmateFlagIndex { get; set; }
+        public int DietFlagIndex { get; set; }
+        public string LookupType { get; set; }
+        public string AssignmentReason { get; set; }
+        public int MedicalFlagIndex { get; set; }
+        public int PreaFlagIndex { get; set; }
+    }
+
+    public class FlagAlertHistoryByPersonVm
+    {
+        public List<FlagAlertHistoryVm> LstPersonFlag { get; set; }
+        public List<FlagAlertHistoryVm> LstInmateFlag { get; set; }
+        public List<FlagAlertHistoryVm> LstDietFlag { get; set; }
+        public List<FlagAlertHistoryVm> LstMedFlag { get; set; }
+        public List<FlagAlertHistoryVm> LstPreaFlag { get; set; }
+    }
+
+    public class AssocAlertHistoryVm : HistoryVm
+    {
+        public int PersonClassificationHistoryId { get; set; }
+        public int CreateBy { get; set; }
+    }
+
+    public class ActiveScheduleVm
+    {
+        public int ObservationScheduleId { get; set; }
+        public DateTime? StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
+        public string Note { get; set; }
+        public string TypeName { get; set; }
+        public int? ObservationType { get; set; }
+        public int DeleteFlag { get; set; }
+        public int ObservationActionId { get; set; }
+        public List<ScheduleActionVm> LstScheduleAction { get; set; }
+    }
+
+    public class ScheduleActionVm
+    {
+        public int ObservationScheduleActionId { get; set; }
+        public string ActionName { get; set; }
+        public int ObservationActionId { get; set; }
+        public int? ObservationScheduleInterval { get; set; }
+        public DateTime? LastReminderEntry { get; set; }
+        public string ObservationScheduleNote { get; set; }
+        public int? HousingUnitId { get; set; }
+        public int? ObservationLateEntryMax { get; set; }
+        public int? ObservationType { get; set; }
+    }
+
+    public class AlertObservationLog
+    {
+        public int ObservationLogId { get; set; }
+        public int? ObservationScheduleActionId { get; set; }
+        public DateTime? ObservationDateTime { get; set; }
+        public int ObservationLateEntryFlag { get; set; }
+        public string ActionAbbr { get; set; }
+        public DateTime? CreateDate { get; set; }
+        public PersonnelVm OfficerDetails { get; set; }
+        public int? LastReminderEntryBy { get; set; }
+    }
+
+    public class ObservationVm
+    {
+        public List<ActiveScheduleVm> LstActiveSchedule { get; set; }
+        public List<AlertObservationLog> AlertObservationLogs { get; set; }
+        public List<ActiveScheduleVm> LstInactiveSchedule { get; set; }
+    }
+
+    public class ObservationHistoryVm
+    {
+        public int ObservationScheduleHistoryId { get; set; }
+        public DateTime? CreateDate { get; set; }
+        public PersonVm PersonDetail { get; set; }
+    }
+
+    public class HistoryValueVm
+    {
+        public string Header { get; set; }
+        public string Details { get; set; }
+        public int ObservationScheduleHistoryId { get; set; }
+    }
+
+    public class ObservationHistoryDetails
+    {
+        public List<ObservationHistoryVm> ObservationHistoryVm { get; set; }
+        public List<HistoryValueVm> HistoryValueVm { get; set; }
+    }
+
+    public class AssocAlertValidation
+    {
+        public AssocErrorMessage ErrorMessage { get; set; }
+        public string Association { get; set; }
+        public string Subset { get; set; }
+        public string Status { get; set; }
+
+    }
+
+    public class ObservationLookupDetails {
+        public List<LookupVm> ListLookup { get; set; }
+        public List<int> ListObservationPolicy { get; set; }
+    }
+
+    public enum AssocErrorMessage
+    {
+        None,
+        AssocAssigned,
+        KeepSepAssigned,
+        KeepSepAssocAssigned,
+        SubsetAssigned,
+        KeepSepSubsetAssigned,
+        SealedInmate
+    }
+
+    public enum FlagAlert
+    {
+        PersonFlagIndex,
+        InmateFlagIndex,
+        DietFlagIndex,
+        MedicalFlagIndex,
+        PreaFlagIndex
+    }
+}

@@ -1,0 +1,58 @@
+using System;
+using System.Collections.Generic;
+
+namespace ServerAPI.ViewModels
+{
+    public class MoneyDepositoryVm
+    {
+        public int TransactionNo { get; set; }
+        public DateTime? TransactionDate { get; set; }
+        public string Description { get; set; }
+        public decimal Amount { get; set; }
+        public string TransactionReceipt { get; set; }
+        public string InmateNumber { get; set; }
+        public int InmateId { get; set; }
+        public bool VerifyFlag { get; set; }
+        public int PersonId { get; set; }
+        public PersonInfoVm PersonDetails { get; set; }
+        public PersonnelVm PersonnelDetails { get; set; }
+        public int FundId { get; set; }
+        public bool VoidFlag { get; set; }
+       
+
+
+    }
+    public class DepositoryFacilityDetailVm
+    {
+        public int FacilityId { get; set; }
+        public decimal CashDrawerMinimumBalance { get; set; }
+        public decimal CashDrawerBalance { get; set; }
+
+
+    }
+    public class PersonnelCountVm
+    {
+        public int PersonnelId { get; set; }
+        public string PersonnelFirstName { get; set; }
+        public string PersonnelLastName { get; set; }
+        public string OfficerBadgeNumber { get; set; }
+        public int Count { get; set; }
+
+
+    }
+
+
+    public class MoneyDepositoryDetailVm
+    {
+        public List<MoneyDepositoryVm> MoneyDepositoryDetail { get; set; }
+        public List<KeyValuePair<string, int>> BankDetails { get; set; }
+        public List<MoneyAccountAoFundVm> FundDetails { get; set; }
+        public List<KeyValuePair<string, int>> DepositoryDetails { get; set; }
+        public List<DepositoryFacilityDetailVm> DepositoryFacilityDetails { get; set; }
+        public List<PersonnelCountVm> PersonnelCountDetails { get; set; }
+
+
+
+
+    }
+}

@@ -1,0 +1,484 @@
+﻿using GenerateTables.Models;
+using Microsoft.EntityFrameworkCore.Internal;
+using ServerAPI.Utilities;
+using ServerAPI.ViewModels;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
+
+namespace ServerAPI.Services
+{
+    public class InmateService : IInmateService
+    {
+        private readonly AAtims _context;
+        private readonly ICommonService _commonService;
+        private readonly IPersonService _personService;
+        private readonly int _personnelId;
+        private readonly IFacilityPrivilegeService _facilityPrivilegeService;
+        private readonly IPhotosService _photos;
+
+        public InmateService(AAtims context, ICommonService commonService, IPersonService personService,
+            IHttpContextAccessor ihHttpContextAccessor, IFacilityPrivilegeService facilityPrivilegeService, IPhotosService photosService)
+        {
+            _context = context;
+            _commonService = commonService;
+            _personService = personService;
+            _personnelId = Convert.ToInt32(ihHttpContextAccessor.HttpContext.User
+                .FindFirst(AuthDetailConstants.PERSONNELID)?.Value);
+            _facilityPrivilegeService = facilityPrivilegeService;
+            _photos = photosService;
+        }
+
+        //To Get Inmate Note details
+        public InmateNoteVm GetInmateNote(int facilityId, int inmateId)
+        {
+            InmateNoteVm inmateNoteVm = new InmateNoteVm
+            {
+                //To get Facility list
+                FacilityList = _commonService.GetFacilities(),
+
+                //To get Person info from service
+                PersonInfo = _personService.GetInmateDetails(inmateId),
+
+                //To get Location list
+                LocationList = _facilityPrivilegeService.GetLocationList(facilityId),
+
+                //To get Note Type list
+                NoteTypeList = _commonService.GetLookupKeyValuePairs(LookupConstants.NOTETYPEINMATE)
+            };
+
+            return inmateNoteVm;
+        }
+
+        //Creating Intake Notes Entry
+        public async Task<int> InsertInmateNote(FloorNotesVm value)
+        {
+            //Insert entry in Floor Note table
+            FloorNotes intakeNotes = new FloorNotes
+            {
+                FloorNoteOfficerId = _personnelId,
+                FloorNoteNarrative = value.FloorNoteNarrative,
+                FloorNoteDate = DateTime.Now,
+                FloorNoteTime = DateTime.Now.ToString("HH:mm:ss"),
+                FloorNoteLocation = value.FloorNoteLocation,
+                CreateDate = DateTime.Now,
+                FloorNoteType = value.FloorNoteType,
+                FloorNoteLocationId = value.FloorNoteLocationId
+            };
+
+            _context.Add(intakeNotes);
+
+            if (value.InmateId > 0)
+            {
+                //Insert entry in Floor Note Xref table
+                FloorNoteXref intakeNotesXref = new FloorNoteXref
+                {
+                    FloorNoteId = intakeNotes.FloorNoteId,
+                    InmateId = value.InmateId
+                };
+
+                _context.Add(intakeNotesXref);
+            }
+
+            return await _context.SaveChangesAsync();
+        }
+
+        /// <summary>
+        /// Update Inmate Note Details
+        /// </summary>
+        /// <param name="value"></param>
+        /// <returns></returns>
+        public async Task<int> UpdateInmateNote(FloorNotesVm value)
+        {
+            //Update FloorNotes Details for Particular FloorNoteId
+            FloorNotes notes = _context.FloorNotes.Single(f => f.FloorNoteId == value.FloorNoteId);
+            {
+                notes.FloorNoteLocation = value.FloorNoteLocation;
+                notes.FloorNoteNarrative = value.FloorNoteNarrative;
+                notes.UpdateDate = DateTime.Now;
+                notes.FloorNoteType = value.FloorNoteType;
+                notes.FloorNoteLocationId = value.FloorNoteLocationId;
+            }
+            return await _context.SaveChangesAsync();
+        }
+        ///Delete Inmate Note
+        public async Task<int> DeleteInmateNote(FloorNotesVm value)
+        {
+            FloorNotes notes = _context.FloorNotes.Single(f => f.FloorNoteId == value.FloorNoteId);
+            {
+                notes.FloorDeleteFlag =value.FloorNoteDeleteFlag ;
+      
+            }
+            return await _context.SaveChangesAsync();
+        }
+
+        /// <summary>
+        ///  Get Inmate Note details for edit
+        /// </summary>
+        /// <param name="floorNoteId"></param>
+        /// <returns></returns>
+        public FloorNotesVm GetInmateNoteEdit(int floorNoteId)
+        {
+            //To get FloorNotes Details for Particular FloorNoteId
+            FloorNotesVm notes = _context.FloorNotes.Where(f => f.FloorNoteId == floorNoteId)
+                .Select(f => new FloorNotesVm
+                {
+                    FloorNoteType = f.FloorNoteType,
+                    FloorNoteNarrative = f.FloorNoteNarrative,
+                    FloorNoteLocation = f.FloorNoteLocation,
+                    FloorNoteLocationId = f.FloorNoteLocationId,
+                    FloorNoteId = f.FloorNoteId
+                }).Single();
+            //To get Inmate Id
+            notes.InmateId = _context.FloorNoteXref.Single(f => f.FloorNoteId == floorNoteId).InmateId;
+            //To get Facility Id of Inmate
+            notes.FacilityId = _context.Inmate.Single(i => i.InmateId == notes.InmateId).FacilityId;
+            return notes;
+        }
+
+        //private bool ValueIs
+
+        public List<InmateSearchVm> GetDashboardInmateSearchDetails(InmateSearchVm inmate)
+        {
+            List<string> alphanumeric = new List<string>();
+            List<string> alpha = new List<string>();
+            
+            foreach (string s in inmate.SearchText)
+            {
+                if (s.Length < 2) continue;
+                if (s.Any(char.IsDigit))
+                {
+                    alphanumeric.Add(s.Replace("-", string.Empty));
+                }
+                else
+                {
+                    alpha.Add(s);
+                }
+            }
+
+            IQueryable<Inmate> listInmate = _context.Inmate.Where(i => inmate.InmateActive == 0 || i.InmateActive == inmate.InmateActive);
+
+            listInmate = alphanumeric.Aggregate(listInmate,
+                (current, s) => inmate.InmateActive == 1
+                    ? current.Where(w => w.InmateNumber.Replace("-", string.Empty).StartsWith(s) || w.Incarceration
+                        .OrderByDescending(o => o.IncarcerationId).FirstOrDefault().BookingNo.Replace("-", string.Empty)
+                        .StartsWith(s)) : current.Where(w =>
+                        w.InmateNumber.Replace("-", string.Empty).StartsWith(s) ||
+                        w.Incarceration.Any(a => a.BookingNo.Replace("-", string.Empty).StartsWith(s))));
+
+            listInmate = alpha.Aggregate(listInmate,
+                (current, s) => current.Where(w =>
+                    w.Person.PersonFirstName.StartsWith(s) || w.Person.Aka.Any(a => a.AkaFirstName.StartsWith(s)) ||
+                    w.Person.PersonLastName.StartsWith(s) || w.Person.Aka.Any(a => a.AkaLastName.StartsWith(s)) ||
+                    w.Person.PersonMiddleName.StartsWith(s) || w.Person.Aka.Any(a => a.AkaMiddleName.StartsWith(s)) ||
+                    w.Person.Aka.Any(a => (" " + a.PersonGangName).Contains(" " + s))));
+
+            if (inmate.FacilityInmate && inmate.FacilityId > 0)
+            {
+                listInmate = listInmate.Where(i => i.FacilityId == inmate.FacilityId);
+            }
+
+            List<InmateSearchVm> inmateSearchVm = listInmate
+                .Select(i => new InmateSearchVm
+                {
+                    InmateNumber = i.InmateNumber,
+                    InmateId = i.InmateId,
+                    PersonId = i.PersonId,
+                    HousingUnitId = i.HousingUnitId,
+                    InmateActive = i.InmateActive,
+                    FacilityId = i.FacilityId,
+                    FacilityAbbr = i.Facility.FacilityAbbr,
+                    IncarcerationId = i.Incarceration.OrderByDescending(o => o.IncarcerationId)
+                        .FirstOrDefault(w => w.InmateId == i.InmateId).IncarcerationId,
+                    BookingNo = i.Incarceration.OrderByDescending(o => o.IncarcerationId)
+                        .FirstOrDefault(w => w.InmateId == i.InmateId).BookingNo,
+                    HousingDetail = new HousingDetail
+                    {
+                        HousingUnitLocation = i.HousingUnit.HousingUnitLocation,
+                        HousingUnitNumber = i.HousingUnit.HousingUnitNumber,
+                        HousingUnitBedNumber = i.HousingUnit.HousingUnitBedNumber,
+                        HousingUnitBedLocation = i.HousingUnit.HousingUnitBedLocation,
+                        HousingUnitListId = i.HousingUnit.HousingUnitListId
+                    },
+                    PersonDetail = new PersonInfoVm
+                    {
+                        PersonFirstName = i.Person.PersonFirstName,
+                        PersonLastName = i.Person.PersonLastName,
+                        PersonMiddleName = i.Person.PersonMiddleName,
+                        PersonSuffix = i.Person.PersonSuffix,
+                        PersonId = i.PersonId,
+                        PersonDob = i.Person.PersonDob,
+                        InmateClassificationId = i.InmateClassificationId
+                    },
+                    PhotoFilePath = _photos.GetPhotoByCollectionIdentifier(i.Person.Identifiers),
+                })
+                .OrderByDescending(x => x.InmateNumber == "1" ? 1 : 0)
+                .ThenBy(s => s.PersonDetail.PersonLastName)
+                .ThenBy(s => s.PersonDetail.PersonFirstName)
+                .ThenBy(s => s.PersonDetail.PersonMiddleName)
+                .ThenBy(s => s.PersonDetail.PersonSuffix)
+                .ThenBy(s => s.InmateNumber)
+                .ToList();
+
+            return inmateSearchVm;
+        }
+
+        public List<InmateSearchVm> GetInmateSearchDetails(InmateSearchVm inmate)
+        {
+            IQueryable<Inmate> listInmate = _context.Inmate
+               .Where(i => inmate.InmateActive ==0|| i.InmateActive == inmate.InmateActive);
+
+            if (inmate.FacilityId > 0)
+            {
+                listInmate = listInmate.Where(i => i.FacilityId == inmate.FacilityId);
+            }
+            
+            //Based on AKA search(inmate number and site number)
+            List<FloorNoteTypeCount> dbAkaDetails = _context.Aka.SelectMany(
+                a => listInmate.Where(i => i.PersonId == a.PersonId && a.DeleteFlag !=1 && !string.IsNullOrEmpty(a.AkaInmateNumber)),
+                (aka, inm) => new FloorNoteTypeCount{
+                  Id=  inm.InmateId,
+                   Name = aka.AkaInmateNumber,
+                   Number = aka.AkaSiteInmateNumber.Trim()
+               }).ToList();
+
+            List<InmateSearchVm> inmateSearchVm = listInmate
+                .Where(w => inmate.SearchText == null || !string.IsNullOrEmpty(w.Person.PersonLastName)
+                    && inmate.SearchText.Any(x => w.Person.PersonLastName.ToUpper().Contains(x.ToUpper())) ||
+                    !string.IsNullOrEmpty(w.Person.PersonFirstName)
+                    && inmate.SearchText.Any(x => w.Person.PersonFirstName.ToUpper().Contains(x.ToUpper())) ||
+                    !string.IsNullOrEmpty(w.Person.PersonMiddleName)
+                    && inmate.SearchText.Any(x => w.Person.PersonMiddleName.ToUpper().Contains(x.ToUpper())) ||
+                    !string.IsNullOrEmpty(w.InmateNumber)
+                    && inmate.SearchText.Any(x => w.InmateNumber.ToUpper().Contains(x.ToUpper())) ||
+                    !string.IsNullOrEmpty(w.InmateSiteNumber)
+                    && inmate.SearchText.Contains(w.InmateSiteNumber.Trim()) ||
+                    !string.IsNullOrEmpty(w.HousingUnit.HousingUnitLocation) && inmate.SearchText.Any(x =>
+                        w.HousingUnit.HousingUnitLocation.ToUpper().Contains(x.ToUpper())) ||
+                    !string.IsNullOrEmpty(w.HousingUnit.HousingUnitNumber) && inmate.SearchText.Any(x =>
+                        w.HousingUnit.HousingUnitNumber.ToUpper().Contains(x.ToUpper())) ||
+                    !string.IsNullOrEmpty(w.HousingUnit.HousingUnitBedNumber) && inmate.SearchText.Any(x =>
+                        w.HousingUnit.HousingUnitBedNumber.ToUpper().Contains(x.ToUpper())) ||
+                    !string.IsNullOrEmpty(w.HousingUnit.HousingUnitBedLocation) && inmate.SearchText.Any(x =>
+                        w.HousingUnit.HousingUnitBedLocation.ToUpper().Contains(x.ToUpper())) ||
+                    dbAkaDetails.Any(a => a.Id == w.InmateId && inmate.SearchText.Contains(a.Name)) ||
+                    dbAkaDetails.Any(a => a.Id == w.InmateId && inmate.SearchText.Contains(a.Number))).Select(i =>
+                    new InmateSearchVm
+                    {
+                        InmateNumber = i.InmateNumber,
+                        InmateId = i.InmateId,
+                        PersonId = i.PersonId,
+                        HousingUnitId = i.HousingUnitId,
+                        InmateActive = i.InmateActive,
+                        FacilityId = i.FacilityId,
+                        FacilityAbbr = i.Facility.FacilityAbbr,
+                        IncarcerationId = i.Incarceration.OrderByDescending(o => o.IncarcerationId)
+                            .FirstOrDefault(w => w.InmateId == i.InmateId).IncarcerationId,
+                        BookingNo = i.Incarceration.OrderByDescending(o => o.IncarcerationId)
+                            .FirstOrDefault(w => w.InmateId == i.InmateId).BookingNo,
+                        HousingDetail = new HousingDetail
+                        {
+                            HousingUnitLocation = i.HousingUnit.HousingUnitLocation,
+                            HousingUnitNumber = i.HousingUnit.HousingUnitNumber,
+                            HousingUnitBedNumber = i.HousingUnit.HousingUnitBedNumber,
+                            HousingUnitBedLocation = i.HousingUnit.HousingUnitBedLocation,
+                            HousingUnitListId = i.HousingUnit.HousingUnitListId
+                        },
+                        PersonDetail = new PersonInfoVm
+                        {
+                            PersonFirstName = i.Person.PersonFirstName,
+                            PersonLastName = i.Person.PersonLastName,
+                            PersonMiddleName = i.Person.PersonMiddleName,
+                            PersonSuffix = i.Person.PersonSuffix,
+                            PersonId = i.PersonId,
+                            PersonDob = i.Person.PersonDob,
+                            InmateClassificationId = i.InmateClassificationId
+                        },
+                        PhotoFilePath = _photos.GetPhotoByCollectionIdentifier(i.Person.Identifiers),
+                    })
+                .OrderByDescending(x => x.InmateNumber == "1" ? 1 : 0)
+                .ThenBy(s => s.PersonDetail.PersonLastName)
+                .ThenBy(s => s.PersonDetail.PersonFirstName)
+                .ThenBy(s => s.PersonDetail.PersonMiddleName)
+                .ThenBy(s => s.PersonDetail.PersonSuffix)
+                .ThenBy(s => s.InmateNumber)
+                .ToList();
+            //List < InmateSearchVm > test=_context.Aka.Where(x=>(!string.IsNullOrEmpty(x.AkaInmateNumber) || inmate.SearchText.Contains()))
+
+            return inmateSearchVm;
+        }
+
+        public List<BookingSearchVm> GetBookingNumber(string searchText, int inmateActive)
+        {
+            IQueryable<BookingSearchVm> lstBookingDetails = _context.Incarceration
+                .Where(i => i.Inmate.InmateActive == inmateActive)
+                .Select(i => new BookingSearchVm
+                {
+                    //ArrestId = i.ArrestId,
+                    ArrestBookingNumber = i.BookingNo,
+                    InmateId = i.Inmate.InmateId,
+                    InmateNumber = i.Inmate.InmateNumber,
+                    //PersonDetail=_commonService.GetPersonDetails(i.Inmate.InmateId)
+                    PersonDetail = new PersonDetail
+                    {
+                        PersonFirstName = i.Inmate.Person.PersonFirstName,
+                        PersonLastName = i.Inmate.Person.PersonLastName,
+                        PersonMiddleName = i.Inmate.Person.PersonMiddleName,
+                        PersonId = i.Inmate.PersonId
+                    }
+                });
+
+            if (!string.IsNullOrEmpty(searchText))
+            {
+                lstBookingDetails = lstBookingDetails.Where(i => i.ArrestBookingNumber.StartsWith(searchText));
+            }
+            return lstBookingDetails.Take(1000).ToList();
+        }
+
+        private InmateVm GetInmate(int inmateId) =>
+            (from i in _context.Inmate
+             where i.InmateId == inmateId
+             select new InmateVm
+             {
+                 InmateId = i.InmateId,
+                 InmateNumber = i.InmateNumber
+             }).Single();
+
+        public async Task<InmateVm> InsertUpdateInmate(InmateVm inmate)
+        {
+            Inmate dbInmate = _context.Inmate.SingleOrDefault(i => i.InmateId == inmate.InmateId);
+            if (dbInmate is null)
+            {
+                dbInmate = new Inmate
+                {
+                    PersonId = inmate.Person.PersonId,
+                    CreateDate = DateTime.Now,
+                    UpdateDate = DateTime.Now,
+                    InmateNumber = inmate.InmateNumber,
+                    FacilityId = 1
+                };
+            }
+            else
+            {
+                dbInmate.UpdateDate = DateTime.Now;
+            }
+            if (dbInmate.InmateId <= 0)
+            {
+                _context.Inmate.Add(dbInmate);
+            }
+            await _context.SaveChangesAsync();
+            return GetInmate(dbInmate.InmateId);
+        }
+
+        public void CreateTask(int inmateId, TaskValidateType eventName)
+        {
+            Inmate inm = _context.Inmate.Single(inmDetail => inmDetail.InmateId == inmateId);
+            int incarcerationId =
+                _context.Incarceration.Single(inc => inc.InmateId == inm.InmateId && !inc.ReleaseOut.HasValue)
+                    .IncarcerationId;
+
+            int[] arrestIds = _context.IncarcerationArrestXref
+                .Where(incArr => incArr.IncarcerationId == incarcerationId && incArr.ArrestId.HasValue)
+                .Select(incArr => incArr.ArrestId.Value).ToArray();
+
+            string[] arrestTypes = _context.Arrest
+                .Where(arr => arrestIds.Contains(arr.ArrestId) && arr.ArrestType != null)
+                .Select(arr => arr.ArrestType).ToArray();
+
+            List<AoTaskLookupAssign> taskLookupAssign = _context.AoTaskLookupAssign.Where(aoTask =>
+                aoTask.TaskCreateLookup == _commonService.GetValidationType(eventName) &&
+                aoTask.FacilityId == inm.FacilityId &&
+                !aoTask.AoTaskLookup.DeleteFlag &&
+                !aoTask.DeleteFlag).ToList();
+
+            if (taskLookupAssign.Count > 0)
+            {
+                taskLookupAssign.ForEach(tasks =>
+                {
+                    bool doTask = false;
+                    if (tasks.TaskCreateBookingTypeFilterString == null)
+                    {
+                        doTask = true;
+                    }
+                    else
+                    {
+                        string[] stepFilters = tasks.TaskCreateBookingTypeFilterString.Split(',');
+                        string[] missing = stepFilters.Where(item => arrestTypes.IndexOf(item) < 0).ToArray();
+                        if (missing.Length != stepFilters.Length)
+                        {
+                            doTask = true;
+                        }
+                    }
+
+                    if (doTask)
+                    {
+                        AoTaskQueue aoTaskQueue = _context.AoTaskQueue.SingleOrDefault(aoQueue =>
+                            aoQueue.AoTaskLookupId == tasks.AoTaskLookupId
+                            && aoQueue.InmateId == inmateId && !aoQueue.CompleteFlag);
+                        if (aoTaskQueue != null) return;
+                        AoTaskQueue insTaskQueue = new AoTaskQueue
+                        {
+                            AoTaskLookupId = tasks.AoTaskLookupId,
+                            AoTaskLookup =
+                                _context.AoTaskLookup.Single(task => task.AoTaskLookupId == tasks.AoTaskLookupId),
+                            InmateId = inmateId,
+                            CreateDate = DateTime.Now,
+                            CreateBy = _personnelId
+                        };
+                        _context.AoTaskQueue.Add(insTaskQueue);
+                        _context.SaveChanges();
+                    }
+                });
+            }
+        }
+
+        public List<KeyValuePair<int, string>> GetInmateTasks(int inmateId, TaskValidateType validateType)
+        {
+            int facilityId = _context.Inmate.Single(inm => inm.InmateId == inmateId).FacilityId;
+
+            List<KeyValuePair<int, string>> lstAoTaskLookups = _context.AoTaskLookupAssign.Where(lookAssign =>
+                    lookAssign.TaskValidateLookup == _commonService.GetValidationType(validateType) &&
+                    !lookAssign.DeleteFlag &&
+                    lookAssign.FacilityId == facilityId &&
+                    !lookAssign.AoTaskLookup.DeleteFlag)
+                .Select(lookAssign => new KeyValuePair<int, string>(lookAssign.AoTaskLookupId,
+                    lookAssign.AoTaskLookup.TaskName)).ToList();
+
+            int[] arrTaskIds = lstAoTaskLookups.Select(task => task.Key).ToArray();
+
+            List<KeyValuePair<int, string>> lstAoTaskQueue = _context.AoTaskQueue
+                .Where(inm =>
+                    inm.InmateId == inmateId && !inm.CompleteFlag && arrTaskIds.Contains(inm.AoTaskLookupId))
+                .Select(que => new KeyValuePair<int, string>(que.AoTaskLookupId,
+                    que.AoTaskLookup.TaskName)
+                ).ToList();
+
+            return lstAoTaskQueue;
+        }
+
+        public List<PersonVm> GetInmateDetails(List<int> inmateIds) =>
+            _context.Inmate.Where(x => inmateIds.Contains(x.InmateId))
+                .Select(a => new PersonVm
+                {
+                    InmateId = a.InmateId,
+                    PersonId = a.PersonId,
+                    PersonFirstName = a.Person.PersonFirstName,
+                    PersonMiddleName = a.Person.PersonMiddleName,
+                    PersonLastName = a.Person.PersonLastName,
+                    PersonSuffix = a.Person.PersonSuffix,
+                    InmateNumber = a.InmateNumber,
+                    FacilityId = a.FacilityId,
+                    HousingUnitId = a.HousingUnitId,
+                    LastReviewDate = a.LastClassReviewDate,
+                    InmateCurrentTrack = a.InmateCurrentTrack,
+                    PersonDob = a.Person.PersonDob                    
+                }).ToList();
+
+        //To get IsActiveInmate
+        public bool IsActiveInmate(int inmateId, int juvenileFlag) =>
+            _context.Inmate.Any(i => i.InmateId == inmateId && i.InmateActive == 1 && i.InmateJuvenileFlag == juvenileFlag);
+    }
+
+}

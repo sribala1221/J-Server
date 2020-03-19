@@ -1,0 +1,60 @@
+﻿{
+  "ConnectionStrings": {
+    "DefaultConnection": "Data Source=localhost; Initial Catalog=CCD_V2;Persist Security Info=True;User ID=serviceaccteng; Password=R#?c99; Connection Timeout=5; Min Pool Size=20; Max Pool Size=200;"
+  },
+  "Logging": {
+    "IncludeScopes": false,
+    "LogLevel": {
+      "Default": "Warning",
+      "System": "Warning",
+      "Microsoft": "Warning"
+    }
+  },
+  "SecretKey": "iNivDmHLpUA223sqsfhqGbMRdRj1PVkH",
+  "JwtIssuerOptions": {
+    "Issuer": "AtimsJms",
+     "Audience": "https://denver-test-api.atimsonline.com/"
+  },
+  "SiteVariables": {
+    "PhotoPath": "E:\\CCD_Images_V2",
+    "FormtemplatePath": "E:\\CCD_Images_V2",
+	"AuditLogPath": "E:\\CCD_Images_V2\\logs",
+	"ReportUrl": "http://192.168.250.178:5488/",
+    "PBPCUrl": "https://denver-test-pbpc.atimsonline.com/",
+    "JMSUrl": "https://denver-test-jms.atimsonline.com/",
+    "AdminUrl": "https://denver-test-v2admin.atimsonline.com/",
+    "V1AdminUrl": "https://denver-test-v1.atimsonline.com/",
+	"InterfaceEngine": "https://denver-test-v2interface.atimsonline.com/",
+	"AtimsPhotoPath": "https://denver-test-api.atimsonline.com/atims_dir/",
+	"IdleTimeOut": 1800,
+  "ClientExternalAppletsPath": "E:\\CCD_Images_V2\\",
+  "AtimsExternalAppletsPath": "E:\\CCD_Images_V2\\"
+  },
+  "AttachmentPaths": {
+    "MEDATTACHTYPE": "\\APPLETSMED\\",
+    "BOOKATTACHTYPE": "\\APPLETSBooking\\",
+    "CLASATTACHTYPE": "\\APPLETSClassify\\",
+    "INCATTACHTYPE": "\\APPLETSIncident\\",
+    "INCARATTACHTYPE": "\\APPLETSIncarceration\\",
+    "REGATTACHTYPE": "\\APPLETSRegistrant\\",
+    "HOUSATTACHTYPE": "\\APPLETSHousing\\", // In V1, APPLETSHousing path has been same for both HOUSATTACHTYPE and PBPCATTACHTYPE.
+    "PBPCATTACHTYPE": "\\APPLETSPrebook\\", //  For Ref at V1 code: Attach.ascx.vb line no(671 - 674).
+    "ALTSENTREQATTYPE": "\\APPLETSAltSent\\",
+    "ALTSENTATTACHTYPE": "\\APPLETSAltSentFile\\",
+    "GRIEVATTACHTYPE": "\\APPLETSGrievance\\",
+    "PROGCASEATTACHTYPE": "\\APPLETSPrograms\\"
+  },
+  "LdapAuth": {
+    "Hostname": "<<ldap server host name goes here>>",
+    "Port": 389
+  },
+    "Saml": {
+    "Required": false,
+	 "Certificate": "-----BEGIN CERTIFICATE-----\r\nMIIB7jCCAVegAwIBAgIBCjANBgkqhkiG9w0BAQQFADAcMRowGAYDVQQDExFnb3Z3bHMzdC5nb3YuZG52cjAeFw0xNjA4MjIyMTUwMzNaFw0yNjA4MjAyMTUwMzNaMBwxGjAYBgNVBAMTEWdvdndsczN0Lmdvdi5kbnZyMIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCbRvvJc+sI8t+JKyMZ0riYw8XVyTM+l2UWIfIn5T543CCzN80XfYdWQ650268NOfGvAyhaxaTQgUVho0klVxvm+5bW99oUaAsdCy59kR8z6Ju8WPGirRmnG0KBm/4HspAzxoBKNa4XRJElxFszz85YMKobeDd+uFD1Qp8pMIhV8wIDAQABo0AwPjAMBgNVHRMBAf8EAjAAMA8GA1UdDwEB/wQFAwMH2AAwHQYDVR0OBBYEFGYPzokctuK0oc/JaAExSPLtrSZSMA0GCSqGSIb3DQEBBAUAA4GBACDxmN7m5COjuL0N3X9p7NLkdzJNwnsY+3789Fe40rP1mI058wg7T5IBaILSezTi/tBZZ5S3gZkkygNj4bGidg5c0z8a2adws7dOw/wBq5/zvHa6GFyLD+h+rWtbKh5+6bMaRY09GCOTz07EaGtqAKraTDJgPwFkqdvSWn+GhQcU\r\n-----END CERTIFICATE-----\r\n",
+    "IdpTargetUrl": "https://testsecure.denvergov.org/oamfed/idp/samlv20", 
+    "IdpLogoutUrl": "https://testsecure.denvergov.org/oamfed/idp/samlv20", 
+    "assertionConsumerServiceUrlJMS": "https://denver-test-api.atimsonline.com/auth/SamlLoginJms", 
+	"AttributeName": "saml:NameID",
+	"Issuer":  "https://denver-test-api.atimsonline.com" 
+  }
+}

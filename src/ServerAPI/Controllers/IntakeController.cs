@@ -1,0 +1,126 @@
+﻿using Microsoft.AspNetCore.Mvc;
+using ServerAPI.ViewModels;
+using ServerAPI.Services;
+using System.Threading.Tasks;
+using ServerAPI.Authorization;
+using Microsoft.AspNetCore.Authorization;
+
+namespace ServerAPI.Controllers
+{
+	[Route("[controller]")]
+	public class IntakeController : ControllerBase
+	{
+		private readonly IIntakeService _intakeService;
+		private readonly ISearchService _searchService;
+		private readonly ITempHoldService _tempHoldService;
+
+		public IntakeController(IIntakeService intakeService, ISearchService searchService, ITempHoldService tempHoldService)
+		{
+			_intakeService = intakeService;
+			_searchService = searchService;
+			_tempHoldService = tempHoldService;
+		}
+
+        //To get Intake in Progress details
+        [HttpGet("GetIntake")]
+		public IActionResult GetIntake(int facilityId, bool isShowAll)
+		{
+			return Ok(_intakeService.GetIntake(facilityId, isShowAll));
+		}
+
+        [FuncPermission(409, FuncPermissionType.Access)]
+        [HttpGet("AccessIntakeWizard")]
+        public IActionResult AccessIntakeWizard()
+        {
+            return Ok();
+        }
+
+        //  Get Booking Search Details
+        [HttpGet("GetBookingSearch")]
+		public IActionResult GetBookingSearch([FromQuery]SearchRequestVm searchDetails)
+		{
+			return Ok(_searchService.GetBookingSearchList(searchDetails));
+		}
+
+		// Get Charges Search Details
+		[HttpGet("GetChargeDetails")]
+		public IActionResult GetChargeDetails(int arrestId )
+		{
+			return Ok(_searchService.GetChargeDetails(arrestId));
+		}
+
+		// Get Incarceration Details
+		[HttpGet("GetIncarceration")]
+		public IActionResult GetIncarcerationDetails(int inmateId)
+		{
+			return Ok(_searchService.GetIncarcerationDetails(inmateId));
+		}
+
+		[HttpGet("GetInmateIdFromPrebook")]
+		public IActionResult GetInmateIdFromPrebook(int inmatePrebookId)
+		{
+			return Ok(_intakeService.GetInmateIdFromPrebook(inmatePrebookId));
+		}
+
+		[HttpGet("GetIntakeTempHoldDetails")]
+		public IActionResult GetIntakeTempHoldDetails(PersonnelSearchVm personnelSearchVm)
+		{
+			return Ok(_tempHoldService.GetIntakeTempHoldDetails(personnelSearchVm));
+		}
+
+        [FuncPermission(407, FuncPermissionType.Add)]
+		[HttpPost("SaveIntakeTempHold")]
+		public async Task<IActionResult> SaveIntakeTempHold([FromBody] IntakeTempHoldParam objTempHoldParam)
+		{
+            return Ok(await _tempHoldService.SaveIntakeTempHold(objTempHoldParam));
+		}
+
+		[HttpPost("UpdateTempHold")]
+		public async Task<IActionResult> UpdateTempHold([FromBody] PrebookCompleteVm objParam)
+		{
+			return Ok(await _tempHoldService.UpdateTempHold(objParam));
+		 }
+
+		[HttpGet("GetTempHoldDetails")]
+		public IActionResult GetTempHoldDetails(TempHoldDetailsVm tempHoldReq)
+		{
+			return Ok(_tempHoldService.GetTempHoldDetails(tempHoldReq));
+		}
+
+	    [HttpGet("GetTempHoldCompleteStepLookup")]
+	    public IActionResult GetTempHoldCompleteStepLookup(int tempHoldId)
+	    {
+	        return Ok(_tempHoldService.GetTempHoldCompleteStepLookup(tempHoldId));
+	    }
+
+        [HttpGet("GetInmatePrebookStaging")]
+        public IActionResult GetInmatePrebookStaging(InmatePrebookStagingVm obj)
+        {
+            return Ok(_intakeService.GetInmatePrebookStaging(obj));
+        }
+
+        [HttpGet("GetPersonByRms")]
+        public IActionResult GetPersonByRms(string sid)
+        {
+            return Ok(_intakeService.GetPersonByRms(sid));
+        }
+
+        [HttpGet("InsertRmsChargesAndWarrants")]
+        public IActionResult InsertRmsChargesAndWarrants(int inmatePrebookStagingId, int inmatePrebookId, int personId, int facilityId)
+        {
+            return Ok(_intakeService.InsertRmsChargesAndWarrants(inmatePrebookStagingId, inmatePrebookId, personId, facilityId));
+        }
+        
+        [HttpPut("CompleteRmsPrebook")]
+        public async Task<IActionResult> CompleteRmsPrebook([FromBody]int inmatePrebookStagingId, [FromQuery]int inmatePrebookId)
+        {
+            return Ok(await _intakeService.CompleteRmsPrebook(inmatePrebookStagingId, inmatePrebookId));
+        }
+
+        [HttpPut("DeleteInmatePrebookStaging")]
+        public async Task<IActionResult> DeleteInmatePrebookStaging([FromBody]int inmatePrebookStagingId)
+        {
+            return Ok(await _intakeService.DeleteInmatePrebookStaging(inmatePrebookStagingId));
+        }
+    }
+}

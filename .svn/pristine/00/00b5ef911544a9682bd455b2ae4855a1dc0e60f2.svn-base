@@ -1,0 +1,403 @@
+using GenerateTables.Models;
+using Microsoft.AspNetCore.Http;
+using ServerAPI.Interfaces;
+using ServerAPI.Utilities;
+using ServerAPI.ViewModels;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+
+namespace ServerAPI.Services
+{
+    public class  VisitorsService : IVisitorsService
+    {
+        private readonly AAtims _context;
+        private readonly int _personnelId;
+        private readonly ICommonService _commonService;
+        private readonly IPersonCharService _personCharService;
+        private readonly IPhotosService _photosService;
+        private readonly IWizardService _wizardService;
+        private readonly IPersonIdentityService _personIdentityService;
+        private readonly IRegisterService _registerService;
+        public VisitorsService(AAtims context, IHttpContextAccessor httpContextAccessor, ICommonService commonService,
+            IPersonCharService personCharService, IPhotosService photosService, IWizardService wizardService,
+            IPersonIdentityService personIdentityService, IRegisterService registerService)
+        {
+            _context = context;
+            _personnelId = Convert.ToInt32(httpContextAccessor.HttpContext.User.FindFirst("personnelId")?.Value);
+            _commonService = commonService;
+            _personCharService = personCharService;
+            _photosService = photosService;
+            _wizardService = wizardService;
+            _personIdentityService = personIdentityService;
+            _registerService = registerService;
+        }
+
+      
+       
+        public List<VisitorsVisitDetails> GetVisitorsVisitDetails(VisitParam objVisitParam)
+        {
+           
+            // IQueryable<VisitToVisitor> visitList = _context.VisitToVisitor.Where(w =>
+            //         (!objVisitParam.PersonId.HasValue || w.PersonId == objVisitParam.PersonId) &&
+            //         w.Visit.RegFacilityId == objVisitParam.FacilityId &&
+            //         (objVisitParam.PendingVisit
+            //             ? w.Visit.CompleteRegistration && !w.Visit.CompleteVisitFlag
+            //             : (objVisitParam.ProfVisitHistory
+            //                 ? w.Visit.CompleteVisitFlag || w.Visit.VisitDenyFlag == 1
+            //                 : !w.Visit.CompleteRegistration)) &&
+            //         !w.Visit.DeleteFlag && w.Visit.VisitDenyFlag == 0 && !w.Visit.VisitSecondaryFlag.HasValue
+            //         && (w.Visit.EndDate == null || w.Visit.EndDate.HasValue &&
+            //             (objVisitParam.PendingVisit
+            //                 ? w.Visit.EndDate.Value.Date == DateTime.Now.Date
+            //                 : w.Visit.EndDate.Value.Date >= DateTime.Now.Date)) );
+                
+            List<VisitorsVisitDetails> lstVisitors = _context.VisitToVisitor.Where(w =>
+                    (!objVisitParam.PersonId.HasValue || w.PersonId == objVisitParam.PersonId) &&
+                    w.Visit.RegFacilityId == objVisitParam.FacilityId &&
+                    (objVisitParam.PendingVisit
+                        ? w.Visit.CompleteRegistration && !w.Visit.CompleteVisitFlag
+                        : (objVisitParam.ProfVisitHistory
+                            ? w.Visit.CompleteVisitFlag || w.Visit.VisitDenyFlag == 1
+                            : !w.Visit.CompleteRegistration)) &&
+                    !w.Visit.DeleteFlag && w.Visit.VisitDenyFlag == 0 && !w.Visit.VisitSecondaryFlag.HasValue
+                    && (w.Visit.EndDate == null || w.Visit.EndDate.HasValue &&
+                        (objVisitParam.PendingVisit
+                            ? w.Visit.EndDate.Value.Date == DateTime.Now.Date
+                            : w.Visit.EndDate.Value.Date >= DateTime.Now.Date)) )
+            .Select(s => new VisitorsVisitDetails
+            {
+
+                VisitToVisitorId = s.VisitToVisitorId,
+                ScheduleId = s.ScheduleId,
+
+                PrimaryVisitor = new PersonInfoVm
+                {
+                    PersonId = s.PersonId,
+                    PersonLastName = s.Visitor.PersonLastName,
+                    PersonFirstName = s.Visitor.PersonFirstName
+
+                },
+                InmateInfo = new PersonInfoVm
+                {
+                    InmateId = s.Visit.InmateId,
+                    InmateNumber = s.Visit.Inmate.InmateNumber,
+                    PersonLastName = s.Visit.Inmate.Person.PersonLastName,
+                    PersonFirstName = s.Visit.Inmate.Person.PersonFirstName
+                },
+
+                VisitorIdNumber = s.VisitorIdNumber,
+                VisitorIdState = s.VisitorIdState,
+                VisitorIdType = s.VisitorIdType,
+                VisitorNotes = s.Visitor.VisitorNotes,
+                VisitorsCount = s.Visit.CountAsVisit,
+
+            })
+            .ToList();
+
+
+            List<int> lstPersonId = lstVisitors.Select(s => s.PrimaryVisitor.PersonId).ToList();
+
+           List<VisitorToInmate> lstVisitorToInmate = _context.VisitorToInmate
+                .Where(w => lstPersonId.Contains(w.VisitorId ?? 0)).ToList();
+
+            List<LookupVm> lstLookup = _commonService.GetLookups(new[]
+           {LookupConstants.RELATIONS, LookupConstants.VISTYPE});
+
+            List<VisitorPersonal> lstVisitorPersonal = _context.VisitorPersonal.Where(w =>
+                lstPersonId.Contains(w.PersonId)).Select(s => new VisitorPersonal {
+                 PersonId = s.PersonId,
+                 VisitorNotAllowedFlag = s.VisitorNotAllowedFlag,
+
+             }).ToList();
+
+            List<VisitorProfessional> lstVisitorProfessional = _context.VisitorProfessional.Where(w =>
+               lstPersonId.Contains(w.PersonId)).Select(s => new VisitorProfessional
+               {
+                   PersonId = s.PersonId,
+                   VisitorType = s.VisitorType
+               }).ToList();
+
+            // IList<VisitorToInmate> lstVisitorInmate=_context.VisitorToInmate
+            // .Select(s=> new VisitorToInmate{
+            //    VisitorId= s.VisitorId,
+            //    InmateId= s.InmateId,
+            //    VisitorRelationship= s.VisitorRelationship
+            // }).ToList();
+
+            lstVisitors.ForEach(item =>
+          {
+                 //int relationshipId =lstVisitorInmate.FirstOrDefault(w=>w.VisitorId==item.PrimaryVisitor.PersonId && w.InmateId == item.InmateInfo.InmateId).VisitorRelationship ?? 0;
+              //Personal Relationship
+              int relationshipId = lstVisitorToInmate.FirstOrDefault(w => w.VisitorId == item.PrimaryVisitor.PersonId
+                                        && w.InmateId == item.InmateInfo.InmateId)?.VisitorRelationship ?? 0;
+              if (relationshipId > 0)
+              {
+                  item.Relationship = lstLookup.SingleOrDefault(l =>
+                      l.LookupIndex == relationshipId && l.LookupType == LookupConstants.RELATIONS)?.LookupDescription;
+              }
+                
+
+              VisitorProfessional visitorProfessional = lstVisitorProfessional.SingleOrDefault(w =>
+                  w.PersonId == item.PrimaryVisitor.PersonId);
+
+              if (visitorProfessional != null)
+              {
+                  item.VisitorType = visitorProfessional.VisitorType ?? 0;
+
+                  if (item.VisitorType > 0)
+                  {
+                      item.Relationship = lstLookup.SingleOrDefault(l => l.LookupIndex == item.VisitorType
+                                                          && l.LookupType == LookupConstants.VISTYPE)?.LookupDescription;
+                  }
+              }
+
+
+            
+
+          });
+            lstVisitors = lstVisitors.Where(w => w.Relationship != null).ToList();
+
+            return lstVisitors;
+        }
+   
+     public List<InmateAssignmentDetails> GetInmateAssignment(int inputs)
+     {
+             List<InmateAssignmentDetails> lstVisitors = _context. VisitorToInmate.Where(w=>w.VisitorId==inputs)
+
+            .Select(s => new InmateAssignmentDetails
+            {
+
+                VisitorToInmateId = s.VisitorToInmateId,
+                VisitorRelation=s.VisitorRelationship,
+                VisitorExpire=s.VisitorNotAllowedExpire,
+                VisitorInfo = new PersonInfoVm
+                {
+                    PersonId = s.Visitor.PersonId,
+                    PersonLastName = s.Visitor.PersonLastName,
+                    PersonFirstName = s.Visitor.PersonFirstName,
+
+                },
+                    HousingUnitLocation = s.Inmate.HousingUnit.HousingUnitLocation,   
+                InmateInfo = new PersonInfoVm
+                {
+                    InmateId = s.Inmate.InmateId,
+                    InmateNumber = s.Inmate.InmateNumber,
+                    PersonLastName = s.Inmate.Person.PersonLastName,
+                    PersonFirstName = s.Inmate.Person.PersonFirstName
+                },
+            })
+            .ToList();
+
+                return lstVisitors;
+     }
+           public Task<int> InsertInmateAssignment(InmateAssignmentinput input)
+        {
+
+           
+
+            VisitorToInmate VisitorToInmatedetails = new VisitorToInmate
+            {
+               InmateId=input.InmateId,
+               VisitorId=input.visitorId,
+               VisitorRelationship=input.VisitorRelation,
+               VisitorNote=input.VisitorNote,
+               VisitorNotAllowedFlag=input.VisitorNotAllowedFlag,
+               VisitorNotAllowedReason=input.VisitorNotAllowedReson,
+               VisitorNotAllowedExpire=input.VisitorNotAllowedExpire,
+               VisitorNotAllowedNote=input.VisitorNotAllowedNote,
+               CreateBy = _personnelId,
+                CreateDate = DateTime.Now,
+
+            };
+
+            _context.VisitorToInmate.Add(VisitorToInmatedetails);
+
+            return _context.SaveChangesAsync();
+
+        }
+        public List<OpenScheduleDetails> GetOpenScheduleDetails(OpenScheduleDetails value)
+        {            
+           
+               IQueryable<VisitToVisitor> vtv = _context.VisitToVisitor
+                                                    .Where(v => v.PersonId == value.PersonId
+                                                                && !v.Visit.DeleteFlag && v.Visit.VisitDenyFlag == 0 
+                                                                && v.Visit.CompleteRegistration
+                                                                && !v.Visit.CompleteVisitFlag 
+                                                                && v.Visit.EndDate.Value.Date == value.VisitAvailDate.Value.Date 
+                                                            );
+        
+                
+                int pendingCount = vtv.Count(w => w.ScheduleId == w.Visit.ScheduleId && w.Visit.InmateTrackingStart == null);
+
+                int inProgressCount = vtv.Count(w => w.ScheduleId == w.Visit.ScheduleId && w.Visit.InmateTrackingStart != null);
+                
+                List<OpenScheduleDetails> openScheduleDetails = vtv.Select( s => new OpenScheduleDetails
+                    {
+                         VisitationRoom = s.Visit.Location.HousingUnitLocation,
+                         RoomCapacity = s.Visit.Location.Capacity ?? 0,
+                         OpenScheduleFlag = s.Visit.Location.VisitOpenScheduleFlag, 
+                         PendingCount = pendingCount,
+                         InProgressCount = inProgressCount                    
+                    }
+                ).ToList();
+
+                return openScheduleDetails;
+                     
+        }
+
+        public List<BumpedVisitList> GetBumpedVisitList(BumpedVisitList value)
+        {
+            List<BumpedVisitList> bumpedVisitList = _context.VisitToVisitor
+                                                           .Where(v => v.ScheduleId == v.Visit.ScheduleId
+                                                                   && v.Visit.BumpFlag == 1
+                                                                   && v.Visit.Inmate.InmateActive == 1
+                                                                   && v.Visit.Location.PrivilegeId == v.Visit.LocationId
+                                                                   && v.Visit.DeleteFlag && v.Visit.VisitDenyFlag == 0
+                                                                   && v.Visit.CompleteRegistration
+                                                                 )
+           .Select(s => new BumpedVisitList
+           {
+               VisitToVisitorId = s.VisitToVisitorId,
+               ScheduleId = s.ScheduleId,
+               PrimaryVisitor = new PersonInfoVm
+               {              
+                    PersonId = s.Visit.PersonnelBumpBy.PersonNavigation.PersonId,
+                    PersonLastName = s.Visit.PersonnelBumpBy.PersonNavigation.PersonLastName,
+                    PersonFirstName = s.Visit.PersonnelBumpBy.PersonNavigation.PersonFirstName,
+                    PersonDob = s.Visit.PersonnelBumpBy.PersonNavigation.PersonDob,
+               },
+               InmateInfo = new PersonInfoVm
+               {
+                   InmateId = s.Visit.InmateId,
+                   InmateNumber = s.Visit.Inmate.InmateNumber,
+                   PersonLastName = s.Visit.Inmate.Person.PersonLastName,
+                   PersonFirstName = s.Visit.Inmate.Person.PersonFirstName,
+                   PersonId = s.Visit.Inmate.PersonId
+               },
+               Location = s.Visit.Location.PrivilegeDescription,
+               FacilityId = s.Visit.RegFacilityId,
+               ScheduledDate = s.Visit.StartDate.Date,
+               ScheduledStartTime = s.Visit.StartDate,
+               ScheduledEndTime = s.Visit.EndDate,
+               ScheduledDuration = s.Visit.Duration,
+               IsCleared = s.Visit.BumpClearFlag ?? 0,
+               BumpedDate = s.Visit.BumpDate,
+               FrontDeskFlag = s.Visit.FrontDeskFlag,
+               BumpVisitId = s.Visit.BumpNewVisitId ?? 0,
+               VisitorType = s.Visit.VisitorType ?? 0,
+               VisitorBefore = s.Visitor.VisitorBefore,                   
+               VisitorIdType = s.VisitorIdType,
+               VisitorId = s.PersonId
+           }).OrderBy(o => o.CreateDate).ToList();
+
+            return bumpedVisitList;
+        }
+        public async Task<int> ClearBumpedVisit(ClearBumpedVisit clearBumpedVisit)
+        {
+            Visit visitScheduleDetails = _context.Visit.Single(s => s.ScheduleId == clearBumpedVisit.ScheduledId);
+            visitScheduleDetails.BumpClearFlag = 1;
+            visitScheduleDetails.BumpClearNote = clearBumpedVisit.ClearNote;
+            visitScheduleDetails.BumpClearBy = _personnelId;
+            visitScheduleDetails.BumpClearDate = DateTime.Now;
+            return await _context.SaveChangesAsync();
+        }
+
+         public async Task<RevisitReturnParams> InsertRevisitVisitorDetails(KeyValuePair<int, int> previousScheduleDetails)
+        {
+            List<Revisit> revisitList = _context.VisitToVisitor
+                                          .Where(w => w.ScheduleId == previousScheduleDetails.Value)
+                                          .Select(s => new Revisit
+                                          {
+                                              FrontDeskFlag = s.Visit.FrontDeskFlag,
+                                              FacilityId = s.Visit.RegFacilityId,
+                                              VisitorType = s.Visit.VisitorType,
+                                              VisitorIdState = s.VisitorIdState,
+                                              VisitorIdNumber = s.VisitorIdNumber,
+                                              VisitAdditionAdultCount = s.Visit.VisitAdditionAdultCount,
+                                              VisitAdditionChildCount = s.Visit.VisitAdditionChildCount,
+                                              PersonId = s.PersonId,
+                                              InmateId = s.Visit.InmateId
+                                          }).ToList();
+
+            Visit visit = new Visit
+            {
+                CreateBy = _personnelId,
+                CreateDate = DateTime.Now,
+                StartDate = DateTime.Now,
+                FrontDeskFlag = revisitList.FirstOrDefault().FrontDeskFlag,
+                RegFacilityId = revisitList.FirstOrDefault().FacilityId,
+                VisitorType = revisitList.FirstOrDefault().VisitorType,
+                VisitAdditionAdultCount = revisitList.FirstOrDefault().VisitAdditionAdultCount,
+                VisitAdditionChildCount = revisitList.FirstOrDefault().VisitAdditionChildCount,
+                InmateId = revisitList.FirstOrDefault().InmateId,                
+            };
+
+            _context.Visit.Add(visit);
+            _context.SaveChanges();
+
+            Visit visit1 = _context.Visit.SingleOrDefault(w => w.ScheduleId == previousScheduleDetails.Value);
+            visit1.BumpNewVisitId = visit.ScheduleId;
+            visit1.BumpClearFlag = 1;
+            await _context.SaveChangesAsync();
+
+            //Visitor Id details
+            VisitToVisitor visitToVisitor = new VisitToVisitor
+            {
+                ScheduleId = visit.ScheduleId,
+                PersonId = revisitList.FirstOrDefault().PersonId,
+                VisitorIdType = revisitList.FirstOrDefault().VisitorIdType,
+                VisitorIdNumber = revisitList.FirstOrDefault().VisitorIdNumber,
+                VisitorIdState = revisitList.FirstOrDefault().VisitorIdState
+            };
+            _context.VisitToVisitor.Add(visitToVisitor);
+            _context.SaveChanges();
+
+
+            AoWizardProgressVm wizardProgress = new AoWizardProgressVm
+            {
+                ScheduleId = visit.ScheduleId,
+                WizardId = 13
+            };
+
+            wizardProgress.WizardProgressId = await _wizardService.CreateWizardProgress(wizardProgress);
+            int componentId;
+
+            for (int i = 1; i <= 2; i++)
+            {
+                if (i == 1)
+                    componentId = (int)AoComponents.VrIdentifyVisitorComponent;
+                else
+                    componentId = (int)AoComponents.VrSelectInmateComponent;
+
+                AoWizardStepProgressVm wizardStep = new AoWizardStepProgressVm
+                {
+                    ComponentId = componentId,
+                    AoWizardFacilityStepId = _context.AoWizardFacilityStep.FirstOrDefault(f => f.AoComponentId == componentId).AoWizardFacilityStepId,
+                    WizardProgressId = wizardProgress.WizardProgressId,
+                    StepComplete = true,
+                    StepCompleteById = _personnelId,
+                    StepCompleteDate = DateTime.Now
+                };
+                await _wizardService.SetWizardStepComplete(wizardStep);
+            }           
+
+            List<int> lstScheduleId = new List<int>() { visit.ScheduleId };
+            List<AoWizardProgressVm> lstVisitRegistrationWizardProgress = _registerService
+                                                                            .GetVisitRegistrationWizardProgress(lstScheduleId);
+            AoWizardProgressVm lstVisitWizardProgress = lstVisitRegistrationWizardProgress[0];
+
+            RevisitReturnParams returnParams = new RevisitReturnParams();
+            returnParams.ScheduleId = visitToVisitor.ScheduleId;
+            returnParams.VisitToVisitorId = visitToVisitor.VisitToVisitorId;
+            returnParams.WizardProgressId = wizardProgress.WizardProgressId;
+            returnParams.RegistrationProgress = lstVisitWizardProgress;
+
+            return returnParams;
+
+        }
+    }       
+}

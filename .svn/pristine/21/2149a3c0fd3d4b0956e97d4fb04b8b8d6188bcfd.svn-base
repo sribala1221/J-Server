@@ -1,0 +1,573 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Security.Claims;
+using System.Security.Principal;
+using System.Threading.Tasks;
+using GenerateTables.Models;
+using JwtDb.Models;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
+using ServerAPI.Authentication;
+using ServerAPI.ViewModels;
+using ServerAPI.Services;
+using System.DirectoryServices.AccountManagement;
+using System.Web;
+using ServerAPI.Utilities;
+using System.Net;
+using Audit.WebApi;
+using Microsoft.AspNetCore.Http;
+
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    [ApiController]
+    public class AuthController : ControllerBase
+    {
+        private readonly JwtDbContext _jwtDbContext;
+        private readonly AAtims _db;
+
+        private readonly UserManager<AppUser> _userManager;
+        private readonly IJwtFactory _jwtFactory;
+        private readonly JwtIssuerOptions _jwtOptions;
+        private readonly IConfiguration _configuration;
+        private readonly IUserSettingsService _userSettings;
+        private readonly IPermissionsService _permissionsService;
+        private readonly RoleManager<IdentityRole> _roleManager;
+        private readonly string _clientName;
+
+        public AuthController(JwtDbContext jwtDbContext, AAtims db, UserManager<AppUser> userManager,
+            IJwtFactory jwtFactory, IOptions<JwtIssuerOptions> jwtOptions, IConfiguration configuration, IUserSettingsService userSettings, 
+            IPermissionsService permissionsService,
+            RoleManager<IdentityRole> roleManager, IHttpContextAccessor httpContextAccessor)
+        {
+            _jwtDbContext = jwtDbContext;
+            _db = db;
+
+            _userManager = userManager;
+            _jwtFactory = jwtFactory;
+            _jwtOptions = jwtOptions.Value;
+            _configuration = configuration;
+            _userSettings = userSettings;
+            _permissionsService = permissionsService;
+            _roleManager = roleManager;
+            _clientName = httpContextAccessor.HttpContext.Request.Headers["ClientSite"];
+            if (string.IsNullOrEmpty(_clientName))
+            {
+                _clientName = "JMS";
+            }
+        }
+    
+      
+        [HttpPost("login")]
+        [AllowAnonymous]
+        [AuditIgnore]
+        public async Task<IActionResult> Login([FromBody] LoginVM credentials)
+        {
+            if (!AllowWorkStationSubNetwork())
+            {
+                ModelState.AddModelError("login_failure", "Unauthorized Network");
+                return BadRequest(ModelState);
+            }
+
+            ClaimsIdentity identity = await GetClaimsIdentity(credentials.UserName, credentials.Password); 
+            AppUser user = await _userManager.FindByNameAsync(credentials.UserName);
+
+            if (identity == null)
+            {
+                if (user != null)
+                {
+                    if (await _userManager.GetLockoutEnabledAsync(user))
+                    {
+                        _userManager.Options.Lockout.MaxFailedAccessAttempts = 6;
+
+                        int accessFailedCount = await _userManager.GetAccessFailedCountAsync(user);
+                        if (accessFailedCount < 5)
+                        {                          
+                            await _userManager.AccessFailedAsync(user);                         
+                        }
+
+                        ModelState.AddModelError("login_failure",
+                            accessFailedCount >= 4
+                                ? "User is locked.Contact Administrator for unlocking the user."
+                                : "Invalid password. please login again.");
+                    }
+                }
+                else
+                {
+                    ModelState.AddModelError("login_failure", "Invalid username or password.");
+                }
+                return BadRequest(ModelState);
+            }
+
+            //Application permission check
+            if(identity.Claims.Any(c=>c.Type == AuthDetailConstants.NOACCESS))
+            {
+                ModelState.AddModelError("login_failure",
+                    $"Access to {identity.Claims.First(f=>f.Type == AuthDetailConstants.NOACCESS).Value} has been denied, please see system administrator to grant rights to this application");
+                return BadRequest(ModelState);
+            }
+
+            if (user != null)
+            {
+                int accessFailedCount = await _userManager.GetAccessFailedCountAsync(user);
+                if (accessFailedCount >= 5)
+                {
+                    ModelState.AddModelError("login_failure", "User is locked.Contact Administrator for unlocking the user.");
+                    return BadRequest(ModelState);
+                }
+            }
+
+            await _userManager.ResetAccessFailedCountAsync(user);
+
+            string personnelId = identity.Claims.First(f => f.Type == AuthDetailConstants.PERSONNELID).Value;
+
+            string userExpires = identity.Claims.FirstOrDefault(f => f.Type == AuthDetailConstants.USEREXPIRES)?.Value;
+
+            bool terminateFlag = _db.Personnel.Any(x => x.PersonnelId == Convert.ToInt16(personnelId) && x.PersonnelTerminationFlag);
+
+            if (terminateFlag)
+            {
+                ModelState.AddModelError("login_failure", "Inactive User");
+                return BadRequest(ModelState);
+            }
+
+            if (!(userExpires is null))
+            {
+                if (Convert.ToDateTime(userExpires).Date < DateTime.Now.Date)
+                {
+                    ModelState.AddModelError("login_failure", "User is expired");
+                    return BadRequest(ModelState);
+                }
+            }
+
+            object userSettings1 = await _userSettings.GetUserSettingsFromAppUser("HomePageSS", await _userManager.FindByNameAsync(credentials.UserName));
+
+            // Serialize and return the response
+            var response = new
+            {
+                auth_token = await _jwtFactory.GenerateEncodedToken(identity),
+                expires_in = (int)_jwtOptions.ValidFor.TotalSeconds,
+                userSettings1,
+                is_admin = identity.Claims.First(f=>f.Type == PermissionTypes.Admin).Value
+            };
+
+            //string json = JsonConvert.SerializeObject(response);
+            return new OkObjectResult(response);
+        }
+
+        [HttpPost("adLogin")]
+        [AllowAnonymous]
+        public async Task<IActionResult> AdLogin([FromBody] AdLoginVM credentials)
+        {
+            if (!AllowWorkStationSubNetwork())
+            {
+                ModelState.AddModelError("login_failure", "Unauthorized Network");
+                return BadRequest(ModelState);
+            }
+
+            //Check if the user credentials are valid in the domain provided
+            bool isValid = ValidateActiveDirectoryUser(credentials);
+
+            //check if isValid is false. If FALSE return (incorrect username or password) message
+            if (!isValid)
+            {
+                ModelState.AddModelError("login_failure", "Invalid username or password.");
+                return BadRequest(ModelState);
+            }
+
+            AppUser userToVerify = await _userManager.FindByNameAsync(credentials.UserName);
+
+            IList<Claim> claims = await _userManager.GetClaimsAsync(userToVerify);
+
+            ClaimsIdentity identity = new ClaimsIdentity(new GenericIdentity(credentials.UserName, "Token"), new[] {
+                new Claim("personnelId", claims.Single(c => c.Type == "personnel_id").Value),
+                new Claim("facilityId",  claims.Single(c => c.Type == "facility_id").Value),
+                new Claim("user_name",  claims.Single(c => c.Type == "family_name").Value),
+            });
+
+            string personnelId = identity.Claims.First(f => f.Type == AuthDetailConstants.PERSONNELID).Value;
+
+            bool terminateFlag = _db.Personnel.Any(x => x.PersonnelId == Convert.ToInt16(personnelId) && x.PersonnelTerminationFlag);
+
+            string userExpires = claims.FirstOrDefault(c => c.Type == AuthDetailConstants.USEREXPIRES)?.Value;
+
+            //Application permission check
+            List<string> roleIds = _jwtDbContext.UserRoles.Where(w=>w.UserId == userToVerify.Id).Select(s=>s.RoleId).ToList();
+
+            List<IdentityRole> roles = _roleManager.Roles.Where(w=>roleIds.Contains(w.Id)).ToList();
+
+            List<string> roleClaims = new List<string>();
+
+            roles.ForEach(f=>{
+                roleClaims.AddRange(_roleManager.GetClaimsAsync(f).Result.Select(s=>s.Type).ToList());
+            }); 
+
+            AppAo app = _clientName.ToUpper().Contains(PermissionTypes.Prebook) ? _db.AppAo.Single(w=> w.AppAoAbbr == PermissionTypes.PBPC)
+                        :_db.AppAo.Single(w=> _clientName.ToUpper().Contains(w.AppAoAbbr));
+ 
+            bool isAccess = roleClaims.Any(x => x == PermissionTypes.Application+PermissionTypes.Permission+app.AppAoId || x == PermissionTypes.Admin);
+
+            //To ensure loggedin user is admin or not
+            bool isAdmin = roleClaims.Any(x => x == PermissionTypes.Admin);
+
+            if (!isAccess)
+            {
+                ModelState.AddModelError("login_failure",
+                    $"Access to {app.AppAoAbbr} has been denied, please see system administrator to grant rights to this application");
+                return BadRequest(ModelState);
+            }
+
+
+            if (terminateFlag)
+            {
+                ModelState.AddModelError("login_failure", "Inactive User");
+                return BadRequest(ModelState);
+            }
+
+            if (!(userExpires is null))
+            {
+                if (Convert.ToDateTime(userExpires).Date < DateTime.Now.Date)
+                {
+                    ModelState.AddModelError("login_failure", "User is expired");
+                    return BadRequest(ModelState);
+                }
+            }
+
+            //Get ClaimsIdentity for the user from UserName
+
+            //get User Home Page from UserSettings
+            object userSettings1 = await _userSettings.GetUserSettingsFromAppUser("HomePageSS", 
+                await _userManager.FindByNameAsync(credentials.UserName));
+
+            //Generate the auth_token from the ClaimsIdentity using _jwtFactory
+            //Generate the expires_in using _jwtOptions
+            var response = new
+            {
+                auth_token = await _jwtFactory.GenerateEncodedToken(identity),
+                expires_in = (int)_jwtOptions.ValidFor.TotalSeconds,
+                userSettings1,
+                is_admin = isAdmin
+            };
+
+            return new OkObjectResult(response);
+        }
+
+        [HttpGet("SamlLoginCheck")]
+        [AllowAnonymous]
+        public IActionResult CheckSaml()
+        {
+            if (!_configuration.GetValue("Saml:Required", false))
+            {
+                return Ok(new SamlUrlResponse
+                {
+                    Required = false,
+                    IdpUrl = ""
+                });
+            }
+
+            if (!AllowWorkStationSubNetwork())
+            {
+                ModelState.AddModelError("login_failure", "Unauthorized Network");
+                return BadRequest(ModelState);
+            }
+
+            string certificate = _configuration.GetValue("Saml:Certificate", "");
+            string idpTargetUrl = _configuration.GetValue("Saml:IdpTargetUrl", "");
+            string issuer = _configuration.GetValue("Saml:Issuer", "");
+            string assertionConsumerServiceUrl = _configuration.GetValue("Saml:AssertionConsumerServiceUrlJMS", "");
+            AccountSettings accountSettings = new AccountSettings(certificate, idpTargetUrl);
+
+            AuthRequest req = new AuthRequest(new AppSettings(assertionConsumerServiceUrl, issuer), accountSettings);
+            string responseRedirect = accountSettings.IdpSsoTargetUrl;
+            string samlRequestToken = req.GetRequest(AuthRequest.AuthRequestFormat.Base64);
+            return Ok(new SamlUrlResponse
+            {
+                Required = true,
+                IdpUrl = responseRedirect,
+                SamlRequestToken = samlRequestToken
+            });
+
+        }
+
+        [HttpPost("SamlLoginJms")]
+        [AllowAnonymous]
+        public async Task SamlLoginJms()
+        {
+            if (_configuration.GetSection("Saml") != null)
+            {
+                string certificate = _configuration.GetSection("Saml")["Certificate"];
+                string idpTargetUrl = _configuration.GetSection("Saml")["IdpTargetUrl"];
+                string attributeValueLink = _configuration.GetSection("Saml")["AttributeName"];
+                AccountSettings accountSettings = new AccountSettings(certificate, idpTargetUrl);
+
+                Response samlResponse = new Response(accountSettings);
+                samlResponse.LoadXmlFromBase64(Request.Form["SAMLResponse"]);
+
+                if (samlResponse.IsValid())
+                {
+                    string userName = samlResponse.GetAttributeValue(attributeValueLink);
+                    string sessionIndex = samlResponse.GetSessionIndex();
+                    if (userName != "")
+                    {
+                        AppUser userToVerify = await _userManager.FindByNameAsync(userName);
+
+                        IList<Claim> claims = await _userManager.GetClaimsAsync(userToVerify);
+
+                        ClaimsIdentity identity = new ClaimsIdentity(new GenericIdentity(userName, "Token"), new[]
+                        {
+                            new Claim("personnelId", claims.Single(c => c.Type == "personnel_id").Value),
+                            new Claim("facilityId", claims.Single(c => c.Type == "facility_id").Value),
+                            new Claim("user_name", claims.Single(c => c.Type == "family_name").Value),
+                        });
+                        string authToken = await _jwtFactory.GenerateEncodedToken(identity);
+                        Response.Redirect(_configuration.GetSection("SiteVariables")["JMSUrl"] +
+                                          "/JMS/SAMLLogin?token=" + authToken + "&session="+sessionIndex);
+                    }
+                }
+            }
+        }
+
+        [HttpPost("SamlLogout")]
+        public IActionResult SamlLogout(SamlLogoutRequest logoutRequest)
+        {
+            if (_configuration.GetSection("Saml")["Required"] == null ||
+                !bool.Parse(_configuration.GetSection("Saml")["Required"])) {
+                return Ok(new SamlUrlResponse
+                {
+                    idpLogoutUrl = ""
+                });
+            }
+
+            string certificate = _configuration.GetSection("Saml")["Certificate"];
+            string idpTargetUrl = _configuration.GetSection("Saml")["IdpTargetUrl"];
+            string assertionConsumerServiceUrl =
+                _configuration.GetSection("Saml")["AssertionConsumerServiceUrlJMS"];
+            string idpLogoutUrl = _configuration.GetSection("Saml")["IdpLogoutUrl"];
+            string issuer = _configuration.GetSection("Saml")["Issuer"];
+            AccountSettings accountSettings = new AccountSettings(certificate, idpTargetUrl, idpLogoutUrl);
+            AuthRequest req = new AuthRequest(new AppSettings(assertionConsumerServiceUrl, issuer),
+                accountSettings);
+
+            string responseRedirect = accountSettings.IdpSsoLogoutUrl + "?SAMLRequest=" +
+                HttpUtility.UrlEncode(req.LogoutRequest(AuthRequest.AuthRequestFormat.Base64, logoutRequest.session));
+            return Ok(new SamlUrlResponse
+            {
+                idpLogoutUrl = responseRedirect
+            });
+
+        }
+
+        private static bool ValidateActiveDirectoryUser(AdLoginVM credentials)
+        {
+            bool result;
+
+            using (PrincipalContext pc = new PrincipalContext(ContextType.Domain, credentials.Domain))
+            {
+                result = pc.ValidateCredentials(credentials.UserName, credentials.Password);
+            }
+
+            return result;
+        }
+
+        private async Task<ClaimsIdentity> GetClaimsIdentity(string userName, [AuditIgnore] string password) {
+            Debug.Assert(!string.IsNullOrEmpty(userName));
+            Debug.Assert(!string.IsNullOrEmpty(password));
+
+            // get the user to verifty
+            AppUser userToVerify = await _userManager.FindByNameAsync(userName);
+
+            // check the credentials  
+            if (userToVerify == null || !await _userManager.CheckPasswordAsync(userToVerify,password))
+                return await Task.FromResult<ClaimsIdentity>(null);
+            IList<Claim> claims = await _userManager.GetClaimsAsync(userToVerify);
+
+            string userExpires = claims.FirstOrDefault(c => c.Type == "user_expires")?.Value;
+
+            // getting claims from aspnetuserclaims table.
+            ClaimsIdentity identity = new ClaimsIdentity(new GenericIdentity(userName, "Token"), new[] {
+                new Claim("personnelId", claims.Single(c => c.Type == "personnel_id").Value),
+                new Claim("facilityId",  claims.Single(c => c.Type == "facility_id").Value),
+                new Claim("user_name",  claims.Single(c => c.Type == "family_name").Value)
+            });
+
+            if (!(userExpires is null))
+            {
+                identity.AddClaim(new Claim(AuthDetailConstants.USEREXPIRES, userExpires));
+            }
+
+            List<string> roleIds = _jwtDbContext.UserRoles.Where(w=>w.UserId == userToVerify.Id)
+                .Select(s=>s.RoleId).ToList();
+
+            List<IdentityRole> roles = _roleManager.Roles.Where(w=>roleIds.Contains(w.Id)).ToList();
+
+            List<string> roleClaims = new List<string>();
+
+            roles.ForEach(f=>{
+                roleClaims.AddRange(_roleManager.GetClaimsAsync(f).Result.Select(s=>s.Type).ToList());
+            });
+
+            AppAo app = _clientName.ToUpper().Contains(PermissionTypes.Prebook) ? _db.AppAo.Single(w => w.AppAoAbbr == PermissionTypes.PBPC)
+                        : _db.AppAo.Single(w => _clientName.ToUpper().Contains(w.AppAoAbbr));
+
+            bool isAccess = roleClaims.Any(x => x == PermissionTypes.Application+PermissionTypes.Permission+app.AppAoId || x == PermissionTypes.Admin);
+
+            if(!isAccess)
+            {
+                identity.AddClaim(new Claim(AuthDetailConstants.NOACCESS,app.AppAoAbbr));
+            }
+            
+            //To ensure loggedin user is admin or not
+            identity.AddClaim(new Claim(PermissionTypes.Admin,roleClaims.Any(x=>x == PermissionTypes.Admin)?"true":"false"));
+ 
+            return identity;
+        }
+
+        // Registration is probably not going to be here; at least not until Admin remains on version 1!
+        // But it allows to create a user through Postman - BREAKING the link between Identity and User_Access!!!
+        // Don't do it except for early testing
+        [HttpPost("register")]
+        [AllowAnonymous]
+        public async Task<IActionResult> Register([FromBody] RegistrationVM model)
+        {
+            AppUser userIdentity = new AppUser {
+                UserName = model.UserName,
+                Email = model.Email
+            };
+            IdentityResult result = await _userManager.CreateAsync(userIdentity, model.Password);
+
+            if (!result.Succeeded) {
+                foreach (IdentityError e in result.Errors)
+                {
+                    ModelState.TryAddModelError(e.Code, e.Description);
+                }
+                return new BadRequestObjectResult(ModelState);
+            }
+
+            await _jwtDbContext.SaveChangesAsync();
+
+            return new OkResult();
+        }
+
+        [HttpPost("ResetPassword")]
+        [AllowAnonymous]
+        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordVM model)
+        {
+            AppUser identity = await _userManager.FindByNameAsync(model.UserName);
+            await _userManager.RemovePasswordAsync(identity);
+            IdentityResult result = await _userManager.AddPasswordAsync(identity, model.NewPassword);
+
+            if (!result.Succeeded)
+            {
+                foreach (IdentityError e in result.Errors)
+                {
+                    ModelState.TryAddModelError(e.Code, e.Description);
+                }
+                return new BadRequestObjectResult(ModelState);
+            }
+
+            await _jwtDbContext.SaveChangesAsync();
+
+            return new OkResult();
+        }
+
+        [HttpGet("details")]
+        public IActionResult GetDetails()
+        {
+            string ipaddress = Request.HttpContext.Connection.RemoteIpAddress.ToString();
+            IConfigurationSection connectionstring = _configuration.GetSection("ConnectionStrings")
+                .GetSection("DefaultConnection");
+            int pid = int.Parse(User.Claims.Single(c => c.Type == "personnelId").Value);
+            Personnel personnel = _db.Personnel.Single(w => w.PersonnelId == pid);
+            UserInfoVm userinfo = new UserInfoVm
+            {
+                PersonnelId = User.Claims.Single(c => c.Type == "personnelId").Value,
+                FacilityId = User.Claims.Single(c => c.Type == "facilityId").Value,
+                UserName = User.Claims.FirstOrDefault()?.Value,
+                LastName = User.Claims.Single(c => c.Type == "user_name").Value,
+                Folder = _configuration.GetValue<string>("SiteVariables:PhotoPath"),
+                PbpcUrl = _configuration.GetValue<string>("SiteVariables:PBPCUrl"),
+                JmsUrl = _configuration.GetValue<string>("SiteVariables:JMSUrl"),
+                AdminUrl = _configuration.GetValue<string>("SiteVariables:AdminUrl"),
+                V1AdminUrl = _configuration.GetValue<string>("SiteVariables:V1AdminUrl"),
+                AcsUrl = _configuration.GetValue<string>("SiteVariables:ACSUrl"),
+                Version = _configuration.GetSection("Version").Value,
+                ServerIp = HttpContext.Connection.LocalIpAddress.ToString(),
+                Port = HttpContext.Connection.LocalPort.ToString(),
+                IpAddress = ipaddress == "::1" ? Dns.GetHostEntry("::1").AddressList[1].ToString() : ipaddress,
+                HostName = ipaddress == "::1" ? Dns.GetHostEntry("::1").HostName.Split('.')[0] : ipaddress,
+                DbName = connectionstring.Value.Split(';')[0].Split('=')[1] + '.' +
+                    connectionstring.Value.Split(';')[1].Split('=')[1],
+                BadgeNumber = personnel.OfficerBadgeNum,
+                FirstName = _db.Person.Single(p => p.PersonId == personnel.PersonId).PersonFirstName
+            };
+            return Ok(userinfo);
+        }
+      
+        // For verification purposes only
+        [HttpGet("values")]
+        [AllowAnonymous]
+        public IActionResult Get()
+        {
+            int[] rc = { 200, 300, 400 };
+            return Ok(rc);
+        }
+
+        [HttpPost("FunctionPermissionCheck")]
+        public Task<string> FunctionPermissionCheck([FromBody] FunctionPermissionCheck functionPermissionCheck)
+        {
+            functionPermissionCheck.AuthenticationHeader = Request.Headers["Authorization"];
+            return _permissionsService.FunctionPermissionCheck(functionPermissionCheck);
+        }
+
+
+        private bool AllowWorkStationSubNetwork()
+        {
+            string ipAddress = ConvertIpToBytesString(Request.HttpContext.Connection.RemoteIpAddress);
+
+            WorkStationSubNetwork subNetwork = _db.WorkStationSubNetwork.AsEnumerable().FirstOrDefault(w => 
+                ipAddress.StartsWith(ConvertSubNetworkToBytesString(w.WorkStationSubNetworkIp)) && w.WorkStationSubNetworkAuthorized);
+            if (subNetwork == null)
+            {
+                return false;
+            }
+            string localIpAddress = Request.HttpContext.Connection.LocalIpAddress.MapToIPv4().ToString();
+            string remoteIpAddress = Request.HttpContext.Connection.RemoteIpAddress.MapToIPv4().ToString();
+            PrintWorkstationMaster workStation = _db.PrintWorkstationMaster.FirstOrDefault(w => 
+                w.WorkStationIp == localIpAddress && w.WorkStationRemoteIp == remoteIpAddress);
+            if (workStation != null) return true;
+
+            workStation = new PrintWorkstationMaster
+            {
+                WorkStationRemoteIp = remoteIpAddress,
+                WorkStationIp = localIpAddress,
+                WorkStationDefaultFacilityId = subNetwork.FacilityId
+            };
+            _db.Add(workStation);
+            _db.SaveChanges();
+
+            return true;
+        }
+
+        private static string ConvertIpToBytesString(IPAddress ipAddress)
+        {
+            string[] ipAddressSectionsArray = ipAddress.MapToIPv4().ToString().Split(".");
+            return ipAddressSectionsArray.Select(section => Convert.ToString(Convert.ToInt64(section), 2))
+                .Select(bits => bits.PadLeft(8, '0')).Aggregate("", (current, bitsString) => current + bitsString);
+        }
+
+        private static string ConvertSubNetworkToBytesString(string subNetworkIp)
+        {
+            string[] ipAddressArray = subNetworkIp.Split("/");
+            int bits = Convert.ToInt16(ipAddressArray[1]);
+            IPAddress ipAddress = IPAddress.Parse(ipAddressArray[0]);
+            string ipAddressString = ConvertIpToBytesString(ipAddress);
+            string subString = ipAddressString.Substring(0, bits);
+            return subString;
+        }
+    }
+}

@@ -1,0 +1,107 @@
+﻿using ServerAPI.Services;
+using ServerAPI.Tests;
+using System.Collections.Generic;
+using Xunit;
+using ServerAPI.ViewModels;
+using System.Linq;
+using System.Threading.Tasks;
+using GenerateTables.Models;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
+using ServerAPI.JMS.Tests.Helper;
+using Microsoft.AspNetCore.Identity;
+using Moq;
+using JwtDb.Models;
+using Microsoft.Extensions.Caching.Memory;
+
+// ReSharper disable once CheckNamespace
+namespace ServerAPI.JMS.Tests
+{
+    [Collection("Database collection")]
+    public class PersonCharServiceTest
+    {
+        private readonly PersonCharService _personCharService;
+        private readonly DbInitialize _fixture;
+        private readonly IConfigurationRoot _configuration = MockHelpers.GetIConfigurationRoot();
+        private readonly Mock<IMemoryCache> _memory = new Mock<IMemoryCache>();
+
+        public PersonCharServiceTest(DbInitialize fixture)
+        {
+            _fixture = fixture;
+            PersonService personService = new PersonService(fixture.Db);
+            Mock<UserManager<AppUser>> userMgr = MockHelpers.MockUserManager<AppUser>();
+            AppletsSavedService appletsSavedService = new AppletsSavedService(_fixture.Db, _configuration);
+            PhotosService photosService = new PhotosService(fixture.Db, _configuration);
+            HttpContextAccessor httpContext = new HttpContextAccessor { HttpContext = fixture.Context.HttpContext };
+            InterfaceEngineService interfaceEngineService = new InterfaceEngineService(_fixture.Db,
+                _configuration, _memory.Object);
+            CommonService commonService = new CommonService(_fixture.Db, _configuration, httpContext,personService,
+                appletsSavedService,interfaceEngineService);
+            _personCharService = new PersonCharService(fixture.Db, commonService, httpContext,personService,
+                interfaceEngineService);
+        }
+
+        [Fact]
+        public void PersonChar_GetPersonCharHistory()
+        {
+            //Act
+            List<HistoryVm> lsthistory = _personCharService.GetPersonCharHistory(9);
+            //Assert
+            HistoryVm history = lsthistory.Single(h => h.PersonId == 50);
+            Assert.Equal("VIJAYA", history.PersonLastName);
+            Assert.Equal("Hair Color", history.Header[3].Header);
+            Assert.Equal("15", history.Header[3].Detail);
+        }
+
+        [Fact]
+        public void PersonChar_GetCharDetails()
+        {
+            //Act
+            PersonCharVm personChar = _personCharService.GetCharDetails(60);
+            //Assert
+            Assert.Equal("UNEMPLOYEE", personChar.Occupation);
+            Assert.Equal(2, personChar.Sex);
+            Assert.Equal("SANGEETHA", personChar.UpdateByPersonFirstName);
+        }
+
+        [Fact]
+        public async Task InsertUpdatePersonChar()
+        {
+            //Arrange
+            PersonCharVm personChar = new PersonCharVm
+            {
+                DescriptionId = 10,
+                Occupation = "REAL ESTATE AGENT",
+                PrimaryLanguage = 52,
+                Sex = 2,
+                EyeColor = 15,
+                HairLength = 5,
+                FacialHair = 2,
+                Weight = 45,
+                HairColor = 4,
+                HairType = 4,
+                PrimaryHeight = 10,
+                SecondaryHeight = 20,
+                RaceLast = 15,
+                Teeth = 2,
+                Glasses = 1,
+                CharHistoryList = @"{'Height':'5','Height Sec':'20','Weight':'65','Gender':'MALE','Hair Color':'BLACK'}",
+                PersonId = 100
+            };
+            PersonDescription description = _fixture.Db.PersonDescription.Single(p => p.PersonDescriptionId == 10);
+            Assert.Equal(2, description.PersonSex);
+            Assert.Equal(5, description.PersonHairColor);
+            PersonDescriptionHistory history =
+                _fixture.Db.PersonDescriptionHistory.SingleOrDefault(p => p.PersonDescriptionId == 10);
+            Assert.Null(history);
+            //Act
+            await _personCharService.InsertUpdatePersonChar(personChar);
+            //Assert
+            description = _fixture.Db.PersonDescription.Single(p => p.PersonDescriptionId == 10);
+            Assert.Equal(2, description.PersonSex);
+            Assert.Equal(4, description.PersonHairColor);
+            history = _fixture.Db.PersonDescriptionHistory.Single(p => p.PersonDescriptionId == 10);
+            Assert.NotNull(history);
+        }
+    }
+}

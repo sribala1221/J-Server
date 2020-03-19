@@ -1,0 +1,18 @@
+﻿using System.Collections.Generic;
+
+namespace ServerAPI.ViewModels
+{
+    public class ProgramInstructor
+    {
+        public List<Instructor> Assigned { get; set; }
+        public List<Instructor> Certified { get; set; }
+        public List<Instructor> NotCertified { get; set; }
+    }
+
+    public class Instructor
+    {
+        public PersonnelVm Personnel { get; set; }
+        public int? DeleteFlag { get; set; }
+        public int? ProgramInstructorCertId { get; set; }
+    }
+}

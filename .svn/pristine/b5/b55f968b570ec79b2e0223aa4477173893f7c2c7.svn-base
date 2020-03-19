@@ -1,0 +1,15 @@
+﻿using ServerAPI.ViewModels;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace ServerAPI.Services
+{
+    public interface IMoneyDepositoryHistoryService
+    {
+        MoneyDepositoryDetailVm GetMoneyDepositoryHistoryDetails();
+        MoneyDepositoryDetailVm GetMoneyDepositoryHistoryDetails(int bankId, int accountAoDepositoryId, 
+            int fundId, int personnelId, DateTime? transactionDate);
+    }
+}

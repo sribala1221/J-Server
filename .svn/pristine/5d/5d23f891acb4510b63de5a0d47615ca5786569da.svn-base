@@ -1,0 +1,118 @@
+﻿using System;
+using System.Collections.Generic;
+
+namespace ServerAPI.ViewModels
+{
+    public class StatusBoardOveriviewVm
+    {
+        public List<OverviewVm> PreScreening { get; set; }
+        public List<OverviewVm> PreScreenInProgress { get; set; }
+        public List<OverviewVm> PreScreenComplete { get; set; }
+        public List<OverviewVm> WizardQueue { get; set; }
+        public List<OverviewVm> TaskQueue { get; set; }
+        public List<OverviewVm> SupervisorQueue { get; set; }
+        public List<OverviewVm> ActiveIncident { get; set; }
+        public List<OverviewVm> IncidentInmate { get; set; }
+        public List<MonitorAttendanceVm> ActiveGrievance { get; set; }
+        public List<OverviewVm> GrievanceInmates { get; set; }
+        public List<MonitorAttendanceVm> GrievancePersonnel { get; set; }
+        public List<OverviewVm> InOutCount { get; set; }
+        public List<OverviewVm> FacilityCount { get; set; }
+        public List<OverviewVm> BuildingCount { get; set; }
+        public List<OverviewVm> ExternalCheckOut { get; set; }
+        public List<OverviewVm> CheckedOut { get; set; }
+        public List<OverviewVm> AppointmentToday { get; set; }
+        public List<OverviewVm> Association { get; set; }
+        public List<OverviewVm> Flag { get; set; }
+        public List<OverviewVm> Classify { get; set; }
+        public List<OverviewVm> Gender { get; set; }
+        public List<OverviewVm> Race { get; set; }
+        public List<OverviewVm> Sentence { get; set; }
+        public List<OverviewVm> Charge { get; set; }
+        public List<OverviewVm> ActiveBooking { get; set; }
+        public List<MonitorAttendanceVm> Attendance { get; set; }
+    }
+
+
+    public class OverviewVm
+    {
+        public int Count { get; set; }
+        public int OverviewId { get; set; }
+        public string Description { get; set; }
+        public OverviewType OverviewFlag { get; set; }
+        public int TotalCount { get; set; }
+        public string Type { get; set; }
+    }
+
+
+    public class OverviewIncidentVm
+    {
+        public double? DiscTypeIndex { get; set; }
+        public string DiscTypeDescription { get; set; }
+        public double? DiscInTypeIndex { get; set; }
+        public string DiscInTypeDescription { get; set; }
+        public int? DisciplinaryType { get; set; }
+        public int? DisciplinaryInmateType { get; set; }
+    }
+
+    public class MonitorAttendanceVm
+    {
+        public int Count { get; set; }
+        public int OverviewId { get; set; }
+        public string Department { get; set; }
+        public string Position { get; set; }
+        public OverviewType OverviewFlag { get; set; }
+    }
+
+    public enum OverviewType
+    {
+        MedPreScreening,
+        MedPreScreenInProgress,
+        MedPrescreenComplete,
+        WizardQueue,
+        Task,
+        Incident,
+        IncidentInmates,
+        Grievance,
+        GrievanceInmates,
+        GrievancePersonnel,
+        SupervisorQueues,
+        InOut,
+        Housing,
+        Facility,
+        ExternalLocation,
+        Location,
+        TodaysAppointment,
+        Association,
+        Flag,
+        Classify,
+        Gender,
+        Race,
+        Sentence,
+        Charge,
+        Attendance,
+        ArrestingAgency
+    }
+
+    public class OverviewDetailInputVm
+    {
+        public int FacilityId { get; set; }
+        public OverviewType OverviewType { get; set; }
+        public string Flag { get; set; }
+        public int FlagId { get; set; }
+        public string Description { get; set; }
+    }
+
+    public class SupervisiorReviewVm
+    {
+        public string BookingNumber { get; set; }
+
+        public PersonInfoVm PersonDetail { get; set; }
+
+        public string InmateNumber { get; set; }
+
+        public string BookingType { get; set; }
+
+        public DateTime? CompleteDate { get; set; }
+    }
+}

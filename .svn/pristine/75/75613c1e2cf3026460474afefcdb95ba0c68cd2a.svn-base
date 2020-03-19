@@ -1,0 +1,67 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.27130.2003
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{AF89B24D-68C4-4757-ADB2-8E1488D4FF69}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{D8E01262-E829-43D0-9BED-4C2F3131EB12}"
+	ProjectSection(SolutionItems) = preProject
+		Scaffold.txt = Scaffold.txt
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "test", "test", "{2D193CDE-236B-4EB2-8AD4-097EA826DD88}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ServerAPI", "src\ServerAPI\ServerAPI.csproj", "{6FA64EB9-CB48-4283-90B2-DA829031E08B}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ServerAPI.JMS.Tests", "test\ServerAPI.JMS.Tests\ServerAPI.JMS.Tests.csproj", "{5C40E0DC-03CA-4BD0-837B-FC55093D1105}"
+EndProject
+Global
+	GlobalSection(SubversionScc) = preSolution
+		Svn-Managed = True
+		Manager = AnkhSVN - Subversion Support for Visual Studio
+	EndGlobalSection
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|Any CPU = Release|Any CPU
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{6FA64EB9-CB48-4283-90B2-DA829031E08B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6FA64EB9-CB48-4283-90B2-DA829031E08B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6FA64EB9-CB48-4283-90B2-DA829031E08B}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{6FA64EB9-CB48-4283-90B2-DA829031E08B}.Debug|x64.Build.0 = Debug|Any CPU
+		{6FA64EB9-CB48-4283-90B2-DA829031E08B}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{6FA64EB9-CB48-4283-90B2-DA829031E08B}.Debug|x86.Build.0 = Debug|Any CPU
+		{6FA64EB9-CB48-4283-90B2-DA829031E08B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6FA64EB9-CB48-4283-90B2-DA829031E08B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6FA64EB9-CB48-4283-90B2-DA829031E08B}.Release|x64.ActiveCfg = Debug|Any CPU
+		{6FA64EB9-CB48-4283-90B2-DA829031E08B}.Release|x64.Build.0 = Debug|Any CPU
+		{6FA64EB9-CB48-4283-90B2-DA829031E08B}.Release|x86.ActiveCfg = Release|Any CPU
+		{6FA64EB9-CB48-4283-90B2-DA829031E08B}.Release|x86.Build.0 = Release|Any CPU
+		{5C40E0DC-03CA-4BD0-837B-FC55093D1105}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5C40E0DC-03CA-4BD0-837B-FC55093D1105}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5C40E0DC-03CA-4BD0-837B-FC55093D1105}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{5C40E0DC-03CA-4BD0-837B-FC55093D1105}.Debug|x64.Build.0 = Debug|Any CPU
+		{5C40E0DC-03CA-4BD0-837B-FC55093D1105}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{5C40E0DC-03CA-4BD0-837B-FC55093D1105}.Debug|x86.Build.0 = Debug|Any CPU
+		{5C40E0DC-03CA-4BD0-837B-FC55093D1105}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5C40E0DC-03CA-4BD0-837B-FC55093D1105}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5C40E0DC-03CA-4BD0-837B-FC55093D1105}.Release|x64.ActiveCfg = Release|Any CPU
+		{5C40E0DC-03CA-4BD0-837B-FC55093D1105}.Release|x64.Build.0 = Release|Any CPU
+		{5C40E0DC-03CA-4BD0-837B-FC55093D1105}.Release|x86.ActiveCfg = Release|Any CPU
+		{5C40E0DC-03CA-4BD0-837B-FC55093D1105}.Release|x86.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{6FA64EB9-CB48-4283-90B2-DA829031E08B} = {AF89B24D-68C4-4757-ADB2-8E1488D4FF69}
+		{5C40E0DC-03CA-4BD0-837B-FC55093D1105} = {2D193CDE-236B-4EB2-8AD4-097EA826DD88}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {6C4AA3AC-C36D-4B88-8617-2AB78CA31732}
+	EndGlobalSection
+EndGlobal

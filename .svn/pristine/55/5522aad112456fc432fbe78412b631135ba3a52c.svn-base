@@ -1,0 +1,48 @@
+using Microsoft.AspNetCore.Mvc;
+using ServerAPI.ViewModels;
+using ServerAPI.Services;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    public class MoneyClearController:Controller
+    {
+        private readonly IMoneyClearService _moneyClearService;
+        public MoneyClearController(IMoneyClearService moneyClearService)
+        {
+            _moneyClearService=moneyClearService;
+        }
+
+        //To get the Money-Clear-Clear-List Details
+        [HttpGet("GetMoneyClearClearDetails")]
+        public IActionResult GetMoneyClearClearDetails(MoneyAccountFilterVm searchValue)
+        {
+            return Ok(_moneyClearService.GetMoneyClearClearDetails(searchValue));
+        }
+
+        //To do the DoTransaction in Money-Clear-Clear-List Details 
+        [HttpGet("UpdateMoneyClearClearTransaction")]
+        public IActionResult UpdateMoneyClearClearTransaction(List<int> checkedTransIdList)
+        {
+            return Ok(_moneyClearService.UpdateMoneyClearClearTransaction(checkedTransIdList));
+        }
+
+      
+
+            [HttpPost("InsertReturnCheck")]
+        public async Task<IActionResult> InsertReturnCheck([FromBody]List<int> param)
+        {
+            return Ok(await _moneyClearService.InsertReturnCheck(param));
+        }
+
+        //To get the Money-Clear-History-List Details
+        [HttpGet("GetMoneyClearHistoryDetails")]
+        public IActionResult GetMoneyClearHistoryDetails(MoneyAccountFilterVm searchValue)
+        {
+            return Ok(_moneyClearService.GetMoneyClearHistoryDetails(searchValue));
+        }
+
+    }
+}

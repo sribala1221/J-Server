@@ -1,0 +1,180 @@
+using System;
+using System.Collections.Generic;
+using Microsoft.AspNetCore.Http;
+using System.Linq;
+using GenerateTables.Models;
+using ServerAPI.ViewModels;
+using System.Threading.Tasks;
+
+
+// ReSharper disable once CheckNamespace
+namespace ServerAPI.Services
+{
+    public class MoneyCollectionService : IMoneyCollectionService
+    {
+        private readonly AAtims _context;
+        private readonly int _personnelId;
+
+        public MoneyCollectionService(AAtims context, IHttpContextAccessor httpContextAccessor)
+        {
+            _context = context;
+            _personnelId = Convert.ToInt32(httpContextAccessor.HttpContext.User
+                .FindFirst("personnelId")?.Value);
+
+        }
+
+        #region To get unpaid fee details(SP Name:AO_MoneyFeeCollection)
+        public List<MoneyFeeCollectionVm> GetMoneyFeeCollection(MoneyAccountFilterVm searchValues)
+        {
+            List<MoneyFeeCollectionVm> list = _context.AccountAoFee
+                 .Where(w => w.TransactionCleared != 1 && w.TransactionVoidFlag != 1
+                   && w.TransactionDate >= searchValues.FromDate && w.TransactionDate <= searchValues.ToDate &&
+                             w.Inmate.AccountAoInmate.Any(a => a.AccountAoBankId == searchValues.BankId
+                             ))
+                             .Select(s => new MoneyFeeCollectionVm
+                             {
+                                 AccountAoFeeId = s.AccountAoFeeId,
+                                 TransactionDate = s.TransactionDate ?? default,
+                                 TransactionDescription = s.TransactionDescription,
+                                 PersonBy = new PersonnelVm
+                                 {
+                                     PersonLastName = s.CreatedByNavigation.PersonNavigation.PersonLastName,
+                                     PersonFirstName = s.CreatedByNavigation.PersonNavigation.PersonFirstName,
+                                     PersonMiddleName = s.CreatedByNavigation.PersonNavigation.PersonMiddleName
+                                 },
+                                 InmateNumber = s.Inmate.InmateNumber,
+                                 FundId = s.AccountAoFundId,
+                                 TransactionVoidFlag = s.TransactionVoidFlag ?? 0,
+                                 TransactionVoidId = s.TransactionVoidFeeId ?? 0,
+                                 TransactionAmount = s.TransactionFee ?? 0,
+                                 InmateId = s.InmateId ?? 0,
+                                 TransactionType = s.TransactionType,
+                                 BankAccountAbbr = s.AccountAoFund.AccountAoBank.BankAccountAbbr,
+                                 FundName = s.AccountAoFund.FundName,
+                                 BalanceAccount = s.BalanceAccountFee,
+                                 BalanceFund = s.BalanceFundFee,
+                                 BalanceInmate = s.BalanceInmateFee,
+                                 TransactionNotes = s.TransactionNotes,
+                                 BalanceAccountFee = s.AccountAoFund.AccountAoBank.BalanceAccountFee ?? 0,
+                                 HousingUnit = s.InmateId > 0 && s.Inmate.HousingUnitId > 0 ? new HousingDetail
+                                 {
+                                     HousingUnitId = s.Inmate.HousingUnit.HousingUnitId,
+                                     HousingUnitLocation = s.Inmate.HousingUnit.HousingUnitLocation,
+                                     HousingUnitNumber = s.Inmate.HousingUnit.HousingUnitNumber,
+                                     HousingUnitBedNumber = s.Inmate.HousingUnit.HousingUnitBedNumber,
+                                     HousingUnitBedLocation = s.Inmate.HousingUnit.HousingUnitBedLocation,
+                                     FacilityAbbr = s.Inmate.Facility.FacilityAbbr
+                                 } : new HousingDetail(),
+                             }).OrderByDescending(o => o.AccountAoFeeId).ToList();
+            list = list.Where(w => searchValues.InmateId > 0 ? w.InmateId == searchValues.InmateId : w.InmateId > 0).ToList();
+            return list;
+        }
+
+        #endregion
+
+        #region Do Transaction(SP Name:Ao_MoneyFeeTransaction)
+        public async Task<int> UpdateMoneyFeeTransaction(MoneyFeeCollectionsVm values)
+        {
+            List<MoneyFeeCollectionVm> list = new List<MoneyFeeCollectionVm>();
+            list = values.MoneyFeeCollection;
+            list.ForEach(val =>
+            {
+                AccountAoFee accountAoFee = _context.AccountAoFee.Single(w => w.AccountAoFeeId == val.AccountAoFeeId);
+                if (accountAoFee.TransactionCleared != 1)
+                {
+                    accountAoFee.TransactionCleared = 1;
+                    accountAoFee.TransactionClearedBy = _personnelId;
+                    accountAoFee.TransactionClearedDate = DateTime.Now;
+                    accountAoFee.TransactionClearedAmount = val.TransactionAmount;
+                    accountAoFee.TransactionClearedCollection = values.CollectionName;
+                    accountAoFee.UpdatedBy = _personnelId;
+                    accountAoFee.UpdateDate = DateTime.Now;
+                }
+                if (val.InmateId > 0)
+                {
+                    decimal InmateBalance = _context.AccountAoInmate
+                    .Single(s => s.InmateId == val.InmateId).BalanceInmateFee;
+                    InmateBalance = InmateBalance > 0 ? InmateBalance - val.TransactionAmount : 0;
+                    AccountAoInmate aoInmate = _context.AccountAoInmate.Single(s => s.InmateId == val.InmateId);
+                    aoInmate.BalanceInmateFee = InmateBalance;
+                    _context.SaveChanges();
+                }
+            });
+            return await _context.SaveChangesAsync();
+        }
+        #endregion
+        // To  Get Money Fee Collection History Details
+        public List<MoneyAccountTransactionVm> GetFeeCollectionHistory(int bankId, DateTime? transactionClearedDate)
+        {
+            List<MoneyAccountTransactionVm> moneyFeeCollection = _context.AccountAoFee.Where(
+                w => (w.TransactionCleared == 1 || w.TransactionVoidFlag == 1)
+                && (w.TransactionClearedDate.Value == transactionClearedDate.Value || w.TransactionVoidDate.Value == transactionClearedDate.Value)
+                && w.Inmate.AccountAoInmate.Any(a => a.AccountAoBankId == bankId))
+            .Select(s => new MoneyAccountTransactionVm
+            {
+                TransactionId = s.AccountAoFeeId,
+                TransactionDate = s.TransactionDate,
+                TransactionAmount = s.TransactionFee ?? 0,
+                TransactionDescription = s.TransactionDescription,
+                TransactionClearedCollection = s.TransactionClearedCollection,
+                TransactionClearedDate = s.TransactionClearedDate,
+                InmateNumber = s.Inmate.InmateNumber,
+                InmateId = s.Inmate.InmateId,
+                TransactionType = s.TransactionType,
+                TransactionNotes = s.TransactionNotes,
+                VoidFlag = s.TransactionVoidFlag == 1,
+                VoidDate = s.TransactionVoidDate,
+                FundName = s.AccountAoFund.FundName,
+                FacilityAbbr = s.Inmate.Facility.FacilityAbbr,
+                HousingUnit = s.InmateId > 0 && s.Inmate.HousingUnitId > 0 ? new HousingDetail
+                {
+                    HousingUnitId = s.Inmate.HousingUnit.HousingUnitId,
+                    HousingUnitLocation = s.Inmate.HousingUnit.HousingUnitLocation,
+                    HousingUnitNumber = s.Inmate.HousingUnit.HousingUnitNumber,
+                    HousingUnitBedNumber = s.Inmate.HousingUnit.HousingUnitBedNumber,
+                    HousingUnitBedLocation = s.Inmate.HousingUnit.HousingUnitBedLocation,
+                } : new HousingDetail(),
+                Person = new PersonVm
+                {
+                    PersonId = s.Inmate.Person.PersonId,
+                    PersonFirstName = s.Inmate.Person.PersonFirstName,
+                    PersonMiddleName = s.Inmate.Person.PersonMiddleName,
+                    PersonLastName = s.Inmate.Person.PersonLastName,
+                    PersonDob = s.Inmate.Person.PersonDob,
+                    PersonSsn = s.Inmate.Person.PersonSsn,
+                    PersonPhone = s.Inmate.Person.PersonPhone,
+                    PersonDlNumber = s.Inmate.Person.PersonDlNumber,
+                    PersonDlState = s.Inmate.Person.PersonDlState,
+                    PersonDlClass = s.Inmate.Person.PersonDlClass
+                },
+                VoidBy = new PersonnelVm
+                {
+                    OfficerBadgeNumber = s.TransactionVoidByNavigation.OfficerBadgeNum,
+                    PersonFirstName = s.TransactionVoidByNavigation.PersonNavigation.PersonFirstName,
+                    PersonLastName = s.TransactionVoidByNavigation.PersonNavigation.PersonLastName,
+                },
+                ClearBy = new PersonnelVm
+                {
+                    OfficerBadgeNumber = s.TransactionClearedByNavigation.OfficerBadgeNum,
+                    PersonFirstName = s.TransactionClearedByNavigation.PersonNavigation.PersonFirstName,
+                    PersonLastName = s.TransactionClearedByNavigation.PersonNavigation.PersonLastName,
+                },
+            }).OrderBy(o => o.AccountAoFeeId).ToList();
+            return moneyFeeCollection;
+        }
+        
+        // To load the money fee collection history clear date details.
+        public List<DateTime> GetMoneyFeeClearedDate(bool flag, int month)
+        {
+            List<DateTime> listClearedDate = !flag
+                ? _context.AccountAoTransaction
+                    .Where(w => w.AccountAoReceiveId > 0 && w.TransactionDate.Value.Month == month)
+                    .Select(s => s.TransactionDate.Value).ToList()
+                : _context.AccountAoFee
+                    .Where(w => w.AccountAoFeeId > 0 && w.TransactionClearedDate.Value.Month == month)
+                    .Select(s => s.TransactionClearedDate.Value).ToList();
+            return listClearedDate.OrderByDescending(o => o.Date).ThenByDescending(t => t.Hour).ThenByDescending(m => m.Minute).ToList();
+        }
+    }
+
+}

@@ -1,0 +1,354 @@
+﻿using GenerateTables.Models;
+using Microsoft.AspNetCore.Http;
+using ScheduleWidget.Common;
+using ScheduleWidget.Schedule;
+using ServerAPI.Interfaces;
+using ServerAPI.Utilities;
+using ServerAPI.ViewModels;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace ServerAPI.Services
+{
+    public class ProgramClassService : IProgramClassService
+    {
+
+        private readonly AAtims _context;
+        private readonly ICommonService _commonService;
+        private readonly int _personnelId;
+
+        public ProgramClassService(AAtims context, ICommonService commonService,
+            IHttpContextAccessor httpContextAccessor, IPersonService personService
+            )
+        {
+            _context = context;
+            _commonService = commonService;
+            _personnelId = Convert.ToInt32(httpContextAccessor.HttpContext.User
+                .FindFirst("personnelId")?.Value);
+        }
+
+        //ProgramClass Schedules
+        public ProgramClassScheduleVm GetProgramClassSchedules(int? facilityId)
+        {
+            //To get Appointment Location for New Appointment Entry
+            ProgramClassScheduleVm apptLocationList = new ProgramClassScheduleVm
+            {
+                //To get Appointment Location
+                LocationList = _context.Privileges
+                    .Where(p => p.InactiveFlag == 0 && p.ShowInAppointments
+                         && (p.FacilityId == facilityId || p.FacilityId == 0 || !p.FacilityId.HasValue))
+                 .OrderBy(x => x.PrivilegeDescription)
+                    .Select(p => new KeyValuePair<int, string>(p.PrivilegeId, p.PrivilegeDescription)).ToList(),
+
+                //To get Course List
+                CourseList = _context.ProgramCourse
+                    .OrderBy(x => x.CourseName)
+                  .Select(p => new ProgramCourseVm
+                  {
+                      GradeFlag = p.GradeFlag,
+                      IssueGradeFlag = p.IssueGradeFlag,
+                      PassNotPassFlag = p.PassNotPassFlag,
+                      CertificateFlag = p.CertificateFlag,
+                      Restrict1Course = p.Restrict1Course,
+                      CertificateName = p.CertificateName,
+                      CourseDescription = p.CourseDescription,
+                      ProgramCourseId = p.ProgramCourseId,
+                      CourseNumber = p.CourseNumber,
+                      CourseName = p.CourseName
+                  }).ToList(),
+
+                InstructorList = GetProgramInstructorDetails(),
+
+                CategoryList = _commonService.GetLookups(new[] { LookupConstants.PROGRAMCATEGORY }),
+
+                ProgramClassList = _context.ProgramClass
+                              .Select(p => new ProgramClassDetailsVm
+                              {
+                                  ProgramClassId = p.ProgramClassId,
+                                  CRN = p.CRN,
+                                  InactiveFlag = p.InactiveFlag,
+                                  ProgramCourseId =p.ProgramCourseId
+                              }).ToList()
+            };
+            return apptLocationList;
+        }
+
+        private List<Instructor> GetProgramInstructorDetails()
+        {
+            List<ProgramInstructorCert> programInstructorCerts = _context.ProgramInstructorCert
+                .ToList();
+            int[] personnelId = _context.ProgramInstructorAssign
+                .Where(a => (a.DeleteFlag == 0 || !a.DeleteFlag.HasValue))
+                .Select(a => a.PersonnelId).ToArray();
+
+            List<Instructor> instructors = _context.Personnel
+                .Where(a => !personnelId.Any(p => p == a.PersonnelId) && a.ProgramInstructorFlag == true)
+                .Select(a => new Instructor
+                {
+                    Personnel = new PersonnelVm
+                    {
+                        PersonnelId = a.PersonnelId,
+                        PersonLastName = a.PersonNavigation.PersonLastName,
+                        PersonFirstName = a.PersonNavigation.PersonFirstName,
+                        OfficerBadgeNumber = a.OfficerBadgeNumber
+                    },
+                    DeleteFlag = programInstructorCerts.Where(p =>
+                       p.PersonnelId == a.PersonnelId).Select(p => p.DeleteFlag)
+                    .FirstOrDefault(),
+                    ProgramInstructorCertId = programInstructorCerts.Where(p =>
+                       p.PersonnelId == a.PersonnelId).Select(p => p.ProgramInstructorCertId)
+                    .FirstOrDefault()
+                }).OrderBy(a => a.Personnel.PersonLastName)
+                .ThenBy(a => a.Personnel.PersonFirstName)
+                .ThenBy(a => a.Personnel.OfficerBadgeNumber).ToList();
+            return instructors;
+        }
+
+        public int InsertProgramClassSchedule(ProgramClassScheduleVm pgmClassDetails)
+        {
+            int programClassId = 0;
+            string programInstructor = "";
+
+            ProgramClass programClass = new ProgramClass();
+
+            programClass.ProgramCourseId = pgmClassDetails.ProgramClass.ProgramCourseId;
+            programClass.CourseCapacity = pgmClassDetails.ProgramClass.CourseCapacity;
+            programClass.CourseClassificationFilter = pgmClassDetails.ProgramClass.CourseClassificationFilter;
+            programClass.CourseGenderFilter = pgmClassDetails.ProgramClass.CourseGenderFilter;
+            programClass.CRN = pgmClassDetails.ProgramClass.CRN;
+            programClass.ProgramInstructorString = pgmClassDetails.ProgramClass.ProgramInstructorString;
+
+            if (pgmClassDetails.ProgramClass.ProgramClassId == 0)
+            {
+                _context.ProgramClass.Add(programClass);
+                _context.SaveChanges();
+
+                programClassId = programClass.ProgramClassId;
+                programInstructor = programClass.ProgramInstructorString;
+            }
+
+            if (programClassId > 0)
+            {
+                pgmClassDetails.Schedule.ForEach(item =>
+                {
+                    ScheduleProgram appointment = new ScheduleProgram();
+                    appointment.CreateDate = DateTime.Now;
+                    appointment.CreateBy = _personnelId;
+                    appointment.LocationId = item.LocationId;
+                    appointment.StartDate = item.StartDate;
+                    appointment.EndDate = item.EndDate;
+                    appointment.Duration = item.Duration;
+                    appointment.IsSingleOccurrence = item.IsSingleOccurrence;
+                    appointment.Time = item.Time;
+                    appointment.DayInterval = item.DayInterval;
+                    appointment.WeekInterval = item.WeekInterval;
+                    appointment.FrequencyType = item.FrequencyType;
+                    appointment.MonthOfYear = item.MonthOfYear;
+                    appointment.DayOfMonth = item.DayOfMonth;
+                    appointment.QuarterInterval = item.QuarterInterval;
+                    appointment.MonthOfQuarterInterval = item.MonthOfQuarterInterval;
+                    appointment.ProgramClassId = programClassId;
+
+                    _context.ScheduleProgram.Add(appointment);
+                    _context.SaveChanges();
+                });
+            }
+
+            return programClass.ProgramClassId;
+        }
+        public List<ProgramAppointmentVm> GetCurrentCourse(int facilityId, DateTime fromDate, DateTime toDate)
+        {
+            List<ProgramAppointmentVm> programApptList = new List<ProgramAppointmentVm>();
+
+            List<ScheduleVm> schList = _context.ScheduleProgram.Where(a =>
+                !a.DeleteFlag &&
+                (a.IsSingleOccurrence && a.StartDate.Date == a.EndDate.Value.Date &&
+                 fromDate.Date <= a.StartDate.Date && toDate.Date >= a.StartDate.Date ||
+
+                 !a.IsSingleOccurrence &&
+                 (fromDate.Date >= a.StartDate.Date &&
+                  toDate.Date <= (a.EndDate.HasValue ? a.EndDate.Value.Date : toDate.Date) ||
+                  fromDate.Date <= (a.EndDate.HasValue ? a.EndDate.Value.Date : toDate.Date) &&
+                  toDate > a.StartDate.Date)
+
+                 || a.IsSingleOccurrence && a.StartDate.Date != a.EndDate.Value.Date && a.EndDate.Value.Date >= fromDate.Date
+                 )).Select(sch => new ScheduleVm
+                 {
+                     StartDate = sch.StartDate,
+                     EndDate = sch.EndDate,
+                     LocationId = sch.LocationId ?? 0,
+                     ScheduleId = sch.ScheduleId,
+                     Duration = sch.Duration,
+                     DeleteReason = sch.DeleteReason,
+                     IsSingleOccurrence = sch.IsSingleOccurrence,
+                     LocationDetail = sch.LocationDetail,
+                     DayInterval = sch.DayInterval,
+                     WeekInterval = sch.WeekInterval,
+                     FrequencyType = sch.FrequencyType,
+                     QuarterInterval = sch.QuarterInterval,
+                     MonthOfQuarterInterval = sch.MonthOfQuarterInterval,
+                     MonthOfYear = sch.MonthOfYear,
+                     DayOfMonth = sch.DayOfMonth,
+                     ProgramId = sch.ProgramClassId,
+                     CRN = sch.ProgramClass.CRN,
+                     CourseCapacity = sch.ProgramClass.CourseCapacity,
+                     ProgramCourseId = sch.ProgramClass.ProgramCourseId,
+                     ProgramCourseNumber = sch.ProgramClass.ProgramCourseIdNavigation.CourseNumber,
+                     ProgramCourseName = sch.ProgramClass.ProgramCourseIdNavigation.CourseName,
+                     ProgramCategory = sch.ProgramClass.ProgramCourseIdNavigation.ProgramCategory,
+                 }).ToList();
+
+            List<KeyValuePair<int, int>> keyValuePairs = schList
+                .Select(a => new KeyValuePair<int, int>(a.ScheduleId, a.LocationId)).ToList();
+            int[] scheduleIds = (from a in schList select a.ScheduleId).ToArray();
+            int[] locationIds = (from a in schList select a.LocationId).ToArray();
+
+            List<Privileges> lstPrivileges = _context.Privileges
+               .Where(l => locationIds.Contains(l.PrivilegeId)).ToList();
+
+            foreach (ScheduleVm sch in schList)
+            {
+                if (sch.LocationId > 0)
+                {
+                    Privileges privileges = lstPrivileges.Single(p => p.PrivilegeId == sch.LocationId);
+                    sch.Location = privileges.PrivilegeDescription;
+                    sch.FacilityId = privileges.FacilityId ?? 0;
+                }
+
+                ScheduleBuilder schBuilder = new ScheduleBuilder();
+                schBuilder.StartDate(sch.StartDate);
+                if (sch.EndDate.HasValue)
+                {
+                    schBuilder.EndDate(sch.EndDate.Value);
+                }
+                else if (!sch.EndDate.HasValue && sch.IsSingleOccurrence)
+                {
+                    schBuilder.EndDate(sch.StartDate.Date.AddHours((sch.StartDate.TimeOfDay + sch.Duration).Hours)
+                        .AddMinutes((sch.StartDate.TimeOfDay + sch.Duration).Minutes));
+                }
+
+                ISchedule materializedSchedule = schBuilder
+                    .Duration(sch.Duration)
+                    .SingleOccurrence(sch.IsSingleOccurrence)
+                    .OnDaysOfWeek(sch.DayInterval)
+                    .DuringMonth(sch.WeekInterval)
+                    .HavingFrequency(sch.FrequencyType)
+                    .Create();
+
+                Debug.Assert(materializedSchedule.EndDate != null, "AppointmentService: materializedSchedule.EndDate != null");
+                DateRange during = new DateRange(materializedSchedule.StartDate,
+                    sch.EndDate.HasValue ? materializedSchedule.EndDate.Value : DateTime.Now.AddYears(5));
+
+                if (materializedSchedule.IsSingleOccurrence)
+                {
+                    programApptList.Add(new ProgramAppointmentVm
+                    {
+                        StartDate = materializedSchedule.StartDate,
+                        EndDate = materializedSchedule.EndDate,
+                        LocationId = sch.LocationId,
+                        ScheduleId = sch.ScheduleId,
+                        InmateId = sch.InmateId,
+                        ReasonId = sch.ReasonId,
+                        TypeId = sch.TypeId,
+                        Duration = materializedSchedule.EndDate - materializedSchedule.StartDate ??
+                                   new TimeSpan(0, 0, 0),
+                        DeleteReason = sch.DeleteReason,
+                        DeleteFlag = sch.DeleteFlag,
+                        DeleteDate = sch.DeleteDate,
+                        DeletedBy = sch.DeleteBy,
+                        Notes = sch.Notes,
+                        IsSingleOccurrence = sch.IsSingleOccurrence,
+                        LocationDetail = sch.LocationDetail,
+                        Location = sch.Location,
+                        //TrackId = sch.TrackId,
+                        FacilityId = sch.FacilityId,
+                        CourseName = sch.ProgramCourseName,
+                        CourseNumber = sch.ProgramCourseNumber,
+                        CRN = sch.CRN,
+                        CourseCapacity = sch.CourseCapacity,
+                        ProgramCourseId = sch.ProgramCourseId,
+                        DayInterval = sch.DayInterval,
+                        WeekInterval = sch.WeekInterval,
+                        ProgramCategory = sch.ProgramCategory,
+
+                    });
+                }
+                else
+                {
+                    programApptList.AddRange(materializedSchedule.Occurrences(during)
+                        .Select(date => new ProgramAppointmentVm
+                        {
+                            StartDate = date.Date.Add(during.StartDateTime.TimeOfDay),
+                            EndDate = sch.EndDate.HasValue
+                                ? date.Date.Add(during.EndDateTime.TimeOfDay)
+                                : date.Date.Add(during.StartDateTime.TimeOfDay).Add(sch.Duration),
+                            LocationId = sch.LocationId,
+                            ScheduleId = sch.ScheduleId,
+                            InmateId = sch.InmateId,
+                            ReasonId = sch.ReasonId,
+                            TypeId = sch.TypeId,
+                            Duration = materializedSchedule.Duration,
+                            DeleteReason = sch.DeleteReason,
+                            DeleteFlag = sch.DeleteFlag,
+                            DeleteDate = sch.DeleteDate,
+                            DeletedBy = sch.DeleteBy,
+                            Notes = sch.Notes,
+                            IsSingleOccurrence = sch.IsSingleOccurrence,
+                            LocationDetail = sch.LocationDetail,
+                            Location = sch.Location,
+                            //TrackId = sch.TrackId,
+                            FacilityId = sch.FacilityId,
+                            CourseName = sch.ProgramCourseName,
+                            CourseNumber = sch.ProgramCourseNumber,
+                            CRN = sch.CRN,
+                            CourseCapacity = sch.CourseCapacity,
+                            ProgramCourseId = sch.ProgramCourseId,
+                            DayInterval = sch.DayInterval,
+                            WeekInterval = sch.WeekInterval,
+                            ProgramCategory = sch.ProgramCategory,
+                        }));
+                }
+            }
+            return programApptList;
+        }
+
+        public List<ProgramAppointmentVm> GetCurrentCourseList(int facilityId, DateTime fromDate, DateTime toDate)
+        {
+            List<ProgramAppointmentVm> programApptList = GetCurrentCourse(facilityId, fromDate, toDate);
+            programApptList = programApptList
+             .GroupBy(h => h.ScheduleId)
+             .Select(s => new ProgramAppointmentVm
+             {
+                 ScheduleId = s.Key,
+                 StartDate = s.Select(x => x.StartDate).FirstOrDefault(),
+                 CRN = s.Select(x => x.CRN).FirstOrDefault(),
+                 CourseName = s.Select(x => x.CourseName).FirstOrDefault(),
+                 CourseNumber = s.Select(x => x.CourseNumber).FirstOrDefault(),
+                 CourseCapacity = s.Select(x => x.CourseCapacity).FirstOrDefault(),
+                 Location = s.Select(x => x.Location).FirstOrDefault(),
+                 DayInterval = s.Select(x => x.DayInterval).FirstOrDefault(),
+                 EndDate = s.Select(x => x.EndDate).FirstOrDefault(),
+                 ProgramCategory = s.Select(x => x.ProgramCategory).FirstOrDefault(),
+                 IsSingleOccurrence = s.Select(x => x.IsSingleOccurrence).FirstOrDefault(),
+             }).ToList();
+            return programApptList;
+        }
+        public Task<int> DeleteScheduleProgram(ProgramAppointmentVm program)
+        {
+            ScheduleProgram courseDetails = _context.ScheduleProgram.SingleOrDefault(p =>
+                        p.ScheduleId == program.ScheduleId);
+            if (program != null)
+            {
+                courseDetails.DeleteFlag = program.DeleteFlag;
+                courseDetails.DeleteBy = _personnelId;
+                courseDetails.DeleteDate = DateTime.Now;
+            }
+
+            return _context.SaveChangesAsync();
+        }
+
+    }
+}

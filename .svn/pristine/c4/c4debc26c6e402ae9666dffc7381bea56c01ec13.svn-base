@@ -1,0 +1,605 @@
+﻿using System;
+using System.Collections.Generic;
+using Newtonsoft.Json.Linq;
+
+namespace ServerAPI.ViewModels
+{
+    public class IncidentFilters
+    {
+        public int FacilityId { get; set; }
+        public int DisciplinaryType { get; set; }
+        public string Hearing { get; set; }
+        public string KeyWord { get; set; }
+        public bool isFirstTime { get; set; }
+        public int Categorization { get; set; }
+        public int Hours { get; set; }
+        public DateTime? FromDate { get; set; }
+        public DateTime? ToDate { get; set; }
+        public bool AllDay { get; set; }
+        public bool DeleteFlag { get; set; }
+        public int InmateId { get; set; }
+        public int OfficerId { get; set; }
+        public OfficerType OfficerType { get; set; }
+        public string IncidentNumber { get; set; }
+        public string HousingLocation { get; set; }
+        public string HousingNumber { get; set; }
+        public string HousingBedNumber { get; set; }
+        public int LocationId { get; set; }
+        public int SiteId { get; set; }
+        public bool IsHistory { get; set; }
+        public int TotalRecords { get; set; }
+        public int RowsPerPage { get; set; }
+        public int Skip { get; set; }
+        public DateTime? IncidentDate { get; set; }
+        public string Location { get; set; }
+        public string SortColumn { get; set; }
+        public string SortOrder { get; set; }
+        public Restrictions Restriction { get; set; }
+        public FilterCategory FilterCategory { get; set; }
+    }
+
+    public class IncidentViewerDetails
+    {
+        public List<KeyValuePair<int, string>> IncidentTypes { get; set; }
+        public List<KeyValuePair<int, string>> CategorizationTypes { get; set; }
+        public List<KeyValuePair<int, string>> DispInmateTypes { get; set; }
+        public List<IncidentViewer> IncidentViewerList { get; set; }
+        public int TotalRecords { get; set; } 
+    }
+
+    public class IncidentViewer : InmateIncidentInfo
+    {
+        public int DisciplinaryIncidentId { get; set; }
+        public PersonVm Personnel { get; set; }
+        public int DisciplinaryInmateId { get; set; }
+        public string FacilityName { get; set; }
+        public string DispViolationDescription { get; set; }
+        public string IncidentFlag { get; set; }
+        public int? DispHearingOfficer1 { get; set; }
+        public PersonnelVm HearingOfficer1 { get; set; }
+        public int? DispHearingOfficer2 { get; set; }
+        public PersonnelVm HearingOfficer2 { get; set; }
+        public int? DispReviewOfficer { get; set; }
+        public PersonnelVm ReviewOfficer { get; set; }
+        public DateTime? DispFindingDate { get; set; }
+        public string DispFindingNotes { get; set; }
+        public string DiscpRecommendations { get; set; }
+        public string ReviewNotes { get; set; }
+        public DateTime? DispReviewCompleteDate { get; set; }
+        public int? DispReviewCompleteOfficerId { get; set; }
+        public PersonnelVm CompleteOfficer { get; set; }
+        public string DisciplinarySanction { get; set; }
+        public string DispScheduleHearingLocation { get; set; }
+        public string InmateInterview { get; set; }
+        public int? DiscDays { get; set; }
+        public PersonInfoVm Person { get; set; }
+        public string DisciplinaryInmateType { get; set; }
+        public string AltSentSiteName { get; set; }
+        public int? DisciplinaryInmatePresent { get; set; }
+        public DateTime? AppealDueDate { get; set; }
+        public DisciplinaryInmateNotice InmateNotice { get; set; }
+        public bool HearingHold { get; set; }
+        public bool NoticeFlag { get; set; }
+        public List<string> AppealRouting { get; set; }
+        public DateTime? NoticeDate { get; set; }
+        public PersonnelVm AllowBy { get; set; }
+        public int? AllowHearingBy { get; set; }
+        public int ViolationCount { get; set; }
+        public List<LookupVm> InvolvedPartyFlags { get; set; }
+        public string Categorization { get; set; }
+        public string LookUpIncidentType { get; set; }
+        public string LookUpCategorizationType { get; set; }
+        public string InvolvedPartyTypes { get; set; }
+        public bool InitialEntryFlag { get; set; }
+        public string Violations { get; set; }
+        public List<ViolationDetails> ViolationDetails { get; set; }
+    }
+
+    public class IncidentDetails
+    {
+        public List<IncidentNarrativeDetailVm> NarrativeDetails { get; set; }
+        public List<PrebookAttachment> IncidentAttachments { get; set; }
+        public List<IdentifierVm> IncidentPhotos { get; set; }
+        public List<IncarcerationForms> IncidentForms { get; set; }
+        public List<IncidentViewer> InvolvedPartyDetails { get; set; }
+        public List<AppealDetailsVm> AppealDetails { get; set; }
+        public AoWizardFacilityVm ActiveIncidentWizards { get; set; }
+        public List<InmateFormDetails> InmateFormList { get; set; }
+    }
+
+    public class IncidentNarrativeDetailVm
+    {
+        public int DisciplinaryIncidentNarrativeId { get; set; }
+        public int DisciplinaryIncidentId { get; set; }
+        public DateTime? CreateDate { get; set; }
+        public bool DeleteFlag { get; set; }
+        public PersonnelVm CreateByPersonnel { get; set; }
+        public string DisciplinaryIncidentNarrative { get; set; }
+        public int DisciplinaryOfficerId { get; set; }
+        public bool ReadyForReviewFlag { get; set; }
+        public int? ReadyForReviewBy { get; set; }
+        public DateTime? ReadyForReviewDate { get; set; }
+        public bool SupervisorReviewFlag { get; set; }
+        public string SupervisorReviewNote { get; set; }
+        public PersonnelVm ReviewBy { get; set; }
+        public DateTime? SupervisorReviewDate { get; set; }
+        public bool DisciplinaryActive { get; set; }
+        public string IncidentNumber { get; set; }
+        public DateTime? IncDate { get; set; }
+        public int Elapsed { get; set; }
+        public string Type { get; set; }
+        public int SupervisorReviewBy { get; set; }
+        public string IncidentLocation { get; set; }
+        public DateTime? DisciplinaryReportDate { get; set; }
+        public bool Reviwed { get; set; }
+        public int ReviewedCount { get; set; }
+        public int ReadForReviwed { get; set; }
+        public int NotForReviwed { get; set; }
+        public int DisciplinaryType { get; set; }
+        public bool AllowHearingFlag { get; set; }
+        public string ActionNote { get; set; }
+        public DateTime? NoticeDate { get; set; }
+        public int ExpectedNarrativeCount { get; set; }
+        public int RecordsCount { get; set; }
+        public NarrativeOperations OperationFlag { get; set; }
+        public bool DispOfficerNarrativeFlag { get; set; }
+        public List<KeyValuePair<int, bool>> InvPartyNarratives { get; set; }
+        public bool SensitiveMaterial { get; set; }
+        public bool PreaOnly { get; set; }
+        public string Categorization { get; set; }
+        public bool InitialEntryFlag { get; set; }
+        public List<KeyValuePair<int, string>> NarrativeFlagNote { get; set; }
+        public bool IsNeedOfHearing { get; set; }
+        public List<AoWizardFacilityStepVm> WizardFacilitySteps { get; set; }
+        public bool DispInmateNarrativeFlag { get; set; }
+        public bool DispInmateByPassHearing { get; set; }
+        public bool NoticeFlag { get; set; }
+        public int? HearingComplete { get; set; }
+        public bool IsActiveAppeal { get; set; }
+        public string InvPartyType { get; set; }
+        public PersonnelVm InvolvedParty { get; set; }
+        public AoWizardProgressVm ActiveIncidentProgress { get; set; }
+        public int DisciplinaryInmateId { get; set; }
+        public int? PersonnelId { get; set; }
+        public string DisciplinaryOtherName { get; set; }
+        public bool IsExpectedNarrative { get; set; }
+    }
+
+    public class IncidentInvPartyStatusVm
+    {
+        public string Status { get; set; }
+        public int Count { get; set; }
+        public int OrderBy { get; set; }
+    }
+
+    public class IncidentInvPartyElapsVm
+    {
+        public string Description { get; set; }
+        public int Count { get; set; }
+        public InvPartyElaps InvPartyElaps { get; set; }
+    }
+
+    public class ClassifyInvPartyDetailsVm
+    {
+        public int DisciplinaryInmateId { get; set; }
+        public int? InmateId { get; set; }
+        public int? PersonId { get; set; }
+        public int DisciplinaryIncidentId { get; set; }
+        public int? HearingComplete { get; set; }
+        public int Elapsed { get; set; }
+        public bool ByPassHearing { get; set; }
+        public string IncidentNum { get; set; }
+        public string IncidentType { get; set; }
+        public string DisciplinaryOtherName { get; set; }
+        public string PersonLastName { get; set; }
+        public string PersonFirstName { get; set; }
+        public string PersonMiddleName { get; set; }
+        public string InmateNumber { get; set; }
+        public string InvPartyType { get; set; }
+        public DateTime? CompleteDate { get; set; }
+        public bool Active { get; set; }
+        public int? InvolvedType { get; set; }
+        public string ViolationDescription { get; set; }
+        public string DisciplinaryDamage { get; set; }
+        public int? DisciplinaryDays { get; set; }
+        public int DisciplinaryDaysSentFlag { get; set; }
+        public string DisciplinaryType { get; set; }
+        public bool NarrativeFlag { get; set; }
+        public int? PersonnelId { get; set; }
+        public AoWizardProgressVm ActiveIncidentProgress { get; set; }
+        public string FlagFixedName6 { get; set; }
+        public string FlagFixedName7 { get; set; }
+        public string DisciplinaryHearingHoldReason { get; set; }
+        public DateTime? DisciplinaryHearingHoldDate { get; set; }
+        public PersonnelVm HoldPersonnel { get; set; }
+        public bool HearingHold { get; set; }
+        public int? IncidentWizardStep { get; set; }
+        public DateTime? DisciplinaryScheduleHearingDate { get; set; }
+        public bool NoticeFlag { get; set; }
+        public DateTime? DisciplinaryHearingDate { get; set; }
+        public DateTime? DisciplinaryReviewDate { get; set; }
+        public DateTime? NoticeDate { get; set; }
+        public DateTime? DisciplinaryReportDate { get; set; }
+        public bool AllowHearingFlag { get; set; }
+        public bool DisciplinaryActive { get; set; }
+        public bool SensitiveMaterial { get; set; }
+        public bool PreaOnly { get; set; }
+        public string Categorization { get; set; }
+        public bool InitialEntryFlag { get; set; }
+        public bool SupervisorReviewFlag { get; set; }
+        public string NarrativeFlagNote { get; set; }
+    }
+
+    public class InvolvedPartyCollectionVm
+    {
+        public List<IncidentInvPartyStatusVm> ClassifyInvPartyStatus { get; set; }
+        public List<IncidentInvPartyElapsVm> ClassifyInvPartyElaps { get; set; }
+        public List<ClassifyInvPartyDetailsVm> ClassifyInvPartyDetails { get; set; }
+        public AoWizardFacilityVm IncidentWizardSteps { get; set; }
+    }
+
+    public enum IncidentInvParty
+    {
+        All,                //ALL
+        BypassHearing,      //BYPASS HEARING
+        InvParty,           //INV PARTY
+        Violation,          //VIOLATION
+        Notice,             //NOTICE
+        Schedule,           //SCHEDULE
+        ScheduleHold,       //SCHEDULE HOLD
+        Hearing,            //HEARING
+        Review,             //REVIEW
+        ReviewComplete,     //REVIEW COMPLETE
+        IncidentComplete    //INCIDENT COMPLETE
+    }
+
+    public enum InvPartyElaps
+    {
+        // Commented text will be a output text of the corresponding property
+        All,
+        Hours0124, //01 - 24 Hours
+        Hours2548, //25 - 48 Hours
+        Hours4972, //49 - 72 Hours
+        Hours73 //73 + Hours
+    }
+
+    public class IncidentCalendarVm
+    {
+        public int PersonId { get; set; }
+        public int DisciplinaryInmateId { get; set; }
+        public int AppointmentId { get; set; }
+        public int AppointmentLocationId { get; set; }
+        public DateTime? AppointmentDate { get; set; }
+        public DateTime? AppointmentEnd { get; set; }
+        public string AppointmentLocation { get; set; }
+        public bool DeleteFlag { get; set; }
+        public string InmateCurrentTrack { get; set; }
+        public string InmateNumber { get; set; }
+        public bool InmateActive { get; set; }
+        public PersonInfoVm PersonDetails { get; set; }
+    }
+
+    public enum DisciplinaryOperation
+    {
+        Add,
+        Edit,
+        Delete
+    }
+
+    public enum NarrativeOperations
+    {
+        Undo,
+        Approve,
+        Deny
+    }
+
+    public class IncidentHistoryInputVm
+    {
+        public int Hours { get; set; }
+        public DateTime? FromDate { get; set; }
+        public DateTime? ToDate { get; set; }
+        public bool AllDay { get; set; }
+        public bool DeleteFlag { get; set; }
+        public int InmateId { get; set; }
+        public int OfficerId { get; set; }
+        public OfficerType OfficerType { get; set; }
+        public string IncidentNumber { get; set; }
+        public string HousingLocation { get; set; }
+        public string HousingNumber { get; set; }
+        public string HousingBedNumber { get; set; }
+        public int LocationId { get; set; }
+        public int SiteId { get; set; }
+        public IncidentFilters IncidentFilters { get; set; }
+    }
+
+    public enum OfficerType
+    {
+        None,
+        CREATEDBY,
+        NARRATIVEBY,
+        REVIEWBY,
+        HEARINGBY,
+        COMPLETEBY
+    }
+
+    public class IncidentHistoryDetails
+    {
+        public List<IncidentViewer> IncidentViewerList { get; set; }
+        public List<string> HousingLocationList { get; set; }
+        public List<KeyValuePair<int, string>> LocationList { get; set; }
+        public List<KeyValuePair<int, string>> AltSentSiteList { get; set; }
+        public int TotalRecords { get; set; }
+    }
+
+    public class NarrativeCommonDetailVm
+    {
+        public List<IncidentNarrativeDetailVm> IncidentNarrativeDetails { get; set; }
+        public List<IncidentNarrativeDetailVm> SuperviorStatusDetails { get; set; }
+        public List<IncidentNarrativeDetailVm> IncidentNarrativesSupervisorCount { get; set; }
+        public PersonnelVm ReprtingOfficer { get; set; }
+        public bool DispOfficerNarrativeFlag { get; set; }
+        public List<IncidentViewer> InvolvedParties { get; set; }
+        public bool IsNeedOfHearing { get; set; }
+        public int[] DispInmateIds { get; set; }
+        public List<IncidentNarrativeDetailVm> AppealReviewCount { get; set; }
+    }
+
+    public class IncidentReport
+    {
+        public IncidentViewer IncidentSummary { get; set; }
+        public List<IncidentViewer> InvolvedPartyDetails { get; set; }
+        public PersonnelVm HeaderDetails { get; set; }
+        public List<HousingAssignVm> HousingLocation { get; set; }
+        public List<IdentifierVm> PhotoGraphs { get; set; }
+        public List<ViolationDetails> ViolationDetails { get; set; }
+        public List<PrivilegeAlertVm> PrivilegeViewes { get; set; }
+        public List<IdentifierVm> IncidentPhotos { get; set; }
+        public List<PrebookAttachment> IncidentAttachments { get; set; }
+        public List<IncarcerationForms> IncidentForms { get; set; }
+        public List<IncidentNarrativeDetailVm> IncidentNarrativeDetails { get; set; }
+        public AppealReport AppealReports { get; set; }
+        public string AgencyName { get; set; }
+        public string ReportName { get; set; }
+        public JObject CustomLabel { get; set; }
+    }
+
+    public class ViolationDetails
+    {
+        public int DispInmateId { get; set; }
+        public int DispControlXrefId { get; set; }
+        public int? DispControlViolationId { get; set; }
+        public int? DispControlLevelId { get; set; }
+        public int? DispControlWaiverId { get; set; }
+        public int? DispControlPleaId { get; set; }
+        public int? DispControlFindingId { get; set; }
+        public int? DispControlSanctionId { get; set; }
+        public KeyValuePair<string, string> Violation { get; set; }
+        public string Level { get; set; }
+        public string Waiver { get; set; }
+        public string Plea { get; set; }
+        public string Finding { get; set; }
+        public string Sanction { get; set; }
+        public string DispControlNotes { get; set; }
+        public int? DispControlSanctionDays { get; set; }
+        public int FinalSancFlag { get; set; }
+        public int? FinalSancPrivilegeId { get; set; }
+        public int? FinalSancSentDays { get; set; }
+    }
+
+    public class AppealDetailsVm
+    {
+        public string AppealHeader { get; set; }
+        public string AppealDetail { get; set; }
+        public DateTime? AppealDate { get; set; }
+        public PersonnelVm Personnel { get; set; }
+    }
+
+    public class IncidentLocationVm
+    {
+        public int FacilityId { get; set; }
+        public int LastHours { get; set; }
+        public OfficerType PersonnelType { get; set; }
+        public string Type { get; set; }
+        public string Building { get; set; }
+        public string Bed { get; set; }
+        public string Location { get; set; }
+        public string Number { get; set; }
+        public DateTime? FromDate { get; set; }
+        public DateTime? ToDate { get; set; }
+        public int? PersonnelId { get; set; }
+    }
+    public class AppealReport
+    {
+        public DateTime AppealDate { get; set; }
+        public string AppealReason { get; set; }
+        public PersonnelVm ReportedBy { get; set; }
+        public int? ReviewDiscDaysNew { get; set; }
+        public PersonnelVm Reviewedby { get; set; }
+        public string ReviewDispo { get; set; }
+        public DateTime? ReviewDate { get; set; }
+        public string AppealNote { get; set; }
+        public int? ReviewDiscDaysPrior { get; set; }
+        public string ReviewInmateResponse { get; set; }
+        public string ReviewNote { get; set; }
+    }
+    public enum ReportType
+    {
+        IncidentReport,
+        InvolvedPtyReport,
+        HearingNotice,
+        HearingReport,
+        SanctionReport,
+        InvolvedPtyAppealReport
+    }
+    public class IncidentDescription
+    {
+        public int? DisciplinaryType { get; set; }
+        public string Categorization { get; set; }
+        public int CategorizationIndex { get; set; }
+
+        public int DisciplinaryIncidentId { get; set; }
+        public string DisciplinaryNumber { get; set; }
+        public DateTime? DisciplinaryReportDate { get; set; }
+        public DateTime? DisciplinaryIncidentDate { get; set; }
+        public string DisciplinarySynopsis { get; set; }
+        public string LookupDescription { get; set; }
+
+        public int InmateId { get; set; }
+        public string PhotoGraphPath { get; set; }
+        public int? IncidentCompelete { get; set; }
+        public int? DisciplinaryViolationId { get; set; }
+        public int DisciplinaryOfficerId { get; set; }
+        public PersonInfoVm Person { get; set; }
+        public int PersonnelId { get; set; }
+        public PersonnelVm Personnel { get; set; }
+        public string IncidentType { get; set; }
+    }
+    public class IncidentCountVm
+    {
+        public List<GridInfoVm> IncidentByTypeCount { get; set; }
+        public List<IncidentDescription> IncidentDescriptionByTypeList { get; set; }
+
+        public List<GridInfoVm> CategorizationCount { get; set; }
+        public List<IncidentDescription> CategorizationTypeList { get; set; }
+
+        public List<GridInfoVm> IncidentViolationCount { get; set; }
+        public List<IncidentDescription> IncidentDescriptionViolationList { get; set; }
+        public List<GridInfoVm> IncidentPersonnelCountList { get; set; }
+        public List<IncidentDescription> IncidentDescriptionPersonnelList { get; set; }
+    }
+
+    public class IncidentWizardCompleteDetails
+    {
+        public List<ClassifyInvPartyDetailsVm> DisciplinaryInmateDetails { get; set; }
+        public int NarrativeReviewCount { get; set; }
+        public int ActiveIncident { get; set; }
+        public int IncidentId { get; set; }
+        public bool Active { get; set; }
+        public List<AoWizardStepProgressVm> WizardStepProgresses { get; set; }
+    }
+    public class IncidentViolationVm
+    {
+        public int DisciplinaryControlLookupId { get; set; }
+        public string DisciplinaryControlLookupName { get; set; }
+        public string DisciplinaryControlLookupDescription { get; set; }
+        public int DisciplinaryControlLookupType { get; set; }
+        public string DisciplinaryControlLevel { get; set; }
+        public int FindingId { get; set; }
+        public bool FinalSancStopWtFlag { get; set; }
+    }
+
+    public class IncicentViolationSaveVm
+    {
+        public int? DisciplinaryControlViolationId { get; set; }
+        public int? DisciplinaryControlWaiverId { get; set; }
+        public int DisciplinaryInmateId { get; set; }
+        public int DisciplinaryControlXrefId { get; set; }
+        public int? ControlLookuplevel { get; set; }
+        public int? DisciplinaryControlSanctionId { get; set; }
+        public int? DisciplinaryControlLevelId { get; set; }
+        public int? DisciplinaryControlFindingId { get; set; }
+        public int? DisciplinaryControlPleaId { get; set; }
+        public int? DisciplinaryControlSysRecSanctionid { get; set; }
+        public int? DisciplinaryControlSanctionDays { get; set; }
+        public int? DisciplinaryControlSysRecSanctionDays { get; set; }
+        public int? DisciplinaryControlSysRecPriorCount { get; set; }
+        public string DisciplinaryControlNotes { get; set; }
+        public string Violation { get; set; }
+        public string Level { get; set; }
+        public string Waiver { get; set; }
+        public string Finding { get; set; }
+        public string Sanction { get; set; }
+        public string Plea { get; set; }
+        public DisciplinaryOperation Operation { get; set; }
+        public List<IncidentViolationVm> LookupDetails { get; set; }
+    }
+    public class IncidentInmateVm
+    {
+        public string ReviewNotes { get; set; }
+        public DateTime? ReviewDate { get; set; }
+        public int InmateId { get; set; }
+        public int ReviewOfficerId { get; set; }
+    }
+    public class AppliedBooking
+    {
+        public int DispSentDayXrefid { get; set; }
+        public int? ArrestId { get; set; }
+        public int? DispInmateId { get; set; }
+        public string BookingNumber { get; set; }
+        public int? DisciplinaryDaysFlag { get; set; }
+        public int? DeleteFlag { get; set; }
+        public int? ArrestSentenceCode { get; set; }
+    }
+
+    public class AppliedCharge : AppliedBooking
+    {
+        public int CrimeId { get; set; }
+        public int? CrimeNumber { get; set; }
+        public int? CrimeCount { get; set; }
+        public string CrimeCodeType { get; set; }
+        public string LookupDescription { get; set; }
+        public string CrimeSection { get; set; }
+        public string CrimeDescription { get; set; }
+        public string CrimeStatuteCode { get; set; }
+        public string ChargeQualifierLookup { get; set; }
+    }
+
+    public class DiscDaysHistory
+    {
+        public int IncarcerationId { get; set; }
+        public int? InmateId { get; set; }
+        public DateTime? ReleaseOut { get; set; }
+        public DateTime? DateIn { get; set; }
+        public string UsedPersonLast { get; set; }
+        public string UsedPersonFrist { get; set; }
+        public string UsedPersonMiddle { get; set; }
+        public string UsedPersonSuffix { get; set; }
+        public List<DiscDays> DiscDays { get; set; }
+    }
+
+    public class DiscDays
+    {
+        public int? InmateId { get; set; }
+        public DateTime? DisciplinaryIncidentDate { get; set; }
+        public DateTime? CreateDate { get; set; }
+        public string DisciplinaryNumber { get; set; }
+        public string IncidentType { get; set; }
+        public int? DisciplinaryDays { get; set; }
+    }
+
+    public class InmateFormDetails
+    {
+        public int FormRecordId { get; set; }
+        public int FormTemplateId { get; set; }
+        public string FormName { get; set; }
+        public DateTime? CreatedDate { get; set; }
+        public int DeleteFlag { get; set; }
+    }
+
+    public class DisciplinaryInmateNotice
+    {
+        public string NoticeNote { get; set; }
+        public DateTime? NoticeDate { get; set; }
+        public int? NoticeWavierId { get; set; }
+        public string NoticeWavierName { get; set; }
+        public int? NoticePersonnelId { get; set; }
+        public string NoticePersonnelName { get; set; }
+        public string NoticePersonnelNumber { get; set; }
+        public bool NoticeFlag { get; set; }
+        public bool? WavierFlag { get; set; }
+    }
+
+    public enum Restrictions
+    {
+        Incidents = 1,
+        SensitiveOnly = 2,
+        PreaOnly = 3
+    }
+
+    public enum FilterCategory
+    {
+        ShowMyActiveIncidents = 1,
+        ShowMyInvolvedPartyIncidents = 2,
+        ShowAllActiveIncidents = 3
+    }
+}

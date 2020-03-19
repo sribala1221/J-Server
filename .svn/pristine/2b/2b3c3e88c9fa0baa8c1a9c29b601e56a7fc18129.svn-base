@@ -1,0 +1,35 @@
+using ServerAPI.ViewModels;
+using Microsoft.AspNetCore.Mvc;
+using ServerAPI.Services;
+using System.Threading.Tasks;
+using System;
+
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    public class MoneyFeeController : Controller
+    {
+        private readonly IMoneyCollectionService _moneyCollectionService;
+
+        public MoneyFeeController(IMoneyCollectionService moneyCollectionService)
+        {
+            _moneyCollectionService = moneyCollectionService;
+        }
+        [HttpGet("GetMoneyFeeCollection")]
+        public IActionResult GetMoneyFeeCollection(MoneyAccountFilterVm values)
+        {
+            return Ok(_moneyCollectionService.GetMoneyFeeCollection(values));
+        }
+        [HttpPost("UpdateMoneyFeeTransaction")]
+        public async Task<IActionResult> UpdateMoneyFeeTransaction(MoneyFeeCollectionVm values)
+        {
+            return Ok(await _moneyCollectionService.UpdateMoneyFeeTransaction(values));
+        }
+
+         [HttpGet("GetFeeCollectionHistory")]
+        public IActionResult GetFeeCollectionHistory(int bankId, DateTime? transactionClearedDate)
+        {
+            return Ok(_moneyCollectionService.GetFeeCollectionHistory(bankId, transactionClearedDate));
+        }
+    }
+}

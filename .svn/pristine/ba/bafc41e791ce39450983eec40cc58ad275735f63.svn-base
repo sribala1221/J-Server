@@ -1,0 +1,264 @@
+﻿using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
+using ServerAPI.Services;
+using ServerAPI.Tests;
+using System;
+using System.Collections.Generic;
+using ServerAPI.ViewModels;
+using Xunit;
+using System.Linq;
+using System.Threading.Tasks;
+using GenerateTables.Models;
+using ServerAPI.JMS.Tests.Helper;
+using Moq;
+using JwtDb.Models;
+using Microsoft.AspNetCore.Identity;
+using ServerAPI.Policies;
+using Microsoft.Extensions.Caching.Memory;
+
+// ReSharper disable once CheckNamespace
+namespace ServerAPI.JMS.Tests
+{
+    [Collection("Database collection")]
+    public class ConsoleServiceTest
+    {
+        private readonly ConsoleService _console;
+        private readonly DbInitialize _fixture;
+        private readonly IConfigurationRoot _configuration = MockHelpers.GetIConfigurationRoot();
+        private readonly Mock<IMemoryCache> _memory = new Mock<IMemoryCache>();
+        public ConsoleServiceTest(DbInitialize fixture)
+        {
+            _fixture = fixture;
+            Mock<UserManager<AppUser>> userMgr = MockHelpers.MockUserManager<AppUser>();
+            AppletsSavedService appletsSavedService = new AppletsSavedService(fixture.Db, _configuration);
+            AtimsHubService atimsHubService = new AtimsHubService(_fixture.HubContext.Object);
+            HttpContextAccessor httpContext = new HttpContextAccessor { HttpContext = fixture.Context.HttpContext };
+            PersonService personService = new PersonService(_fixture.Db);
+            Mock<RoleManager<IdentityRole>> roleMgr = MockHelpers.MockRoleManager<IdentityRole>();
+            UserPermissionPolicy userPermission =
+                new UserPermissionPolicy(_fixture.Db, userMgr.Object, roleMgr.Object, httpContext);
+            PhotosService photosService = new PhotosService(fixture.Db, _configuration);
+
+            InterfaceEngineService interfaceEngineService = new InterfaceEngineService(_fixture.Db,
+                _configuration, _memory.Object);
+
+            CommonService commonService = new CommonService(_fixture.Db, _configuration, httpContext, personService,appletsSavedService,interfaceEngineService);
+            FacilityPrivilegeService facilityPrivilegeService = new FacilityPrivilegeService(_fixture.Db, httpContext,
+                personService);
+            InmateService inmateService = new InmateService(_fixture.Db, commonService, personService, httpContext,
+                facilityPrivilegeService, photosService);
+            FacilityHousingService facilityHousingService = new FacilityHousingService(_fixture.Db, _configuration, httpContext);
+
+            TrackFurlService trackFurlService = new TrackFurlService(_fixture.Db, commonService, inmateService,
+                facilityPrivilegeService, photosService, facilityHousingService);
+            CellService cellService = new CellService(fixture.Db, commonService, httpContext,
+                facilityPrivilegeService, facilityHousingService, _fixture.JwtDb, userMgr.Object);
+
+            WorkCrewService workCrewService = new WorkCrewService(fixture.Db, commonService,
+                facilityPrivilegeService, photosService);
+            KeepSepAlertService keepSepAlertService = new KeepSepAlertService(_fixture.Db, httpContext,
+                facilityHousingService,interfaceEngineService);
+            WizardService wizardService = new WizardService(_fixture.Db,atimsHubService);
+            PersonAkaService personAkaService = new PersonAkaService(_fixture.Db, commonService, httpContext, personService,
+                interfaceEngineService);
+            PrebookActiveService prebookActiveService = new PrebookActiveService(_fixture.Db, httpContext, atimsHubService);
+            PersonCharService personCharService = new PersonCharService(_fixture.Db, commonService, httpContext, personService,
+                interfaceEngineService);
+            PersonIdentityService personIdentityService = new PersonIdentityService(_fixture.Db,
+                httpContext, prebookActiveService, personAkaService, personService,interfaceEngineService);
+
+            RegisterService registerService = new RegisterService(_fixture.Db, httpContext, commonService, personCharService,
+                photosService, wizardService, personIdentityService, keepSepAlertService, userPermission);
+
+            AppointmentViewerService appointmentViewerService = new AppointmentViewerService(_fixture.Db,commonService,photosService);
+            AppointmentService appointmentService = new AppointmentService(_fixture.Db, commonService, registerService,
+                httpContext, personService, keepSepAlertService, interfaceEngineService, 
+                appointmentViewerService );
+
+            ProgramService programService = new ProgramService(_fixture.Db, commonService, photosService);
+
+            ApptService apptService = new ApptService(_fixture.Db, commonService, appointmentService, photosService,
+                facilityPrivilegeService);
+
+            ObservationLogService oberLogService = new ObservationLogService(_fixture.Db, httpContext);
+
+            HeadCountService headCountService =
+                new HeadCountService(_fixture.Db, commonService, cellService, httpContext);
+
+            SafetyCheckService safetyCheckService =
+                new SafetyCheckService(_fixture.Db, commonService, cellService, httpContext, facilityPrivilegeService, atimsHubService);
+
+            _console = new ConsoleService(_fixture.Db, httpContext, trackFurlService,
+                workCrewService, userMgr.Object, programService, apptService, registerService, oberLogService,
+                safetyCheckService, headCountService, photosService);
+        }
+
+        [Fact]
+        public void Console_GetMyLocationList()
+        {
+            //Act
+            List<ConsoleLocationVm> lstConsoleLocation = _console.GetMyLocationList(2);
+            //Assert
+            ConsoleLocationVm location = lstConsoleLocation.Single(l => l.PrivilegeId == 8);
+            Assert.Equal("COIMBATORE", location.PrivilegeDescription);
+        }
+
+        [Fact]
+        public async Task Console_InsertMyLocationList()
+        {
+            //Arrange
+            List<ConsoleLocationVm> lstConsoleLocation = new List<ConsoleLocationVm>
+            {
+                new ConsoleLocationVm
+                {
+                    PrivilegeId = 5,
+                    PrivilegeDescription = "CHENNAI",
+                    Selected = true
+                },
+                new ConsoleLocationVm
+                {
+                    PrivilegeId = 6,
+                    PrivilegeDescription = "TRICHY",
+                    Selected = true
+                }
+            };
+            UserConsoleSetting userConsole = _fixture.Db.UserConsoleSetting
+                .SingleOrDefault(u => u.LocationId == 6);
+            Assert.Null(userConsole);
+
+            //Act
+            await _console.InsertMyLocationList(lstConsoleLocation);
+
+            //Assert
+            userConsole = _fixture.Db.UserConsoleSetting
+                .Single(u => u.LocationId == 6);
+            Assert.NotNull(userConsole);
+        }
+
+        [Fact]
+        public async Task InsertBatchSafetyCheck()
+        {
+            //Arrange
+            List<SafetyCheckVm> safetyChecks = new List<SafetyCheckVm>
+            {
+                new SafetyCheckVm
+                {
+                    HousingUnitListId = 12,
+                    FacilityId = 1,
+                    CreatedDate = null,
+                    FacilityName = null,
+                    FacilityAbbr = null,
+                    PrivilegesId = 5
+                },
+                new SafetyCheckVm
+                {
+                    HousingUnitListId = 11,
+                    FacilityId = 1,
+                    CreatedDate = DateTime.Now,
+                    PrivilegesId = 6
+                }
+            };
+
+            SafetyCheckBed safetyCheckBed =
+                _fixture.Db.SafetyCheckBed.SingleOrDefault(s => s.HousingUnitBedNumber == "DOWN0014");
+            Assert.Null(safetyCheckBed);
+
+            //Act
+            await _console.InsertBatchSafetyCheck(safetyChecks);
+
+            //Assert
+            safetyCheckBed = _fixture.Db.SafetyCheckBed.SingleOrDefault(s => s.HousingUnitBedNumber == "DOWN0014");
+
+            Assert.NotNull(safetyCheckBed);
+
+        }
+
+        [Fact]
+        public void LoadBatchSafetyCheckList()
+        {
+            //Arrange
+            ConsoleInputVm consoleInput = new ConsoleInputVm
+            {
+                ListConsoleHousingId = new List<int>
+                {
+                    5,
+                    11
+                },
+                ListConsoleLocationId = new List<int>(),
+                ListConsoleMyLocationId = new List<int>
+                {
+                    6,
+                    7
+                },
+                FacilityId = 1
+            };
+
+            //Act
+            BatchSafetyCheckVm batchSafetyCheck = _console.LoadBatchSafetyCheckList(consoleInput);
+
+            //Assert
+            SafetyCheckVm safetyCheck = batchSafetyCheck.SafetyCheckHousing.Single(x => x.HousingUnitListId == 5);
+            Assert.Equal("FLOOR1", safetyCheck.HousingUnitLocation);
+        }
+
+        [Fact]
+        public void GetReleaseQueueDetails()
+        {
+            //Act
+            List<int> housingUnitListId = new List<int>
+            {
+                9
+            };
+
+            List<ReleaseQueueVm> lstReleaseQueues = _console.GetReleaseQueueDetails(1, "Cleared For Release", housingUnitListId, false);
+
+            //Assert
+            ReleaseQueueVm releaseQueue = lstReleaseQueues.Single(i => i.InmateId == 108);
+            Assert.Equal("MADURAI", releaseQueue.InmateCurrentTrak);
+        }
+
+        [Fact]
+        public void LoadIncarcerationFormDetails()
+        {
+            //Arrange
+            ConsoleInputVm consoleInput = new ConsoleInputVm
+            {
+                FacilityId = 2,
+                ListConsoleHousingId = new List<int>
+                {
+                    11,
+                    15
+                }
+            };
+
+            //Act
+            IncarcerationFormListVm incarcerationFormList = _console.LoadIncarcerationFormDetails(consoleInput);
+
+            //Assert
+            IncarcerationForms incarcerationForms =
+                incarcerationFormList.IncarcerationForms.Single(f => f.FormTemplatesId == 11);
+            Assert.Equal("MEDICAL PRE-SCREENING", incarcerationForms.DisplayName);
+        }
+
+        [Fact]
+        public async Task ClearFormRecord()
+        {
+            //Arrange
+            IncarcerationForms incarcerationForms = new IncarcerationForms
+            {
+                FormRecordId = 10,
+                FormTemplatesId = 11
+            };
+            FormRecord formRecord = _fixture.Db.FormRecord.Single(f => f.FormRecordId == 10);
+            Assert.Equal(0, formRecord.FormHousingClear);
+
+            //Act
+            await _console.ClearFormRecord(incarcerationForms);
+
+            //Assert
+            //Cleared flag
+            formRecord = _fixture.Db.FormRecord.Single(f => f.FormRecordId == 10);
+            Assert.Equal(1, formRecord.FormHousingClear);
+        }
+    }
+}

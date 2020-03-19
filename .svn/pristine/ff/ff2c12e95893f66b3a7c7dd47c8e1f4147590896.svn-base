@@ -1,0 +1,408 @@
+﻿using GenerateTables.Models;
+using ServerAPI.Interfaces;
+using ServerAPI.ViewModels;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+// ReSharper disable once CheckNamespace
+namespace ServerAPI.Services
+{
+    public class VisitAvailabilityService : IVisitAvailabilityService
+    {
+        private readonly AAtims _context;
+        public VisitAvailabilityService(AAtims context)
+        {
+            _context = context;
+        }
+        //Visit Availability will work based on selected facility (or)
+        //based on inmate facility and housing(for housing room should assign for the inmate housing in admin page).
+        public VisitScheduledDetail GetVisitAvailability(VisitScheduledVm objParam)
+        {
+            objParam.VisitDate = objParam.VisitDate ?? DateTime.Now;
+            List<VisitScheduledVm> visitationRoomInfoFinal = new List<VisitScheduledVm>();
+            HousingUnitList housingUnitList = new HousingUnitList();
+            HousingUnitVisitationClassRule classRule = new HousingUnitVisitationClassRule();
+            InmateDetailVm inmateInfo = new InmateDetailVm();
+            int[] unitListId = new int[] { };
+            if (objParam.InmateId > 0)
+            {
+                inmateInfo = _context.Inmate.Where(s => s.InmateId == objParam.InmateId).Select(s =>
+                   new InmateDetailVm
+                   {
+                       FacilityId = s.FacilityId,
+                       HousingUnitId = s.HousingUnitId,
+                       HousingUnitListId = s.HousingUnit.HousingUnitListId,
+                       InmateClassificationId = s.InmateClassificationId,
+                       Classification = s.InmateClassification.InmateClassificationReason
+                   }).Single();
+            }
+            List<HousingUnitList> housingUnitLocationList = _context.HousingUnitList
+                .Where(x => x.LocationIdList != null && ((inmateInfo.FacilityId > 0 && inmateInfo.FacilityId == x.FacilityId) ||
+                                                         objParam.FacilityId == x.FacilityId))
+                .Select(s => new HousingUnitList
+                {
+                    LocationIdList = s.LocationIdList,
+                    HousingUnitListId = s.HousingUnitListId,
+                    HousingUnitLocation = s.HousingUnitLocation,
+                    HousingUnitNumber = s.HousingUnitNumber
+                }).ToList();
+
+            List<string> lst = housingUnitLocationList.Select(x => x.LocationIdList).ToList();
+            string loc = string.Join(",", lst);
+            int[] location = !string.IsNullOrEmpty(loc) ? loc.Split(",").ToArray().Select(int.Parse).ToArray() : null;
+            List<VisitScheduledVm> visitationRoomInfo = _context.Privileges
+                .Where(w => ((inmateInfo.FacilityId > 0 && inmateInfo.FacilityId == w.FacilityId) ||
+                             objParam.FacilityId == w.FacilityId) && location.Contains(w.PrivilegeId) && w.ShowInVisitation &&
+                            w.InactiveFlag == 0 && w.RemoveFromPrivilegeFlag == 1 && w.RemoveFromTrackingFlag == 0)
+                .Select(s => new VisitScheduledVm
+                {
+                    VisitOpenScheduleFlag = s.VisitOpenScheduleFlag,
+                    VisitationRoom = s.PrivilegeDescription,
+                    VisitDate = objParam.VisitDate,
+                    PrivilegeId = s.PrivilegeId,
+                    RoomCapacity = s.Capacity ?? 0,
+                    VisitAllowProfOnlyFlag = s.VisitAllowProfOnlyFlag,
+                    VisitAllowPersonalOnlyFlag = s.VisitAllowPersonalOnlyFlag
+                }).ToList();
+           
+            if (inmateInfo.FacilityId > 0)
+            {
+                int[] locationList = new int[] { };
+                if (inmateInfo.FacilityId > 0 && inmateInfo.HousingUnitId == null)
+                {
+                    visitationRoomInfo = new List<VisitScheduledVm>();
+                }
+                else if (inmateInfo.HousingUnitId != null)
+                {
+                    housingUnitList = _context.Inmate.Where(w => w.InmateId == objParam.InmateId)
+                        .Select(s => new HousingUnitList
+                        {
+                            HousingUnitListId = s.HousingUnit.HousingUnitList.HousingUnitListId,
+                            LocationIdList = s.HousingUnit.HousingUnitList.LocationIdList
+                        }).SingleOrDefault();
+
+                    if (housingUnitList?.LocationIdList != null)
+                    {
+                        locationList = housingUnitList.LocationIdList.Split(",").ToArray().Select(int.Parse).ToArray();
+                        visitationRoomInfo.ForEach(i =>
+                        {
+                            if (locationList.Contains(i.PrivilegeId))
+                            {
+                                i.HousingUnitId = inmateInfo.HousingUnitId ?? 0;
+                                i.HousingUnitListId = inmateInfo.HousingUnitListId ?? 0;
+                            }
+                        });
+                    }
+
+                    if (housingUnitList?.HousingUnitListId != null && inmateInfo.InmateClassificationId != null)
+                    {
+                        classRule = _context.HousingUnitVisitationClassRule.SingleOrDefault(w =>
+                            w.HousingUnitListId == housingUnitList.HousingUnitListId &&
+                            w.ClassificationReason == inmateInfo.Classification);
+                    }
+                    visitationRoomInfo = visitationRoomInfo.Where(s => locationList.Contains(s.PrivilegeId)).ToList();
+                }
+
+                if (inmateInfo.FacilityId > 0 && housingUnitList?.HousingUnitListId > 0)
+                {
+                    unitListId = housingUnitLocationList.Where(w => w.HousingUnitListId == housingUnitList?.HousingUnitListId).Select(x => x.HousingUnitListId).ToArray();
+                }
+            }
+
+            List<VisitToVisitor> visitCount = _context.VisitToVisitor.Where(v =>
+                    v.Visit.VisitDenyFlag != 1 && !v.Visit.DeleteFlag &&
+                    v.Visit.StartDate.Date == objParam.VisitDate.Value.Date &&
+                    v.Visit.CompleteRegistration && !v.Visit.CompleteVisitFlag)
+                .Select(s => new VisitToVisitor
+                {
+                    Visit = s.Visit
+                }).ToList();
+
+            List<HousingUnitVisitation> housingUnitVisitation = _context.HousingUnitVisitation.Where(v =>
+                    ((inmateInfo.FacilityId > 0 && inmateInfo.FacilityId == v.FacilityId &&
+                      unitListId.Contains(v.HousingUnitListId ?? 0)) || objParam.FacilityId == v.FacilityId) &&
+                    (!v.DeleteFlag.HasValue || v.DeleteFlag == 0) && objParam.VisitDate.Value.Date.DayOfWeek.ToString() == v.VisitationDay)
+                .Select(s => new HousingUnitVisitation
+                {
+                    HousingUnitListId = s.HousingUnitListId,
+                    HousingUnitLocation = s.HousingUnitLocation,
+                    HousingUnitNumber = s.HousingUnitNumber,
+                    VisitationFrom = s.VisitationFrom,
+                    VisitationTo = s.VisitationTo,
+                    RegistrationFrom = s.RegistrationFrom,
+                    RegistrationTo = s.RegistrationTo
+                }).ToList();
+            //Open per and prof
+            visitationRoomInfo.ForEach(item =>
+            {
+                if (item.VisitOpenScheduleFlag)
+                {
+                    VisitScheduledVm housingUnitVisitation2 = new VisitScheduledVm
+                    {
+                        VisitationRoom = item.VisitationRoom,
+                        VisitOpenScheduleFlag = item.VisitOpenScheduleFlag,
+                        VisitAllowProfOnlyFlag = item.VisitAllowProfOnlyFlag,
+                        VisitAllowPersonalOnlyFlag = item.VisitAllowPersonalOnlyFlag,
+                        VisitDate = item.VisitDate,
+                        FrontDeskFlag = item.FrontDeskFlag,
+                        HousingUnitId = item.HousingUnitId,
+                        HousingUnitListId = item.HousingUnitListId,
+                        PrivilegeId = item.PrivilegeId,
+                        RoomCapacity = item.RoomCapacity,
+                        VisitsPending = visitCount.Count(s =>
+                            !s.Visit.InmateTrackingStart.HasValue && item.PrivilegeId == s.Visit.LocationId),
+                        VisitsInProgress = visitCount.Count(s =>
+                            s.Visit.InmateTrackingStart.HasValue && item.PrivilegeId == s.Visit.LocationId)
+                    };
+
+                    if (objParam.VisitDate != null && ((item.RoomCapacity ?? 0) - housingUnitVisitation2.VisitsPending -
+                                                        housingUnitVisitation2.VisitsInProgress) < 0 && objParam.VisitDate.Value.Date == DateTime.Now.Date)
+                    {
+                        List<Visit> pending = visitCount.Where(s =>
+                               !s.Visit.InmateTrackingStart.HasValue && item.PrivilegeId == s.Visit.LocationId).Select(e => e.Visit).ToList();
+                        List<Visit> progress = visitCount.Where(s =>
+                            s.Visit.InmateTrackingStart.HasValue && item.PrivilegeId == s.Visit.LocationId).Select(e => e.Visit).ToList();
+                        housingUnitVisitation2.Rules = CalculateEstimate(pending, progress);
+                    }
+                    visitationRoomInfoFinal.Add(housingUnitVisitation2);
+                }
+            });
+
+            //Slot Personal
+            List<HousingUnitList> lstHousingUnit = new List<HousingUnitList>();
+            List<HousingUnitList> housingUnitLocust = _context.HousingUnitList
+                .Where(x => x.LocationIdList != null && ((inmateInfo.FacilityId > 0 && inmateInfo.FacilityId == x.FacilityId) ||
+                            objParam.FacilityId == x.FacilityId))
+                .Select(s => new HousingUnitList
+                {
+                    LocationIdList = s.LocationIdList,
+                    HousingUnitListId = s.HousingUnitListId,
+                    HousingUnitLocation = s.HousingUnitLocation,
+                    HousingUnitNumber = s.HousingUnitNumber
+                }).ToList();
+            if (inmateInfo.FacilityId > 0 && housingUnitList?.HousingUnitListId > 0)
+            {
+                housingUnitLocust = housingUnitLocust.Where(w => w.HousingUnitListId == housingUnitList?.HousingUnitListId).ToList();
+            }
+            housingUnitLocust.ForEach(i =>
+                {
+                    if (i.LocationIdList != null)
+                    {
+                        string data = string.Join(",", i.LocationIdList);
+                        List<string> hoc = data.Split(",").ToList();
+                        hoc.ForEach(s =>
+                        {
+                            HousingUnitList housingUnit = new HousingUnitList
+                            {
+                                LocationIdList = s,
+                                HousingUnitLocation = i.HousingUnitLocation,
+                                HousingUnitNumber = i.HousingUnitNumber,
+                                HousingUnitListId = i.HousingUnitListId
+                            };
+                            lstHousingUnit.Add(housingUnit);
+                        });
+                    }
+                });
+
+            visitationRoomInfo.ForEach(item =>
+            {
+                if (!item.VisitOpenScheduleFlag)
+                {
+                    List<HousingUnitList> lstUnit = lstHousingUnit.Where(s => s.LocationIdList == item.PrivilegeId.ToString())
+                        .ToList();
+                    lstUnit.ForEach(d =>
+                    {
+                        housingUnitVisitation.ForEach(val =>
+                        {
+                            if (val.HousingUnitLocation.ToUpper().Trim() == d.HousingUnitLocation.ToUpper().Trim() &&
+                                val.HousingUnitNumber.Trim() == d.HousingUnitNumber.Trim())
+                            {
+                                VisitScheduledVm housingUnitVisitation1 = new VisitScheduledVm
+                                {
+                                    VisitationRoom = item.VisitationRoom,
+                                    VisitOpenScheduleFlag = item.VisitOpenScheduleFlag,
+                                    VisitDate = item.VisitDate,
+                                    FrontDeskFlag = item.FrontDeskFlag,
+                                    PrivilegeId = item.PrivilegeId,
+                                    RoomCapacity = item.RoomCapacity,
+                                    HousingUnitLocation = d.HousingUnitLocation,
+                                    HousingUnitNumber = d.HousingUnitNumber,
+                                    VisitAllowProfOnlyFlag = item.VisitAllowProfOnlyFlag,
+                                    VisitAllowPersonalOnlyFlag = item.VisitAllowPersonalOnlyFlag
+                                };
+                                if (objParam.VisitDate != null && val.VisitationFrom != null && val.VisitationTo != null)
+                                {
+                                    DateTime? from = objParam.VisitDate.Value.Date;
+                                    DateTime? to = objParam.VisitDate.Value.Date;
+                                    housingUnitVisitation1.FromTime = from.Value
+                                        .AddHours(val.VisitationFrom.Value.Hour)
+                                        .AddMinutes(val.VisitationFrom.Value.Minute);
+                                    housingUnitVisitation1.ToTime = to.Value
+                                        .AddHours(val.VisitationTo.Value.Hour)
+                                        .AddMinutes(val.VisitationTo.Value.Minute);
+                                }
+                                housingUnitVisitation1.HousingUnitId = (item.HousingUnitListId == val.HousingUnitListId)
+                                    ? item.HousingUnitId
+                                    : 0;
+                                housingUnitVisitation1.HousingUnitListId =
+                                    (item.HousingUnitListId == val.HousingUnitListId)
+                                        ? item.HousingUnitListId
+                                        : 0;
+
+                                housingUnitVisitation1.VisitsPending = visitCount.Count(s =>
+                                    s.Visit.EndDate != null && (housingUnitVisitation1.FromTime != null && housingUnitVisitation1.ToTime != null &&
+                                                                (item.PrivilegeId == s.Visit.LocationId && s.Visit.StartDate >= DateTime.Now &&
+                                                                 housingUnitVisitation1.FromTime.Value.Date == s.Visit.StartDate.Date &&
+                                                                 housingUnitVisitation1.FromTime.Value.ToShortTimeString() ==
+                                                                 s.Visit.StartDate.ToShortTimeString() &&
+                                                                 housingUnitVisitation1.ToTime.Value.ToShortTimeString() ==
+                                                                 s.Visit.EndDate.Value.ToShortTimeString()
+                                                                )));
+
+                                housingUnitVisitation1.VisitsInProgress = visitCount.Count(s =>
+                                    s.Visit.EndDate != null &&
+                                    (housingUnitVisitation1.ToTime != null && housingUnitVisitation1.FromTime != null &&
+                                     (item.PrivilegeId == s.Visit.LocationId && s.Visit.StartDate < DateTime.Now &&
+                                      housingUnitVisitation1.FromTime.Value.Date == s.Visit.StartDate.Date &&
+                                      housingUnitVisitation1.FromTime.Value.ToShortTimeString() ==
+                                      s.Visit.StartDate.ToShortTimeString() &&
+                                      housingUnitVisitation1.ToTime.Value.ToShortTimeString() ==
+                                      s.Visit.EndDate.Value.ToShortTimeString())));
+
+                                visitationRoomInfoFinal.Add(housingUnitVisitation1);
+                            }
+                        });
+                    });
+                }
+            });
+
+
+            //Slot Professional
+            List<VisitScheduledVm> slotProfRoomInfoFinal = new List<VisitScheduledVm>();
+
+            List<VisitToVisitor> schedule = _context.VisitToVisitor.Where(x => x.Visit.CompleteRegistration && x.Visit.VisitDenyFlag != 1 && x.Visit.VisitorType == 1 &&
+                                                                               !x.Visit.DeleteFlag && !x.Visit.CompleteVisitFlag)
+                .Select(x => new VisitToVisitor
+                {
+                    PersonId = x.PersonId,
+                    Visit = x.Visit
+                }).ToList();
+
+            List<Visit> profVisit = schedule.Where(v => objParam.VisitDate != null && (
+                                                                           v.Visit.StartDate.Date == objParam.VisitDate.Value.Date)).Select(x => x.Visit).ToList();
+            visitationRoomInfo.ForEach(item =>
+            {
+                VisitScheduledVm housingUnitVisitation2 = new VisitScheduledVm
+                {
+                    VisitationRoom = item.VisitationRoom,
+                    VisitOpenScheduleFlag = item.VisitOpenScheduleFlag,
+                    VisitDate = item.VisitDate,
+                    FrontDeskFlag = item.FrontDeskFlag,
+                    HousingUnitId = item.HousingUnitId,
+                    HousingUnitListId = item.HousingUnitListId,
+                    PrivilegeId = item.PrivilegeId,
+                    RoomCapacity = item.RoomCapacity,
+                    VisitAllowProfOnlyFlag = item.VisitAllowProfOnlyFlag,
+                    VisitAllowPersonalOnlyFlag = item.VisitAllowPersonalOnlyFlag,
+                    IsSlotProf = true
+                };
+                slotProfRoomInfoFinal.Add(housingUnitVisitation2);
+                profVisit.ForEach(val =>
+                {
+                    VisitScheduledVm housingUnitVisitation1 = new VisitScheduledVm
+                    {
+                        VisitationRoom = item.VisitationRoom,
+                        VisitOpenScheduleFlag = item.VisitOpenScheduleFlag,
+                        VisitAllowProfOnlyFlag = item.VisitAllowProfOnlyFlag,
+                        VisitAllowPersonalOnlyFlag = item.VisitAllowPersonalOnlyFlag,
+                        VisitDate = item.VisitDate,
+                        FrontDeskFlag = item.FrontDeskFlag,
+                        HousingUnitId = item.HousingUnitId,
+                        HousingUnitListId = item.HousingUnitListId,
+                        PrivilegeId = item.PrivilegeId,
+                        RoomCapacity = item.RoomCapacity,
+                        FromTime = val.StartDate,
+                        ToTime = val.EndDate
+                    };
+                    housingUnitVisitation1.VisitsPending = profVisit.Count(s =>
+                        housingUnitVisitation1.FromTime != null &&
+                        (!s.InmateTrackingStart.HasValue && item.PrivilegeId == s.LocationId &&
+                         housingUnitVisitation1.FromTime.Value.ToShortTimeString() == s.StartDate.ToShortTimeString()));
+
+                    housingUnitVisitation1.VisitsInProgress = profVisit.Count(s =>
+                        s.EndDate != null && (housingUnitVisitation1.ToTime != null &&
+                                                    (s.InmateTrackingStart.HasValue &&
+                                                     item.PrivilegeId == s.LocationId &&
+                                                     housingUnitVisitation1.ToTime.Value.ToShortTimeString() ==
+                                                     s.EndDate.Value.ToShortTimeString())));
+
+                    if (housingUnitVisitation1.VisitsPending > 0 || housingUnitVisitation1.VisitsInProgress > 0)
+                        slotProfRoomInfoFinal.Add(housingUnitVisitation1);
+                });
+            });
+            VisitScheduledDetail visitScheduledDetail = new VisitScheduledDetail
+            {
+                NoRoom = !visitationRoomInfo.Any(),
+                VisitRuleMaxLengthMin = classRule?.VisitRuleMaxLengthMin ?? 0,
+                VisitationRoomInfo = visitationRoomInfoFinal,
+                SlotProfRoomInfo = slotProfRoomInfoFinal
+            };
+
+            return visitScheduledDetail;
+        }
+        private List<VisitClassRule> CalculateEstimate(List<Visit> pending, List<Visit> progress)
+        {
+            List<VisitClassRule> visitClassRule = new List<VisitClassRule>();
+            int[] lstInmate = pending.Select(x => x.InmateId ?? 0).ToArray();
+            int[] lstInmates = progress.Select(x => x.InmateId ?? 0).ToArray();
+            List<InmateDetailVm> inmateDetail = _context.Inmate.Where(s => lstInmate.Contains(s.InmateId) && s.HousingUnitId != null || lstInmates.Contains(s.InmateId)).Select(s =>
+                new InmateDetailVm
+                {
+                    InmateId = s.InmateId,
+                    HousingUnitListId = s.HousingUnit.HousingUnitList.HousingUnitListId,
+                    InmateClassificationId = s.InmateClassificationId,
+                    Classification = s.InmateClassification.InmateClassificationReason
+                }).ToList();
+            int[] unitId = inmateDetail.Select(x => x.HousingUnitListId ?? 0).ToArray();
+            List<HousingUnitVisitationClassRule> rules = _context.HousingUnitVisitationClassRule.Where(x => unitId.Contains(x.HousingUnitListId ?? 0)).ToList();
+            pending.ForEach(n =>
+            {
+                InmateDetailVm detail = inmateDetail.SingleOrDefault(s => s.InmateId == n.InmateId);
+                if (detail != null)
+                {
+                    int classRule = rules.SingleOrDefault(w =>
+                                        w.HousingUnitListId == detail.HousingUnitListId &&
+                                        w.ClassificationReason == detail.Classification)?.VisitRuleMaxLengthMin ?? 0;
+
+                    VisitClassRule rule = new VisitClassRule
+                    {
+                        InmateId = detail.InmateId,
+                        ClassRule = classRule,
+                        IsPending = true
+                    };
+                    visitClassRule.Add(rule);
+                }
+            });
+            progress.ForEach(n =>
+            {
+                InmateDetailVm detail = inmateDetail.SingleOrDefault(s => s.InmateId == n.InmateId);
+                if (detail != null)
+                {
+                    int classRule = rules.SingleOrDefault(w =>
+                                        w.HousingUnitListId == detail.HousingUnitListId &&
+                                        w.ClassificationReason == detail.Classification)?.VisitRuleMaxLengthMin ?? 0;
+
+                    VisitClassRule rule = new VisitClassRule
+                    {
+                        InmateId = detail.InmateId,
+                        ClassRule = classRule,
+                        StartDate = n.InmateTrackingStart
+                    };
+                    visitClassRule.Add(rule);
+                }
+            });
+            return visitClassRule;
+        }
+    }
+}

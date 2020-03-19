@@ -1,0 +1,12 @@
+using ServerAPI.ViewModels;
+using System;
+
+// ReSharper disable once CheckNamespace
+namespace ServerAPI.Services
+{
+    public interface IClassifyAlertsPrivilegeService
+    {
+        ClassifyAlertsPrivilegeVm GetClassifyPrivilegeDetails(int facilityId,DateTime? fromDate,DateTime? toDate, 
+        int officerId);
+    }
+}

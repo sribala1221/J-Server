@@ -1,0 +1,124 @@
+﻿using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
+using ServerAPI.JMS.Tests.Helper;
+using ServerAPI.Services;
+using ServerAPI.Tests;
+using ServerAPI.ViewModels;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using GenerateTables.Models;
+using Xunit;
+using System.Threading.Tasks;
+using Moq;
+using Microsoft.AspNetCore.Identity;
+using JwtDb.Models;
+using Microsoft.Extensions.Caching.Memory;
+
+// ReSharper disable once CheckNamespace
+namespace ServerAPI.JMS.Tests
+{
+    [Collection("Database collection")]
+    public class PersonAkaServiceTest
+    {
+        private readonly PersonAkaService _personAkaService;
+        private readonly DbInitialize _fixture;
+        private readonly IConfigurationRoot _configuration = MockHelpers.GetIConfigurationRoot();
+        private readonly Mock<IMemoryCache> _memory = new Mock<IMemoryCache>();
+
+        public PersonAkaServiceTest(DbInitialize fixture)
+        {
+            _fixture = fixture;
+            Mock<UserManager<AppUser>> userMgr = MockHelpers.MockUserManager<AppUser>();
+            AppletsSavedService appletsSavedService = new AppletsSavedService(_fixture.Db, _configuration);
+            PhotosService photosService = new PhotosService(fixture.Db, _configuration);
+            PersonService personService = new PersonService(_fixture.Db);
+            HttpContextAccessor httpContext = new HttpContextAccessor { HttpContext = fixture.Context.HttpContext };
+            InterfaceEngineService interfaceEngineService = new InterfaceEngineService(_fixture.Db,
+                _configuration, _memory.Object);
+            CommonService commonService = new CommonService(_fixture.Db, _configuration,
+                httpContext, personService,appletsSavedService,interfaceEngineService);
+            _personAkaService = new PersonAkaService(fixture.Db, commonService, httpContext, personService,
+                interfaceEngineService);
+        }
+
+
+        [Fact]
+        public void GetAkaDetails()
+        {
+            //Act
+            List<AkaVm> lstAka = _personAkaService.GetAkaDetails(100);
+
+            //Assert
+            Assert.True(lstAka.Count > 0);
+
+        }
+
+        [Fact]
+        public void DeleteUndoPersonAka()
+        {
+            //Arrange
+            AkaVm aka = new AkaVm
+            {
+                AkaId = 19,
+                AkaHistoryList = "{'FKNLAST NAME':'JATHAV','FKNFIRST NAME'':'KARTHIK','FKNMIDDLE NAME':null,'FKNSUFFIX':'JV'}",
+                DeleteFlag = 0
+            };
+
+            //Before insert history table
+            AkaHistory akaHistory = _fixture.Db.AkaHistory.SingleOrDefault(a => a.AkaId == 19);
+            Assert.Null(akaHistory);
+
+            //Act
+            _personAkaService.DeleteUndoPersonAka(aka);
+
+            //Assert
+            //After insert history table
+            akaHistory = _fixture.Db.AkaHistory.Single(a => a.AkaId == 19);
+            Assert.NotNull(akaHistory);
+        }
+
+        [Fact]
+        public void GetPersonAkaHistory()
+        {
+            //Act
+            List<HistoryVm> lstHistory = _personAkaService.GetPersonAkaHistory(16);
+
+            //Assert
+            Assert.True(lstHistory.Count > 0);
+        }
+
+        [Fact]
+        public async Task InsertUpdatePersonAka()
+        {
+            //Arrange
+            AkaVm akavm = new AkaVm
+            {
+                PersonId = 101,
+                AkaFirstName = "KRITHIV",
+                AkaLastName = "ROSAN",
+                AkaMiddleName = null,
+                AkaSuffix = "KR",
+                AkaDob = DateTime.Now.AddYears(-35),
+                CreateDate = DateTime.Now.AddDays(-18),
+                UpdateDate = null,
+                AkaInmateNumber = "SVK742",
+                CreatedBy = 12
+            };
+
+            //Before Insert
+            Aka aka = _fixture.Db.Aka.SingleOrDefault(a => a.AkaLastName == "ROSAN");
+            Assert.Null(aka);
+
+            //Act
+            await _personAkaService.InsertUpdatePersonAka(akavm);
+
+            //Assert
+            //After Insert
+            aka = _fixture.Db.Aka.SingleOrDefault(a => a.AkaLastName == "ROSAN");
+            Assert.NotNull(aka);
+        }
+    }
+
+
+}

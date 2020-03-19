@@ -1,0 +1,201 @@
+﻿using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using ServerAPI.Services;
+using ServerAPI.ViewModels;
+using System.Collections.Generic;
+using Newtonsoft.Json;
+using ServerAPI.Authorization;
+using ServerAPI.Policies;
+
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    public class CommonController : Controller
+    {
+        private readonly ICommonService _commonService;
+        private readonly IBookingService _bookingService;
+        private readonly IBookingDetailService _bookingDetailService;
+        private readonly IUserPermissionPolicy _userPermissionPolicy;
+
+        public CommonController(ICommonService commonService, IBookingService bookingService, 
+            IBookingDetailService iBookingDetailService, IUserPermissionPolicy userPermissionPolicy)
+        {
+            _commonService = commonService;
+            _bookingService = bookingService;
+            _bookingDetailService = iBookingDetailService;
+            _userPermissionPolicy = userPermissionPolicy;
+        }
+
+        [HttpPost("GetLookups")]
+        public IActionResult GetLookups([FromBody] string[] value)
+        {
+            List<LookupVm> debugVar = _commonService.GetLookups(value);
+            return Json(debugVar);
+        }
+
+        [HttpGet("GetDropdownValues")]
+        public IActionResult GetDropdownValues(string[] lookupTypes, string[] lookupReferences)
+        {
+            return Json(_commonService.GetDropdownValues(lookupTypes, lookupReferences));
+        }
+
+        [HttpGet("GetAgencies")]
+        public IActionResult GetAgenciesByType(string type)
+        {
+            return Json(_commonService.GetAgenciesByType(type));
+        }
+
+        [AllowAnonymous]
+        [HttpGet("GetAgencyByOri")]
+        public IActionResult GetAgencyByOri(string oriNumber)
+        {
+            return Json(_commonService.GetAgencyByOri(oriNumber));
+        }
+
+        [HttpGet("GetOfficerDetails")]
+        public IActionResult GetPersonnelDetails()
+        {
+            return Json(_commonService.GetPersonnelDetails());
+        }
+
+        [HttpGet("GetPersonnelByUserName")]
+        public IActionResult GetPersonnelByUsername(string username)
+        {
+            return Json(_commonService.GetPersonnelByUsername(username));
+        }
+
+        //Get User Control Field Names
+        [HttpPost("GetFieldNames")]
+        public IActionResult GetFieldNames([FromBody] List<UserControlFieldTags> controlFields)
+        {
+            return Json(_commonService.GetFieldNames(controlFields));
+        }
+
+        [HttpGet("GetEvidenceAgency")]
+        public IActionResult GetEvidenceAgency(bool arrestFlag, bool courtFlag)
+        {
+            return Json(_commonService.GetEvidenceAgency(arrestFlag, courtFlag));
+        }
+
+        [HttpGet("GetEvidencePersonnel")]
+        public IActionResult GetEvidencePersonnel(string type)
+        {
+            return Json(_commonService.GetPersonnel(type));
+        }
+        
+        /// <summary>
+        /// To search personnel or officer details
+        /// </summary>
+        /// <param name="personnelSearchVm"></param>
+        /// <returns></returns>
+        [HttpPost("LoadPersonnelSearch")]
+        public IActionResult LoadPersonnelSearch([FromBody] PersonnelSearchVm personnelSearchVm)
+        {
+            return Ok(_commonService.GetPersonnelSearchDetails(personnelSearchVm));
+        }
+
+        [HttpGet("GetDbDetails")]
+        [AllowAnonymous]
+        public IActionResult GetDdDetails()
+        {
+            return Ok(_commonService.GetDbDetails());
+        }
+        /// <summary>
+        /// Get site options value
+        /// </summary>
+        /// <param name="optionName"></param>
+        /// <param name="optionVariable"></param>
+        /// <returns></returns>
+        [HttpGet("GetSiteOptions")]
+        public IActionResult GetSiteOptions(string optionName = "", string optionVariable = "")
+        {
+            return Ok(_commonService.GetSiteOptionValue(optionName, optionVariable));
+        }
+
+        [HttpPost("GetSiteOptionList")]
+        public IActionResult GetSiteOptionList([FromBody] string[] siteOptionNames)
+        {
+            return Ok(_commonService.GetSiteOptions(siteOptionNames));
+        }
+
+        [HttpGet("GetIncarcerationFormsDetails")]
+        public IActionResult GetIncarcerationFormsDetails(int incarcerationId, string filterName)
+        {
+            return Ok(_bookingDetailService.GetIncarcerationFormsDetails(incarcerationId, filterName));
+        }
+
+        [HttpPost("DeleteUndoIncarcerationForm")]
+        public async Task<IActionResult> DeleteUndoIncarcerationForm([FromBody] IncarcerationForms incFrom)
+        {
+            return Ok(await _bookingDetailService.DeleteUndoIncarcerationForm(incFrom));
+        }
+
+        [HttpPost("UpdateFormInterfaceBypassed")]
+        public async Task<IActionResult> UpdateFormInterfaceBypassed([FromBody] IncarcerationForms incFrom)
+        {
+            return Ok(await _bookingDetailService.UpdateFormInterfaceBypassed(incFrom));
+        }
+
+        [FuncPermission(492, FuncPermissionType.Edit)]
+        [HttpPost("InsertInmateTracking")]
+        public IActionResult InsertInmateTracking([FromBody] InmateTrackingVm ob)
+        {
+            return Ok(_commonService.InsertInmateTracking(ob));
+        }
+        [FuncPermission(532, FuncPermissionType.Edit)]
+        [HttpPost("CheckOutInsertInmateTracking")]
+        public IActionResult CheckOutInsertInmateTracking([FromBody] InmateTrackingVm ob)
+        {
+            return Ok(_commonService.InsertInmateTracking(ob));
+        }
+        [FuncPermission(533, FuncPermissionType.Edit)]
+        [HttpPost("ConflictEditTracking")]
+        public IActionResult ConflictEditTracking()
+        {
+            return Ok();
+        }
+
+        [AllowAnonymous]
+        [HttpGet("GetExecSp")]
+        public IActionResult GetExecSp(string spName, string parameters)
+        {
+            return Ok(_commonService.GetExecSp(spName, JsonConvert.DeserializeObject<KeyValuePair<string, string>[]>(parameters)));
+        }
+
+        [HttpGet("GetBookings")]
+        public IActionResult GetBookings(int incarcerationId, bool toBindCharge)
+        {
+            return Ok(_bookingService.GetBookings(incarcerationId, toBindCharge));
+        }
+
+        [HttpGet("GetCourtCommitFlag")]
+        public IActionResult GetCourtCommitFlag(int arrestId) {
+            return Ok(arrestId > 0 && _commonService.GetCourtCommitFlag(arrestId));
+        }
+
+        [HttpGet("GetIdleTimeOut")]
+        public IActionResult GetIdleTimeOut()
+        {
+            return Ok(_commonService.GetIdleTimeOut());
+        }
+
+        [HttpGet("GetAppDetails")]
+        public IActionResult GetAppDetails()
+        {
+            return Ok(_userPermissionPolicy.GetAppPermission());
+        }
+
+        [HttpGet("GetHousingUnitListIds")]
+        public IActionResult GetHousingUnitListIds(int housingGroupId)
+        {
+            return Ok(_commonService.GetHousingUnitListIds(housingGroupId));
+        }
+
+        [HttpPost("GetIncidentLookups")]
+        public IActionResult GetIncidentLookups([FromBody] string[] value)
+        {
+            return Ok(_commonService.GetIncidentLookups(value));
+        }
+    }
+}

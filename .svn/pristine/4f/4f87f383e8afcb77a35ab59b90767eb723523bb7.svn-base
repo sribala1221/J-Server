@@ -1,0 +1,217 @@
+﻿using System;
+using System.Collections.Generic;
+
+namespace ServerAPI.ViewModels
+{
+    public class ClassifyQueueVm
+    {
+        public List<KeyValuePair<int, string>> ClassifyQueue { get; set; }
+        public List<KeyValuePair<int, string>> InProgressQueue { get; set; }
+        public List<QueueReviewDetails> ReviewQueue { get; set; }
+        public List<RequestTypes> PendingQueue { get; set; }
+        public List<ProgramEligibility> EligibilityProgramRequestQueue { get; set; }
+        public List<RequestTypes> AssignQueue { get; set; }
+        public KeyValuePair<int, int> SpecialQueue { get; set; }
+        public List<QueueWorkCrew> EligibilityRequestQueue { get; set; }
+        public List<QueueDetails> QueueDetails { get; set; }
+        public string SiteOption { get; set; }
+    }
+
+    public class ReviewQueue
+    {
+        public string Housing { get; set; }
+        public DateTime? ReviewDate { get; set; }
+        public int Batch { get; set; }
+        public int InmateId { get; set; }
+        public int Interval { get; set; }
+        public string FacilityAbbr { get; set; }
+        public string HousingUnitLocation { get; set; }
+        public string HousingUnitNumber { get; set; }
+        public string Reason { get; set; }
+        public int HousingUnitId { get; set; }
+        public DateTime? LastClassReviewDate { get; set; }
+    }
+    public class ProgramEligibility : ReviewQueue
+    {
+        public int RequestId { get; set; }
+        public int ProgramRequestId { get; set; }
+        public int ProgramClassId { get; set; }
+          public int ProgramId { get; set; }
+        public int? PriorityLevel { get; set; }
+        public string Note { get; set; }
+        public HousingDetail HousingDetails { get; set; }
+        public PersonVm InmateDetails { get; set; }
+         public List<ScheduleVm> ScheduleDetails { get; set; }
+        public DateTime? RequestDate { get; set; }
+        public bool DeleteFlag { get; set; }
+        public bool ClassifyRouteFlag { get; set; }
+        public bool DeniedFlag { get; set; }
+        public bool AppealFlag { get; set; }
+       public bool ApproveFlag { get; set; }
+        public string ProgramCategory { get; set; }
+        public string SendNoteToHousing { get; set; }
+        public string ClassOrServiceName { get; set; }
+        public string ClassOrServiceClassFilter { get; set; }
+        public string ClassOrServiceGenderFilter { get; set; }
+        public int? ClassOrServiceNumber { get; set; }
+        public QueueEligibilityPerson DeniedDetails { get; set; }
+        public QueueEligibilityPerson ClassifyRouteDetails { get; set; }
+        public QueueEligibilityPerson UpdateDetails { get; set; }
+        public QueueEligibilityPerson AssignedDetails { get; set; }
+          public QueueEligibilityPerson ApproveDetails { get; set; }
+        public QueueEligibilityPerson AppealDetails { get; set; }
+        public int AppointmentProgramAssignId { get; set; }
+        public int? ProgramComplete { get; set; }
+        public int? ProgramNotComplete { get; set; }
+        public string ProgramUnassignReason { get; set; }
+        public string ProgramGrade { get; set; }
+        public int? ProgramPass { get; set; }
+        public int? ProgramNotPass { get; set; }
+        public DateTime? CreateDate { get; set; }
+        public DateTime? DeleteDate { get; set; }
+        public bool IsChecked { get; set; }
+        public bool IsCheckCertificate { get; set; }
+        public List<ScheduleVm>  SchedulesDetails { get; set; }
+        public List<ProgramEligibilityClassVm> ProgramEligibilityClass { get; set; }
+        public int Createby { get; set; }
+        public int? Deleteby { get; set; }
+        public string ProgramUnassignNote { get; set; }
+        public string PhotoFilePath { get; set; }
+        public int AttendCount { get; set; }
+        public int NotAttendCount { get; set; }
+        public string InmateNote { get; set; }
+        public string CertificateName { get; set; }
+         public string Gender { get; set; }
+
+         public string ProgramCourseName{get;set;}
+         public string ProgramClassName{get;set;}
+
+         public InmateDetailsList InmateInfo { get; set; }
+          public int ProgramClassAssignId{get;set;}
+           public bool CourseComplete{get;set;}
+            public int? AssignedBy{get;set;}
+             public DateTime? AssignedDate{get;set;}
+    }
+
+    public class ProgramEligibilityClassVm
+    {
+        public string ProgramCategory { get; set; }
+        public int ProgramId { get; set; }
+        public int InmateId { get; set; }
+        public string ClassOrServiceName { get; set; }
+        public string ClassOrServiceClassFilter { get; set; }
+        public string ClassOrServiceGenderFilter { get; set; }
+        public int? ClassOrServiceNumber { get; set; }
+    }
+
+    public class ProgramCatogoryVm
+    {
+        public int ProgramRequestId { get; set; }
+         public List<int> RequestIds { get; set; }
+        public string DenyReason { get; set; }
+        public string SentReason { get; set; }
+        public bool Catogory { get; set; }
+        public bool DeniedFlag { get; set; }
+         public bool ApproveFlag { get; set; }
+        public bool ClassifyRouteFlag { get; set; }
+        public bool DeleteFlag { get; set; }
+        public string SentNote { get; set; }
+        public string DeniedNote { get; set; }
+        public string AppealReason { get; set; }
+        public bool IsAppeal { get; set; }
+        public string SentToHousing { get; set; }
+        public DateTime DeniedDate { get; set; }
+        public string AppealNote { get; set; }        
+        public List<int> AppointmentId { get; set; }
+        public int InmateId{ get; set;}
+        public string InmateNote{get; set;}
+    }
+
+    public class QueueEligibilityPerson
+    {
+        public int? PersonnelId { get; set; }
+        public string PersonLastName { get; set; }
+        public string OfficerBadgeNumber { get; set; }
+        public DateTime? Date { get; set; }
+        public string Note { get; set; }
+        public string Reason { get; set; }
+        public DateTime? UpdateDate { get; set; }
+        public DateTime? DeleteDate { get; set; }
+        public int ProgramRequestId { get; set; }
+    }
+
+    public class QueueDetails
+    {
+        public int InmateId { get; set; }
+        public string Description { get; set; }
+        public HousingDetail HousingDetails { get; set; }
+        public PersonInfo InmateDetails { get; set; }
+        public DateTime? LastClassReviewDate { get; set; }
+        public int InmateClassificationId { get; set; }
+        public string InmateTrakNote { get; set; }
+        public int InmateTrackId { get; set; }
+        public int Interval { get; set; }
+        public string InmateClassificationReason { get; set; }
+        public DateTime? CourtAppointment { get; set; }
+    }
+
+    public class QueueInputs
+    {
+        public int FacilityId { get; set; }
+        public string Flag { get; set; }
+        public string Housing { get; set; }
+        public bool LoadFlag { get; set; }
+        public int[] LstInmateIds { get; set; }
+        public string Narrative { get; set; }
+    }
+
+    public class QueueWorkCrew
+    {
+        public int InmateId { get; set; }
+        public int WorkCrewRequestId { get; set; }
+        public PersonVm PersonDetails { get; set; }
+        public string CrewName { get; set; }
+        public string RouteNote { get; set; }
+        public DateTime? RouteDate { get; set; }
+        public string Type { get; set; }
+        public bool WorkFurloughFlag { get; set; }
+    }
+
+    public class QueueReviewDetails
+    {
+        public int Count { get; set; }
+        public int ReviewCount { get; set; }
+        public string Housing { get; set; }
+        public int Batch { get; set; }
+    }
+
+    public class SpecialQueueHistory
+    {
+        public int InmateId { get; set; }
+        public int OfficerId { get; set; }
+        public PersonnelVm OfficerDetails { get; set; }
+        public DateTime? SaveDate { get; set; }
+        public PersonVm InmateDetails { get; set; }
+        public int Interval { get; set; }
+    }
+
+    public class SpecialQueueInputs
+    {
+        public DateTime FromDate { get; set; }
+        public DateTime ToDate { get; set; }
+        public int InmateId { get; set; }
+        public int OfficerId { get; set; }
+        public int Interval { get; set; }
+        public int Count { get; set; }
+        public int FacilityId { get; set; }
+    }
+     public class ProgramRequestInputVm
+    {
+        public int InmateId { get; set; }
+        public int Priority { get; set; }
+        public int ProgramId { get; set; }
+        public string Notes { get; set; }
+        public List<ProgramEligibility> ListProgramEligibility { get; set; }
+
+    }
+}

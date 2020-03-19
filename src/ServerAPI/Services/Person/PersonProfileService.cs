@@ -1,0 +1,433 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using ServerAPI.ViewModels;
+using ServerAPI.Utilities;
+using GenerateTables.Models;
+using Microsoft.AspNetCore.Http;
+
+namespace ServerAPI.Services
+{
+    public class PersonProfileService : IPersonProfileService
+    {
+        private readonly AAtims _context;
+        private readonly IPersonIdentityService _personIdentityService;
+        private readonly int _personnelId;
+
+
+        public PersonProfileService(AAtims context, IPersonIdentityService personIdentityService,
+            IHttpContextAccessor ihHttpContextAccessor)
+        {
+            _context = context;
+            _personIdentityService = personIdentityService;
+            _personnelId =
+                Convert.ToInt32(ihHttpContextAccessor.HttpContext.User.FindFirst(AuthDetailConstants.PERSONNELID)?.Value);
+        }
+
+        public PersonProfileVm GetProfileDetails(int personId, int inmateId)
+        {
+            PersonProfileVm personProfile = (from p in _context.Person
+                                             where p.PersonId == personId
+                                             select new PersonProfileVm
+                                             {
+                                                 IllegalAlien = p.IllegalAlienFlag,
+                                                 USCitizen = p.UsCitizenFlag,
+                                                 Citizen = p.CitizenshipString,
+                                                 Religion = p.PersonReligion,
+                                                 GenderIdentity = p.PersonGenderIdentity,
+                                                 GenderIdentityDiff = p.PersonGenderIdentityDiff,
+                                                 EduGrade = p.PersonEduGrade,
+                                                 EduGed = p.PersonEduGed ?? 0,
+                                                 EduDegree = p.PersonEduDegree,
+                                                 EduDiscipline = p.PersonEduDiscipline,
+                                                 EduSpecial = p.PersonEduSpecial,
+                                                 MedInsuranceProvider = p.PersonMedInsuranceProvider,
+                                                 MedInsuranceProviderOther = p.PersonMedInsuranceProviderOther,
+                                                 MedInsurancePolicyNo = p.PersonMedInsurancePolicyNo,
+                                                 MedInsuranceNote = p.PersonMedInsuranceNote,
+                                                 PersonPreferenceNameAkaId = p.PersonPreferenceNameAkaid,
+                                                 PersonPreferencePronoun = p.PersonPreferencePronoun,
+                                                 PersonPreferenceSearch = p.PersonPreferenceSearch
+                                             }).SingleOrDefault();
+            if (personProfile == null) return null;
+            PersonDescription desc = (from pd in _context.PersonDescription
+                where pd.PersonId == personId
+                select new PersonDescription
+                {
+                    PersonMaritalStatus = pd.PersonMaritalStatus,
+                    PersonEthnicity = pd.PersonEthnicity,
+                    PersonPrimaryLanguage = pd.PersonPrimaryLanguage,
+                    PersonInterpreterNeeded = pd.PersonInterpreterNeeded,
+                    PersonDescriptionId = pd.PersonDescriptionId
+                }).OrderByDescending(p => p.PersonDescriptionId).FirstOrDefault();
+
+            personProfile.MaritalStatus = desc?.PersonMaritalStatus;
+            personProfile.Ethnicity = desc?.PersonEthnicity;
+            personProfile.PrimLang = desc?.PersonPrimaryLanguage;
+            personProfile.Interpreter = desc?.PersonInterpreterNeeded;
+            personProfile.SkillTrade = GetSkillAndTradedetails(personId);
+
+            Incarceration incarceration = (from i in _context.Incarceration
+                where i.ReleaseOut == null && i.InmateId == inmateId
+                select new Incarceration
+                {
+                    DesireWorkCrew = i.DesireWorkCrew,
+                    DesireFurlough = i.DesireFurlough,
+                    DesireClasses = i.DesireClasses,
+                    IncarcerationId = i.IncarcerationId
+                }).SingleOrDefault();
+
+            if (incarceration != null)
+            {
+                personProfile.DesireClasses = incarceration.DesireClasses ? 1 : 0;
+                personProfile.DesireFurlough = incarceration.DesireFurlough ? 1 : 0;
+                personProfile.DesireWorkCrew = incarceration.DesireWorkCrew ? 1 : 0;
+                personProfile.IncarcerationId = incarceration?.IncarcerationId ?? 0;
+            }
+            return personProfile;
+        }
+
+        public Task<int> InsertUpdatePersonProfile(PersonProfileVm personProfile)
+        {
+            PersonDescription dbPerDesc = (from pd in _context.PersonDescription
+                                           where pd.PersonId == personProfile.PersonId
+                                           select pd).OrderByDescending(p => p.PersonDescriptionId).FirstOrDefault();
+
+            if (dbPerDesc is null)
+            {
+                dbPerDesc = new PersonDescription
+                {
+                    PersonId = personProfile.PersonId,
+                    CreatedBy = _personnelId,
+                    CreateDate = DateTime.Now
+                };
+            }
+            else
+            {
+                dbPerDesc.UpdatedBy = _personnelId;
+                dbPerDesc.UpdateDate = DateTime.Now;
+            }
+            dbPerDesc.PersonMaritalStatus = personProfile.MaritalStatus;
+            dbPerDesc.PersonEthnicity = personProfile.Ethnicity;
+            dbPerDesc.PersonPrimaryLanguage = personProfile.PrimLang;
+            dbPerDesc.PersonInterpreterNeeded = personProfile.Interpreter;
+
+            if (dbPerDesc.PersonDescriptionId <= 0)
+            {
+                _context.PersonDescription.Add(dbPerDesc);
+                _context.SaveChanges();
+            }
+
+            Person dbPerson = (from p in _context.Person
+                               where p.PersonId == personProfile.PersonId
+                               select p).SingleOrDefault();
+            if (dbPerson != null)
+            {
+                dbPerson.IllegalAlienFlag = personProfile.IllegalAlien;
+                dbPerson.UsCitizenFlag = personProfile.USCitizen;
+                dbPerson.CitizenshipString = personProfile.Citizen;
+                dbPerson.PersonReligion = personProfile.Religion;
+                dbPerson.PersonGenderIdentity = personProfile.GenderIdentity;
+                dbPerson.PersonGenderIdentityDiff = personProfile.GenderIdentityDiff;
+                dbPerson.PersonEduGrade = personProfile.EduGrade;
+                dbPerson.PersonEduGed = personProfile.EduGed;
+                dbPerson.PersonEduDegree = personProfile.EduDegree;
+                dbPerson.PersonEduDiscipline = personProfile.EduDiscipline;
+                dbPerson.PersonEduSpecial = personProfile.EduSpecial;
+                dbPerson.PersonMedInsuranceProvider = personProfile.MedInsuranceProvider;
+                dbPerson.PersonMedInsuranceProviderOther = personProfile.MedInsuranceProviderOther;
+                dbPerson.PersonMedInsurancePolicyNo = personProfile.MedInsurancePolicyNo;
+                dbPerson.PersonMedInsuranceNote = personProfile.MedInsuranceNote;
+                dbPerson.UpdateDate = DateTime.Now;
+                dbPerson.UpdateBy = _personnelId;
+                dbPerson.PersonPreferenceNameAkaid = personProfile.PersonPreferenceNameAkaId;
+                dbPerson.PersonPreferencePronoun = personProfile.PersonPreferencePronoun;
+                dbPerson.PersonPreferenceSearch = personProfile.PersonPreferenceSearch;
+            }
+
+            Incarceration dbIncarceration = (from i in _context.Incarceration
+                                             where i.IncarcerationId == personProfile.IncarcerationId
+                                             select i).SingleOrDefault();
+
+            if (dbIncarceration != null)
+            {
+                dbIncarceration.DesireClasses = personProfile.DesireClasses == 1;
+                dbIncarceration.DesireFurlough = personProfile.DesireFurlough == 1;
+                dbIncarceration.DesireWorkCrew = personProfile.DesireWorkCrew == 1;
+            }
+
+            _personIdentityService.LoadInsertPersonHistory(personProfile.PersonId, personProfile.PersonHistoryList);
+            return _context.SaveChangesAsync();
+        }
+
+        public List<PersonSkillTradeVm> GetSkillAndTradedetails(int personId)
+        {
+            List<PersonSkillTradeVm> skillTrade = (from l in _context.Lookup
+                                                   where l.LookupType == LookupConstants.SKILLTRADES && l.LookupInactive == 0
+                                                   select new PersonSkillTradeVm
+                                                   {
+                                                       SkillTrade = l.LookupDescription
+                                                   }).OrderBy(d => d.SkillTrade).ToList();
+            var skDetails = (from sk in _context.PersonSkillAndTrade
+                             where sk.PersonId == personId
+                             select sk).ToList();
+            skillTrade.ForEach(skd =>
+            {
+                skd.SkillAndTradeId =
+                    skDetails.SingleOrDefault(ldesc => ldesc.PersonSkillTrade == skd.SkillTrade)?.PersonSkillAndTradeId ?? 0;
+                skd.IsSkillTrade = skd.SkillAndTradeId > 0;
+            });
+
+            return skillTrade;
+        }
+
+        public Task<int> InsertSkillAndTradeDetails(PersonProfileVm personProfile)
+        {
+            personProfile.SkillTrade.ForEach(std =>
+            {
+                if (std.IsSkillTrade && std.SkillAndTradeId <= 0)
+                {
+                    PersonSkillAndTrade dbSkillTrade = new PersonSkillAndTrade
+                    {
+                        PersonId = personProfile.PersonId,
+                        CreateBy = _personnelId,
+                        CreateDate = DateTime.Now,
+                        PersonSkillTrade = std.SkillTrade
+                    };
+                    _context.PersonSkillAndTrade.Add(dbSkillTrade);
+                }
+                else if (!std.IsSkillTrade && std.SkillAndTradeId > 0)
+                {
+                    PersonSkillAndTrade dbSkillAndTradeDetail = _context.PersonSkillAndTrade
+                        .SingleOrDefault(pst => pst.PersonId == personProfile.PersonId && pst.PersonSkillTrade == std.SkillTrade);
+                    if (dbSkillAndTradeDetail != null)
+                    {
+                        _context.PersonSkillAndTrade.Remove(dbSkillAndTradeDetail);
+                    }
+                }
+            });
+
+            return _context.SaveChangesAsync();
+        }
+
+        public WorkCrowAndFurloughRequest GetWorkCrewRequestDetails(int facilityId, int inmateId)
+        {
+            WorkCrowAndFurloughRequest workCrowAndFurlough = new WorkCrowAndFurloughRequest
+            {
+                LstWorkCrowAndFurlough = (from wl in _context.WorkCrewLookup
+                    where wl.DeleteFlag == 0 && wl.FacilityId == facilityId
+                    select new WorkCrewRequestVm
+                    {
+                        WorkCrewLookupId = wl.WorkCrewLookupId,
+                        WorkFurloughFlag = wl.WorkFurloughFlag,
+                        FacilityId = wl.FacilityId,
+                        CrewClassfilter = wl.CrewClassFilter,
+                        CrewGenderfilter = wl.CrewGenderFilter,
+                        CrewName = wl.CrewName
+                    }).ToList()
+            };
+            int[] wcLookUpId =
+                _context.WorkCrew.Where(wc => wc.EndDate == null || wc.EndDate > DateTime.Now && wc.InmateId == inmateId)
+                    .Select(i => i.WorkCrewLookupId).ToArray();
+            workCrowAndFurlough.AssignedCrewName =
+                _context.WorkCrewLookup.Where(wcl => wcLookUpId.Contains(wcl.WorkCrewLookupId))
+                    .Select(n => n.CrewName).FirstOrDefault();
+
+            workCrowAndFurlough.LstWorkCrowAndFurlough.ForEach(det =>
+            {
+                det.LstCrewGenderfilter = !string.IsNullOrWhiteSpace(det.CrewGenderfilter) ? det.CrewGenderfilter.Split(",") : null;
+                det.LstCrewClassfilter = !string.IsNullOrWhiteSpace(det.CrewClassfilter) ? det.CrewClassfilter.Split(",") : null;
+            });
+
+            if (inmateId > 0)
+            {
+
+                Inmate dbInmateDetails = (from i in _context.Inmate
+                                          where i.InmateId == inmateId
+                                          select new Inmate
+                                          {
+                                              InmateActive = i.InmateActive,
+                                              InmateClassificationId = i.InmateClassificationId,
+                                              PersonId = i.PersonId,
+                                          }).Single();
+
+                if (dbInmateDetails.InmateActive == 1)
+                {
+                    workCrowAndFurlough.Class = _context.InmateClassification.FirstOrDefault(i => i.InmateClassificationId == dbInmateDetails.InmateClassificationId)?
+                   .InmateClassificationReason;
+                }
+
+                //  int ? LookupIndex = dbInmateDetails.FirstOrDefault()?.Person?.PersonSexLast;
+                int? LookupIndex = _context.Person.FirstOrDefault(p => p.PersonId == dbInmateDetails.PersonId)?.PersonSexLast;
+
+                workCrowAndFurlough.Gender = _context.Lookup.SingleOrDefault(
+                       l => l.LookupType == LookupConstants.SEX && l.LookupIndex == LookupIndex)?.LookupDescription;
+            }
+
+            return workCrowAndFurlough;
+        }
+
+        public Task<int> InsertWorkCrowAndFurloughRequest(WorkCrowAndFurloughRequest workCrowAndFurlough)
+        {
+            workCrowAndFurlough.LstWorkCrowAndFurlough.ForEach(wcf =>
+            {
+                WorkCrewRequest dbWorkCrew = new WorkCrewRequest
+                {
+                    WorkCrewLookupId = wcf.WorkCrewLookupId,
+                    RequestNote = workCrowAndFurlough.RequestNote,
+                    CreateBy = _personnelId,
+                    CreateDate = DateTime.Now,
+                    InmateId = workCrowAndFurlough.InmateId
+                };
+                _context.WorkCrewRequest.Add(dbWorkCrew);
+            });
+
+            return _context.SaveChangesAsync();
+        }
+
+        public List<ProgramAndClass> ValidateProgam(ProgramDetails program)
+        {
+            List<ProgramAndClass> list = new List<ProgramAndClass>();
+
+            // This program table need to change based on programClass
+            program.LstProgramAndClass.ForEach(prc =>
+            {
+                prc.IsDuplicated = _context.ProgramRequest.Count(
+                                       preq => preq.InmateId == program.InmateId && preq.ProgramClassId == prc.ProgramId
+                                               && (!preq.AppointmentProgramAssignId.HasValue ||
+                                                preq.AppointmentProgramAssignId == 0)
+                                               && (!preq.DeniedFlag.HasValue || preq.DeniedFlag == 0) &&
+                                               preq.DeleteFlag == 0) > 0;
+
+                //prc.IsRequested = _context.AppointmentProgramAssign
+                //                      .Count(apa => apa.Appointment.ProgramId == prc.ProgramId &&
+                //                              apa.InmateId == program.InmateId
+                //                              && apa.Appointment.DeleteFlag == 0 && apa.DeleteFlag == 0) > 0;
+
+                if (prc.IsDuplicated || prc.IsRequested)
+                {
+                    list.Add(prc);
+                }
+            });
+
+            if (!list.Any())
+            {
+                InsertProgramRequestDetails(program);
+            }
+            return program.LstProgramAndClass;
+        }
+
+        private void InsertProgramRequestDetails(ProgramDetails program)
+        {
+            program.LstProgramAndClass.ForEach(pr =>
+            {
+                // This program table need to change based on programClass
+                ProgramRequest dbProgramRequest = new ProgramRequest
+                {
+                    ProgramClassId = pr.ProgramId,
+                    CreateDate = DateTime.Now,
+                    CreateBy = _personnelId,
+                    PriorityLevel = program.PriorityLevel,
+                    InmateId = program.InmateId,
+                    RequestNote = program.RequestNote
+                };
+                _context.ProgramRequest.Add(dbProgramRequest);
+            });
+            _context.SaveChangesAsync();
+        }
+        public AkaDetails NamePreference(int personId)
+        {
+
+            return new AkaDetails
+            {
+                personAka = _context.Aka.Where(w => w.PersonId == personId).Select(s => new PersonAkaVm
+                {
+                    AkaId = s.AkaId,
+                    AkaFirstName = s.AkaFirstName,
+                    AkaLastName = s.AkaLastName,
+                    AkaMiddleName = s.AkaMiddleName
+                }).ToList(),
+                personGangName = _context.Aka.Where(w => w.PersonId == personId && !string.IsNullOrEmpty(w.PersonGangName)).Select(s => new KeyValuePair<string, int>(s.PersonGangName, s.AkaId)).ToList()
+            };
+        }
+
+        public PersonAkaHeader DisplayString(int personId)
+        {
+            PersonAkaHeader personAka = new PersonAkaHeader();
+
+            //Key(int?) PersonPreferenceNameAkaId, value(string) PersonPreferencePronoun.
+            KeyValuePair<int, string> value = _context.Person.Where(w => w.PersonId == personId).Select(s => new KeyValuePair<int, string>(
+                  s.PersonPreferenceNameAkaid ?? 0, s.PersonPreferencePronoun
+              )).SingleOrDefault();
+
+            if (value.Key > 0)
+            {
+                personAka.PersonHeaderDetails = _context.Aka.Where(w => w.AkaId == value.Key).Select(s => new PersonAkaVm
+                {
+                    AkaFirstName = s.AkaFirstName,
+                    AkaLastName = s.AkaLastName,
+                    AkaMiddleName = s.AkaMiddleName,
+                    personGangName = s.PersonGangName
+                }).SingleOrDefault();
+            }
+            if (!string.IsNullOrEmpty(value.Value))
+            {
+                personAka.PersonPronoun = value.Value;
+            }
+            return personAka;
+        }
+
+        public ProgramDetails GetProgramAndClass(int inmateId, int facilityId)
+        {
+            ProgramDetails programDetails = new ProgramDetails
+            {
+                LstProgramAndClass = _context.Program.Where(
+                        pr => (pr.ProgramCategory.FacilityId == facilityId || pr.ProgramCategory.FacilityId == 0)
+                              && pr.DeleteFlag == 0 &&
+                              (!pr.ProgramCategory.DeleteFlag.HasValue || pr.ProgramCategory.DeleteFlag == 0))
+                    .Select(prg => new ProgramAndClass
+                    {
+                        ProgramId = prg.ProgramId,
+                        GenderFilter = prg.ClassOrServiceGenderFilter,
+                        ClassFilter = prg.ClassOrServiceClassFilter,
+                        ClassOrServiceName = prg.ClassOrServiceName,
+                        ClassOrServiceNumber = prg.ClassOrServiceNumber,
+                        ProgramCategory = prg.ProgramCategory.ProgramCategory1
+                    }).ToList()
+            };
+
+            if (inmateId > 0)
+            {
+                Inmate dbInmateDetails = (from i in _context.Inmate
+                                          where i.InmateId == inmateId
+                                          select new Inmate
+                                          {
+                                              InmateActive = i.InmateActive,
+                                              InmateClassificationId = i.InmateClassificationId,
+                                              PersonId = i.PersonId,
+                                          }).Single();
+
+                if (dbInmateDetails.InmateActive == 1)
+                {
+                    programDetails.Class = _context.InmateClassification.FirstOrDefault(i => i.InmateClassificationId == dbInmateDetails.InmateClassificationId)?
+                   .InmateClassificationReason;
+                }
+
+                int? LookupIndex = _context.Person.FirstOrDefault(p => p.PersonId == dbInmateDetails.PersonId)?.PersonSexLast;
+
+                programDetails.Gender =
+                   _context.Lookup.SingleOrDefault(
+                       l => l.LookupType == LookupConstants.SEX && l.LookupIndex == LookupIndex)?.LookupDescription;
+
+                programDetails.LstProgramAndClass.ForEach(det =>
+                {
+                    det.LstGenderfilter = !string.IsNullOrWhiteSpace(det.GenderFilter) ? det.GenderFilter.Split(",") : null;
+                    det.LstClassfilter = !string.IsNullOrWhiteSpace(det.ClassFilter) ? det.ClassFilter.Split(",") : null;
+                });
+            }
+
+            return programDetails;
+        }
+    }
+}

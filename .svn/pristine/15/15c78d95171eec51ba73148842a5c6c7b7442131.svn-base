@@ -1,0 +1,258 @@
+using GenerateTables.Models;
+using ServerAPI.ViewModels;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+// ReSharper disable once CheckNamespace
+namespace ServerAPI.Services
+{
+    public class SearchInmateBookingService : ISearchInmateBookingService
+    {
+        private readonly AAtims _context;
+
+        // ReSharper disable once NotAccessedField.Local
+        private readonly IPhotosService _photos;
+
+        public SearchInmateBookingService(AAtims context, IPhotosService photosService)
+        {
+            _context = context;
+            _photos = photosService;
+        }
+
+        public List<SearchResult> GetBookingSearchList(SearchRequestVm searchDetails)
+        {
+            bool isToSearchDob = searchDetails.DateOfBirth.HasValue &&
+                                 searchDetails.DateOfBirth > DateTime.MinValue;
+            bool isToSearchByDateIn = searchDetails.bookingSearchFlag != 7
+                                      && searchDetails.dateSearchFrom.HasValue
+                                      && searchDetails.dateSearchTo.HasValue;
+            bool isToSearchByRelease = searchDetails.bookingSearchFlag != 7
+                                       && searchDetails.dateReleaseFrom.HasValue &&
+                                       searchDetails.dateReleaseTo.HasValue;
+            bool isToSearchBySchedule = searchDetails.bookingSearchFlag != 7
+                                        && searchDetails.dateschReleaseFrom.HasValue &&
+                                        searchDetails.dateschReleaseTo.HasValue;
+            bool isToSearchBySent = searchDetails.bookingSearchFlag != 7
+                                    && searchDetails.datesentStartFrom.HasValue &&
+                                    searchDetails.datesentStartTo.HasValue;
+            bool isToSearchByAfterRelease = searchDetails.bookingSearchFlag != 7
+                                            && searchDetails.dateAfterReleaseFrom.HasValue &&
+                                            searchDetails.dateAfterReleaseTo.HasValue;
+            bool isToSearchByInCustody = searchDetails.bookingSearchFlag != 7
+                                         && searchDetails.dateInCustodyFrom.HasValue &&
+                                         searchDetails.dateInCustodyTo.HasValue;
+            bool isToSearchByOverallSent =
+                searchDetails.overallSentDaysFrom > 0 || searchDetails.overallSentDaysTo > 0;
+            bool isDaysInCustody = searchDetails.daysCustomdyFrom > 0 || searchDetails.daysCustomdyTo > 0;
+
+            List<SearchResult> personDetailsLst = _context.Incarceration.Where(inc =>
+                    (!searchDetails.activeBookingOnly || !inc.ReleaseOut.HasValue)
+                    && (searchDetails.FacilityId == 0
+                        || inc.Inmate.FacilityId == searchDetails.FacilityId)
+                    && (!searchDetails.isInmateprebookrelatedsearch
+                        || string.IsNullOrWhiteSpace(searchDetails.prebookNo)
+                        || inc.InmatePrebook.Any(w => w.PreBookNumber == searchDetails.prebookNo))
+                    && (!searchDetails.isInmateprebookrelatedsearch
+                        || string.IsNullOrWhiteSpace(searchDetails.prebookCaseNumber)
+                        || inc.InmatePrebook.Any(w => w.CaseNumber == searchDetails.prebookCaseNumber))
+                    && (!searchDetails.isInmateprebookrelatedsearch
+                        || searchDetails.ArrestingAgency == 0
+                        || inc.InmatePrebook.Any(w => w.ArrestAgencyId == searchDetails.ArrestingAgency))
+                    && (!searchDetails.isInmateprebookrelatedsearch
+                        || searchDetails.prebookarrestingOfficerName == 0
+                        || inc.InmatePrebook.Any(
+                            w => w.ArrestingOfficerId == searchDetails.prebookarrestingOfficerName))
+                    && (!searchDetails.ActiveOnly || inc.Inmate.InmateActive == 1)
+                    && (string.IsNullOrEmpty(searchDetails.bunkId)
+                        || inc.Inmate.HousingUnitId > 0
+                        && inc.Inmate.HousingUnit.HousingUnitBedLocation == searchDetails.bunkId
+                        && (!inc.Inmate.HousingUnit.HousingUnitInactive.HasValue ||
+                            inc.Inmate.HousingUnit.HousingUnitInactive == 0))
+                    && (string.IsNullOrEmpty(searchDetails.cellId)
+                        || inc.Inmate.HousingUnitId > 0
+                        && inc.Inmate.HousingUnit.HousingUnitBedNumber == searchDetails.cellId
+                        && (!inc.Inmate.HousingUnit.HousingUnitInactive.HasValue ||
+                            inc.Inmate.HousingUnit.HousingUnitInactive == 0))
+                    && (searchDetails.podId == 0
+                        || inc.Inmate.HousingUnitId > 0
+                        && inc.Inmate.HousingUnit.HousingUnitListId == searchDetails.podId
+                        && (!inc.Inmate.HousingUnit.HousingUnitInactive.HasValue ||
+                            inc.Inmate.HousingUnit.HousingUnitInactive == 0))
+                    && (string.IsNullOrEmpty(searchDetails.BuildingId)
+                        || inc.Inmate.HousingUnitId > 0
+                        && inc.Inmate.HousingUnit.HousingUnitLocation == searchDetails.BuildingId
+                        && (!inc.Inmate.HousingUnit.HousingUnitInactive.HasValue ||
+                            inc.Inmate.HousingUnit.HousingUnitInactive == 0))
+                    && (searchDetails.InmateSearchFacilityId == 0
+                        || (inc.Inmate.FacilityId == searchDetails.InmateSearchFacilityId))
+                    && (string.IsNullOrEmpty(searchDetails.classificationId)
+                        || inc.Inmate.InmateClassification.InmateClassificationReason == searchDetails.classificationId)
+                    && (searchDetails.locationId == 0
+                        || (inc.Inmate.InmateCurrentTrackId == searchDetails.locationId))
+                    && (searchDetails.personFlagId == 0
+                        || inc.Inmate.Person.PersonFlag.Any(pf =>
+                            pf.PersonFlagIndex == searchDetails.personFlagId))
+                    && (searchDetails.inmateFlagId == 0
+                        || inc.Inmate.Person.PersonFlag.Any(pf =>
+                            pf.InmateFlagIndex == searchDetails.inmateFlagId))
+                    && (searchDetails.medFlagId == 0
+                        || inc.Inmate.Person.PersonFlag.Any(
+                            pf => pf.MedicalFlagIndex == searchDetails.medFlagId))
+                            && (searchDetails.dietFlagId == 0
+                        || inc.Inmate.Person.PersonFlag.Any(
+                            pf => pf.DietFlagIndex == searchDetails.dietFlagId))
+                    && (string.IsNullOrEmpty(searchDetails.InmateNumber)
+                        || inc.Inmate.InmateNumber.StartsWith(searchDetails.InmateNumber)
+                        || inc.Inmate.Person.Aka.Any(p =>
+                            p.AkaInmateNumber.StartsWith(searchDetails.InmateNumber)))
+                    && (string.IsNullOrEmpty(searchDetails.InmateSiteNumber)
+                        || inc.Inmate.InmateSiteNumber.StartsWith(searchDetails.InmateSiteNumber)
+                        || inc.Inmate.Person.Aka.Any(
+                            p => p.AkaSiteInmateNumber.StartsWith(searchDetails.InmateSiteNumber)))
+                    && (!searchDetails.IncarcerationSearch
+                        || !searchDetails.ActiveOnly
+                        || ((string.IsNullOrWhiteSpace(searchDetails.incarcerabookingNumber)
+                             || inc.BookingNo == searchDetails.incarcerabookingNumber)
+                            && (searchDetails.keepNoKeeper == 0
+                                || inc.NoKeeper == (searchDetails.keepNoKeeper == 1))
+                            && (string.IsNullOrWhiteSpace(searchDetails.receiveMethod)
+                                || inc.ReceiveMethod == searchDetails.receiveMethod)
+                            && (!isToSearchByDateIn
+                                || inc.DateIn >= searchDetails.dateSearchFrom &&
+                                inc.DateIn <= searchDetails.dateSearchTo)
+                            && (!isToSearchByRelease
+                                || inc.ReleaseOut >= searchDetails.dateReleaseFrom &&
+                                inc.ReleaseOut <= searchDetails.dateReleaseTo)
+                            && (!isToSearchBySchedule
+                                || inc.OverallFinalReleaseDate >= searchDetails.dateschReleaseFrom &&
+                                inc.OverallFinalReleaseDate <= searchDetails.dateschReleaseTo)
+                            && (!isToSearchBySent
+                                || inc.OverallSentStartDate >= searchDetails.datesentStartFrom &&
+                                inc.OverallSentStartDate <= searchDetails.datesentStartTo)
+                            && (!isToSearchByAfterRelease
+                                || inc.TransportScheduleDate >= searchDetails.dateAfterReleaseFrom &&
+                                inc.TransportScheduleDate <= searchDetails.dateAfterReleaseTo)
+                            && (!isToSearchByInCustody
+                                || inc.DateIn <= searchDetails.dateInCustodyTo &&
+                                inc.ReleaseOut <= searchDetails.dateInCustodyFrom)
+                            && (searchDetails.sentenceStatus != 2
+                                || inc.OverallSentStartDate == null)
+                            && (searchDetails.sentenceStatus != 3
+                                || inc.OverallSentStartDate != null && inc.OverallFinalReleaseDate == null)
+                            && (searchDetails.sentenceStatus != 4
+                                || inc.OverallSentStartDate != null && inc.OverallFinalReleaseDate != null)
+                            && (!searchDetails.transportAfterRelease || inc.TransportFlag == 1)
+                            && (!isToSearchByOverallSent
+                                || inc.TotSentDays <= searchDetails.overallSentDaysFrom &&
+                                inc.TotSentDays >= searchDetails.overallSentDaysTo)
+                            && (searchDetails.ClearByOfficer == 0 ||
+                                inc.ReleaseClearBy ==
+                                searchDetails.ClearByOfficer)
+                            && (searchDetails.ReleaseOfficer == 0
+                                || inc.ReleaseCompleteBy == searchDetails.ReleaseOfficer)
+                            && (searchDetails.IntakeOfficer == 0 ||
+                                inc.InOfficerId ==
+                                searchDetails.IntakeOfficer)))
+                    && (string.IsNullOrEmpty(searchDetails.Moniker)
+                        || inc.Inmate.Person.Aka.Any(aka =>
+                            aka.PersonGangName.StartsWith(searchDetails.Moniker)))
+                    && (string.IsNullOrEmpty(searchDetails.FirstName)
+                        || (inc.Inmate.Person.PersonFirstName.StartsWith(searchDetails.FirstName)
+                            || inc.Inmate.Person.Aka.Any(aka =>
+                                aka.AkaFirstName.StartsWith(searchDetails.FirstName))))
+                    && (string.IsNullOrEmpty(searchDetails.LastName)
+                        || (inc.Inmate.Person.PersonLastName.StartsWith(searchDetails.LastName)
+                            || inc.Inmate.Person.Aka.Any(aka =>
+                                aka.AkaLastName.StartsWith(searchDetails.LastName))))
+                    && (string.IsNullOrEmpty(searchDetails.MiddleName)
+                        || (inc.Inmate.Person.PersonMiddleName.StartsWith(searchDetails.MiddleName)
+                            || inc.Inmate.Person.Aka.Any(aka =>
+                                aka.AkaMiddleName.StartsWith(searchDetails.MiddleName))))
+                    && (!isToSearchDob
+                        || (inc.Inmate.Person.PersonDob.Value.Date == searchDetails.DateOfBirth.Value.Date
+                            || inc.Inmate.Person.Aka.Any(aka =>
+                                aka.AkaDob.Value.Date == searchDetails.DateOfBirth.Value.Date)))
+                ).Distinct().Take(10000)
+                .Select(inc => new SearchResult
+                {
+                    Days = isDaysInCustody ? GetDifferentDays(inc.DateIn, inc.ReleaseOut) : 0,
+                    FirstName = inc.Inmate.Person.PersonFirstName,
+                    MiddleName = inc.Inmate.Person.PersonMiddleName,
+                    LastName = inc.Inmate.Person.PersonLastName,
+                    InmateNumber = inc.Inmate.InmateNumber,
+                    BookingNumber = inc.BookingNo,
+                    DateIn = inc.DateIn,
+                    ReleaseOut = inc.ReleaseOut,
+                    keeper = !inc.NoKeeper ? "Keeper" : "No Keeper",
+                    OverallSentStartDate = inc.OverallSentStartDate,
+                    TransportScheduleDate = inc.TransportScheduleDate,
+                    CaseCount = inc.IncarcerationArrestXref.Count,
+                    IncarcerationId = inc.IncarcerationId,
+                    InmateId = inc.InmateId ?? 0,
+                    TransportFlag = inc.TransportFlag,
+                    OverallFinalReleaseDate = inc.OverallFinalReleaseDate,
+                    InmateActive = inc.Inmate.InmateActive,
+                    PersonId = inc.Inmate.PersonId,
+                    //Photofilepath = _photos.GetPhotoByIdentifier(inc.Arrest.IncarcerationArrestXref.Select(s =>
+                    //        s.Incarceration.Inmate.Person.Identifiers.LastOrDefault(idn =>
+                    //            idn.IdentifierType == "1" && idn.DeleteFlag == 0)
+                    //    ).FirstOrDefault())
+                }).ToList();
+
+            //List<Identifiers> identifierLst = _context.Identifiers
+            //    .Where(idf => idf.IdentifierType == "1"
+            //                  && idf.DeleteFlag == 0
+            //                  && _personDetailsLst.Select(a => a.PersonId).Contains(idf.PersonId ?? 0))
+            //    .Select(idf => new Identifiers
+            //    {
+            //        PersonId = idf.PersonId,
+            //        IdentifierId = idf.IdentifierId,
+            //        PhotographRelativePath = _photos.GetPhotoByIdentifier(idf)
+            //    }).OrderByDescending(o => o.IdentifierId).ToList();
+
+            ////Booking Result
+            //Parallel.ForEach(_personDetailsLst, item =>
+            //{
+            //    item.Photofilepath =
+            //        identifierLst.FirstOrDefault(idn => idn.PersonId == item.PersonId)?.PhotographRelativePath;
+            //});
+
+            if (isDaysInCustody)
+            {
+                personDetailsLst = personDetailsLst.Where(de =>
+                        de.Days >= searchDetails.daysCustomdyFrom && de.Days <= searchDetails.daysCustomdyTo)
+                    .ToList();
+            }
+
+            return personDetailsLst;
+        }
+
+        private static int GetDifferentDays(DateTime? dateIn, DateTime? releaseOut)
+        {
+            var days = 0;
+            if (releaseOut == null)
+            {
+                releaseOut = DateTime.Now;
+                if (dateIn != null)
+                {
+                    days = (releaseOut.Value.Date - dateIn.Value.Date).Days;
+                    return days;
+                }
+
+                return days;
+            }
+            else
+            {
+                if (dateIn != null)
+                {
+                    days = (releaseOut.Value.Date - dateIn.Value.Date).Days;
+
+                    return days;
+                }
+
+                return days;
+            }
+        }
+    }
+}

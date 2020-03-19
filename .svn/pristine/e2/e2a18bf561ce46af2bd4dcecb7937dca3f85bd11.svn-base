@@ -1,0 +1,55 @@
+﻿using ServerAPI.ViewModels;
+using System.Collections.Generic;
+using GenerateTables.Models;
+using System;
+using Microsoft.AspNetCore.Http;
+using System.IO;
+using System.Data;
+using System.Data.SqlClient;
+using Newtonsoft.Json.Linq;
+
+namespace ServerAPI.Services
+{
+    public interface ICommonService
+    {
+        void EventHandle(EventVm evenHandle);
+        List<Lookup> GetLookupList(string lookupType);
+        List<Facility> GetFacilities();
+        string GetSiteOptionValue(string optionName, string optionVariable);
+        List<KeyValuePair<int, string>> GetLookupKeyValuePairs(string lookupType);
+        string GetGlobalNumber(int atimsNumberId, bool suppBooking = false, int incarcerationId = 0);
+        List<AgencyVm> GetAgencyNameList(List<int> agencyIds);
+        int GetAgeFromDob(DateTime? personDob);
+        List<PersonnelVm> GetPersonnel(string type);
+        string UploadFile(IFormFile uploadedFile);
+        void DeleteFile(string fileName);
+        PrebookAttachment GetAttachment(int attachmentId);
+        string GetSiteOptionValue(string optionName);
+        List<LookupVm> GetLookups(string[] values);
+        List<LookupDropdownListVm> GetDropdownValues(string[] lookupTypes, string[] lookupDescriptions);
+        List<AgencyVm> GetAgenciesByType(string type);
+        AgencyVm GetAgencyByOri(string oriNumber);
+        List<PersonnelVm> GetPersonnelDetails();
+        PersonnelVm GetPersonnelByUsername(string username);
+        List<UserControlFieldTags> GetFieldNames(List<UserControlFieldTags> userField);
+        List<AgencyVm> GetEvidenceAgency(bool arrestFlag, bool courtFlag);
+        List<PersonnelSearchVm> GetPersonnelSearchDetails(PersonnelSearchVm personnelSearchVm);
+        List<PersonnelSearchVm> GetParticularPersonnel(PersonnelSearchVm personnelSearchVm);
+        string GetDbDetails();
+        int InsertInmateTracking(InmateTrackingVm ob);
+        void InsertConflict(List<TrackingConflictVm> obTrackingConflictDetails, int inmateId, string note);
+        byte[] ConvertStreamToByte(Stream input);
+        string GetExecSp(string spName, KeyValuePair<string, string>[] parameters);
+        string GetValidationType(TaskValidateType taskType);
+        bool GetCourtCommitFlag(int arrestId);
+        List<string> GetLookupGangSubSet(string gangName);
+        int GetIdleTimeOut();
+        List<SiteOptions> GetSiteOptions(string[] siteOptionNames);
+        void atimsReportsContentLog(string reportName, string jsonString);
+        List<int> GetHousingUnitListIds(int housingGroupId);
+        void WriteToFile(string fileName, string content);
+        DataTable RunStoredProcedure(string storeProcedureName, List<SqlParameter> parameters);
+        JObject GetCustomMapping();
+        List<LookupVm> GetIncidentLookups(string[] types);
+    }
+}

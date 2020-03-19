@@ -1,0 +1,33 @@
+using System;
+using System.Collections.Generic;
+
+
+namespace ServerAPI.ViewModels
+{
+    public class MoneyClearVm
+    {
+        public int AccountAoTransactionId { get; set; }
+        public DateTime? TransactionDate { get; set; }
+        public string TransactionDescription { get; set; }
+        public string TransactionCheckNumber { get; set; }
+        public string InmateNumber { get; set; }
+        public PersonVm PersonDetails { get; set; }
+        public decimal TransactionAmount { get; set; }
+        public bool TransactionVoidFlag { get; set; }
+        public int? BankId { get; set; }
+        public int? FundId { get; set; }
+        public DateTime? FromDate { get; set; }
+        public DateTime? ToDate { get; set; }
+        public string CheckNo { get; set; }
+        public decimal InmateBalance { get; set; }
+        public decimal FundBalance { get; set; }
+        public PersonnelVm PersonnelDetails { get; set; }
+        public decimal AccountBalance { get; set; }    
+    }
+    public class MoneyClearDetailsVm
+    {
+        public List<MoneyClearVm> GetMoneyClear { get; set; }
+        public List<KeyValuePair<string,int>> LoadBankDetails { get; set; }
+        public List<MoneyAccountAoFundVm> LoadFundDetails { get; set; }
+    }
+}

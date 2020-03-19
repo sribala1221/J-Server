@@ -1,0 +1,1126 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Data.SqlClient;
+using System.Linq;
+using System.Reflection;
+using System.Threading.Tasks;
+using System.Web;
+using GenerateTables.Models;
+using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
+using Newtonsoft.Json;
+using ServerAPI.Utilities;
+using ServerAPI.ViewModels;
+
+// ReSharper disable once CheckNamespace
+namespace ServerAPI.Services
+{
+    public class FormsService : IFormsService
+    {
+        private readonly AAtims _context;
+        private readonly int _personnelId;
+        private readonly IPersonService _personService;
+        private readonly ICommonService _commonService;
+        private readonly IInterfaceEngineService _interfaceEngineService;
+
+        public FormsService(AAtims context, IHttpContextAccessor httpContextAccessor, ICommonService commonService,
+            IPersonService personService,IInterfaceEngineService interfaceEngineService)
+        {
+            _context = context;
+            _commonService = commonService;
+            _personnelId =
+                Convert.ToInt32(httpContextAccessor.HttpContext.User.FindFirst(AuthDetailConstants.PERSONNELID)?.Value);
+            _personService = personService;
+            _interfaceEngineService = interfaceEngineService;
+        }
+
+        public Form GetFormDetails(FormDetail detail)
+        {
+            int templateId = detail.TemplateId ?? _context.FormTemplates.First(x =>
+                                     x.FormCategory.FormCategoryId == detail.CategoryId && x.Inactive != 1)
+                                 .FormTemplatesId;
+            Dictionary<string, object> xmlModel = new Dictionary<string, object>();
+            Dictionary<string, object> spModel = GetFormData(templateId, detail.FieldName);
+            int formRecordId = !detail.IsAdd && detail.FormRecordId == 0
+                ? GetFormRecordId(detail.FieldName)
+                : detail.FormRecordId;
+            if (formRecordId > 0)
+            {
+                xmlModel = GetSavedFormData(templateId, formRecordId);
+                if (xmlModel != null)
+                {
+                    foreach (KeyValuePair<string, object> item in spModel)
+                    {
+                        if (xmlModel.ContainsKey(item.Key))
+                        {
+                            if (detail.Autofill)
+                            {
+                                xmlModel[item.Key] = item.Value != null && item.Value.ToString() != string.Empty ? item.Value :
+                                    detail.FormData.Values.Count > 0 ? detail.FormData.Values[item.Key] : string.Empty;
+                            }
+                            continue;
+                        }
+                        if (detail.Autofill)
+                        {
+                            xmlModel.Add(item.Key, item.Value != null && item.Value.ToString() != string.Empty ? item.Value :
+                                detail.FormData.Values.Count > 0 ? detail.FormData.Values[item.Key] : string.Empty);
+                        }
+                        else
+                        {
+                            xmlModel.Add(item.Key, item.Value);
+                        }
+                    }
+                }
+            }
+
+            bool? bTrack = _context.FormTemplates.SingleOrDefault(s => s.FormTemplatesId == templateId)
+                ?.NoSignatureTrack;
+            Form form = new Form
+            {
+                FormTemplateId = templateId,
+                FormRecordId = formRecordId,
+                Values = (formRecordId == 0 || xmlModel == null) ? AutoFillFormData(spModel, detail.FormData.Values) : AutoFillFormData(xmlModel, detail.FormData.Values),
+                SignValues = GetSignature(formRecordId, templateId),
+                NoSignatureTrack = bTrack == true
+            };
+            return form;
+        }
+
+        private Dictionary<string, object> AutoFillFormData(Dictionary<string, object> dbModel, Dictionary<string, object> ipModel)
+        {
+            if (ipModel.Count == 0) return dbModel;
+            foreach ((string key, object value) in ipModel)
+            {
+                if (!dbModel.ContainsKey(key))
+                {
+                    dbModel.Add(key, value);
+                    continue;
+                }
+
+                if (dbModel[key] == null && value != null)
+                {
+                    dbModel[key] = ipModel[key];
+                }
+            }
+            return dbModel;
+        }
+
+        private int GetFormRecordId(FormFieldName value)
+        {
+            return _context.FormRecord
+                       .LastOrDefault(x => value.AltSentId != 0 && x.AltSentId == value.AltSentId
+                                           || value.ArrestId != 0 && x.ArrestId == value.ArrestId
+                                           || value.BailId != 0 && x.BailTransactionId == value.BailId
+                                           || value.DisciplinaryControlId != 0 &&
+                                           x.DisciplinaryControlId ==
+                                           value.DisciplinaryControlId
+                                           || value.DisciplinaryInmateId != 0 &&
+                                           x.DisciplinaryInmateId ==
+                                           value.DisciplinaryInmateId
+                                           || value.GrivanceId != 0 && x.GrievanceId == value.GrivanceId
+                                           || value.IncarcerationId != 0 &&
+                                           x.IncarcerationId == value.IncarcerationId
+                                           || value.InmateClassificationId != 0 &&
+                                           x.InmateClassificationId ==
+                                           value.InmateClassificationId
+                                           || value.MedPrebookId != 0 &&
+                                           x.MedInmatePrebookId == value.MedPrebookId
+                                           || value.PrebookId != 0 &&
+                                           x.InmatePrebookId == value.PrebookId
+                                           || value.RCRequestId != 0 && x.RequestId == value.RCRequestId
+                                           || (value.ProgramCaseInmateId != 0 &&
+                                           x.ProgramCaseInmateId == value.ProgramCaseInmateId)
+                                           || (x.PropReleaseDate.HasValue &&
+                                           x.PropReleaseDate == value.ReleaseDate && x.PropReleaseInmateId == value.InmateId)
+                                           || (x.PropertyIncarcerationId == value.IncarcerationId))
+                       ?.FormRecordId ?? 0;
+        }
+
+        public async Task<int> InsertBookMarkXref(int templateId, string html)
+        {
+            string[] sepVarStrings = { @"name=""" };
+            string[] sepFields = html.Split(sepVarStrings, StringSplitOptions.RemoveEmptyEntries);
+
+            if (sepFields != null)
+            {
+                bool templateExists = _context.FormTemplatesXref.Any(x => x.FormTemplatesId == templateId);
+                if (templateExists)
+                {
+                    _context.FormTemplatesXref.RemoveRange(
+                        _context.FormTemplatesXref.Where(x => x.FormTemplatesId == templateId));
+                    await _context.SaveChangesAsync();
+                }
+
+                for (int i = 1; i < sepFields.Length; i++)
+                {
+                    string field = sepFields[i].Substring(0, sepFields[i].IndexOf(@"""", StringComparison.Ordinal))
+                        .Trim();
+                    if (field == null) continue;
+                    int? mapFieldId = _context.FormMappedField.SingleOrDefault(x => x.FormMappedFieldName == field)
+                        ?.FormMappedFieldId;
+
+                    bool bookmarkExists = _context.FormTemplatesXref.Any(x => x.FormTemplatesId == templateId
+                                                                              && x.FormMappedFieldId == mapFieldId);
+
+                    if (bookmarkExists || mapFieldId == null) continue;
+                    FormTemplatesXref formTemplatesXref = new FormTemplatesXref
+                    {
+                        FormTemplatesId = templateId,
+                        FormMappedFieldId = mapFieldId.Value
+                    };
+                    _context.FormTemplatesXref.Add(formTemplatesXref);
+                    return await _context.SaveChangesAsync();
+
+                }
+            }
+
+            return await _context.SaveChangesAsync();
+        }
+
+        public async Task<int> SaveForm(FormSaveData value)
+        {            
+            if (value.FormRecordId == 0)
+            {    
+                FormRecord fromRecord = new FormRecord
+                {
+                    FormTemplatesId = value.TemplateId,
+                    MedInmatePrebookId = value.MedPrebookId,
+                    RecordsCheckRequestId = value.RcRequestId,
+                    InmatePrebookId = value.PrebookId,
+                    InmateId = value.InmateId,
+                    InmateClassificationId = value.InmateClassificationId,
+                    IncarcerationId = value.IncarcerationId,
+                    XmlData = value.Payload,
+                    CreateBy = _personnelId,
+                    CreateDate = DateTime.Now,
+                    BailTransactionId = value.BailTransactionId,
+                    SheetArrestId = value.SheetArrestId,
+                    PropertyIncarcerationId = value.PropertyIncarcerationId,
+                    PropReleaseInmateId = value.PropReleaseInmateId,
+                    PropReleaseDate = value.PropReleaseDate,
+                    FormNotes = value.FormNotes,
+                    DisciplinaryInmateId = value.DisciplinaryInmateId,
+                    DisciplinaryControlId = value.DisciplinaryIncidentId,
+                    ArrestId = value.ArrestId,
+                    ValidationFlag = value.ValidationFlag,
+                    Sig = value.SignValues.Signature1 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature1.Split(',')[1])
+                        : null,
+                    Sig2 = value.SignValues.Signature2 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature2.Split(',')[1])
+                        : null,
+                    Sig3 = value.SignValues.Signature3 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature3.Split(',')[1])
+                        : null,
+                    Sig4 = value.SignValues.Signature4 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature4.Split(',')[1])
+                        : null,
+                    Sig5 = value.SignValues.Signature5 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature5.Split(',')[1])
+                        : null,
+                    Sig6 = value.SignValues.Signature6 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature6.Split(',')[1])
+                        : null,
+                    Sig7 = value.SignValues.Signature7 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature7.Split(',')[1])
+                        : null,
+                    NoSignatureFlag = value.NoSignatureFlag,
+                    NoSignatureReason = value.NoSignatureReason == "" ? null : value.NoSignatureReason,
+                    BooksSheetIncarcerationId = value.BooksSheetIncarcerationId,
+                    FacilityId = value.FacilityId,
+                    InvestigationId = value.InvestigationId,
+                    PREAInmateId = value.PREAInmateId,                   
+                };
+                _context.Add(fromRecord);
+                await _context.SaveChangesAsync();
+                value.FormRecordId = fromRecord.FormRecordId;
+                FormRecordSaveHistory formRecordSaveHistory = new FormRecordSaveHistory
+                {
+                    FormRecordId = value.FormRecordId,
+                    XmlData = value.Payload,
+                    SaveDate = DateTime.Now,
+                    SaveBy = _personnelId,
+                    NoSignatureFlag = value.NoSignatureFlag,
+                    NoSignatureReason = value.NoSignatureReason,
+                    Sig = value.SignValues.Signature1 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature1.Split(',')[1])
+                        : null,
+                    Sig2 = value.SignValues.Signature2 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature2.Split(',')[1])
+                        : null,
+                    Sig3 = value.SignValues.Signature3 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature3.Split(',')[1])
+                        : null,
+                    Sig4 = value.SignValues.Signature4 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature4.Split(',')[1])
+                        : null,
+                    Sig5 = value.SignValues.Signature5 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature5.Split(',')[1])
+                        : null,
+                    Sig6 = value.SignValues.Signature6 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature6.Split(',')[1])
+                        : null,
+                    Sig7 = value.SignValues.Signature7 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature7.Split(',')[1])
+                        : null
+                };
+                _context.FormRecordSaveHistory.Add(formRecordSaveHistory);
+                await _context.SaveChangesAsync();
+            }
+            else
+            {
+
+                //update in form record table
+                FormRecord formRec = _context.FormRecord.SingleOrDefault(w => w.FormRecordId == value.FormRecordId);
+                if (formRec != null)
+                {
+                    formRec.XmlData = value.Payload;
+                    formRec.MedInmatePrebookId = value.MedPrebookId;
+                    formRec.FormTemplatesId = value.TemplateId;
+                    formRec.UpdateBy = _personnelId;
+                    formRec.UpdateDate = DateTime.Now;
+                    formRec.FormNotes = value.FormNotes;
+                    formRec.ValidationFlag = value.ValidationFlag;
+                    formRec.Sig = value.SignValues.Signature1 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature1.Split(',')[1])
+                        : null;
+                    formRec.Sig2 = value.SignValues.Signature2 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature2.Split(',')[1])
+                        : null;
+                    formRec.Sig3 = value.SignValues.Signature3 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature3.Split(',')[1])
+                        : null;
+                    formRec.Sig4 = value.SignValues.Signature4 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature4.Split(',')[1])
+                        : null;
+                    formRec.Sig5 = value.SignValues.Signature5 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature5.Split(',')[1])
+                        : null;
+                    formRec.Sig6 = value.SignValues.Signature6 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature6.Split(',')[1])
+                        : null;
+                    formRec.Sig7 = value.SignValues.Signature7 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature7.Split(',')[1])
+                        : null;
+                    formRec.NoSignatureFlag = value.NoSignatureFlag;
+                    formRec.NoSignatureReason = value.NoSignatureReason;
+                }
+
+                //insert into form record save history table
+                FormRecordSaveHistory formRecordSaveHistory = new FormRecordSaveHistory
+                {
+                    FormRecordId = value.FormRecordId,
+                    XmlData = value.Payload,
+                    SaveDate = DateTime.Now,
+                    SaveBy = _personnelId,
+                    NoSignatureFlag = value.NoSignatureFlag,
+                    NoSignatureReason = value.NoSignatureReason,
+                    Sig = value.SignValues.Signature1 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature1.Split(',')[1])
+                        : null,
+                    Sig2 = value.SignValues.Signature2 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature2.Split(',')[1])
+                        : null,
+                    Sig3 = value.SignValues.Signature3 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature3.Split(',')[1])
+                        : null,
+                    Sig4 = value.SignValues.Signature4 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature4.Split(',')[1])
+                        : null,
+                    Sig5 = value.SignValues.Signature5 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature5.Split(',')[1])
+                        : null,
+                    Sig6 = value.SignValues.Signature6 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature6.Split(',')[1])
+                        : null,
+                    Sig7 = value.SignValues.Signature7 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature7.Split(',')[1])
+                        : null
+                };
+                 _context.FormRecordSaveHistory.Add(formRecordSaveHistory);
+
+            }
+
+            if (value.PrebookId > 0 && value.EventHandleFlag)
+            {
+                _interfaceEngineService.Export(new ExportRequestVm
+                {
+                    EventName = EventNameConstants.PREBOOKFORMSAVE,
+                    PersonnelId = _personnelId,
+                    Param1 = value.PrebookId.Value.ToString(),
+                    Param2 = value.FormRecordId.ToString()
+                });
+            }
+
+            List<WebServiceEventAssign> lstEventAssign =
+                _context.WebServiceEventAssign.Where(ws => ws.FormTemplatesId == value.TemplateId).ToList();
+            _context.WebServiceEventType.SelectMany(wt => lstEventAssign.Where(wa => wa.WebServiceEventTypeId
+                                                             == wt.WebServiceEventTypeId &&
+                                                             wa.FormTemplatesId == value.TemplateId), (et, ea) => new
+                                                             {
+                                                                 et.WebServiceEventName,
+                                                                 et.WebServiceEventTypeId,
+                                                                 ea.FormTagName,
+                                                                 ea.FormTagValue,
+                                                                 ea.WebServiceEventAssignId
+                                                             }).
+                ToList().ForEach(eva =>
+                {
+                    if (!string.IsNullOrEmpty(eva.FormTagName) && !string.IsNullOrEmpty(eva.FormTagValue))
+                    {
+                        Dictionary<string, object> lst = JsonToKeyValuePair(value.Payload);
+                        if (lst.Count(a => a.Key == eva.FormTagName && a.Value.ToString() == eva.FormTagValue) >= 0)
+                        {
+                            _interfaceEngineService.Export(new ExportRequestVm
+                            {
+                                EventName = eva.WebServiceEventName,
+                                PersonnelId = _personnelId,
+                                Param1 = value.PersonId.ToString(),
+                                Param2 = value.FormRecordId.ToString()
+                            });
+                        }
+                    }
+                    else
+                    {
+                        _interfaceEngineService.Export(new ExportRequestVm {
+                            EventName= eva.WebServiceEventName,
+                            PersonnelId= _personnelId,
+                            Param1= value.PersonId.ToString(),
+                            Param2 = value.FormRecordId.ToString()
+                        });
+                    }
+                });
+
+            await _context.SaveChangesAsync();
+            _interfaceEngineService.Export(new ExportRequestVm
+            {
+                EventName = EventNameConstants.FORMSAVE,
+                PersonnelId = _personnelId,
+                Param1 = value.PersonId?.ToString(),
+                Param2 = value.FormRecordId.ToString()
+            });
+            return value.FormRecordId;
+        }
+
+        public async Task<int> SavePdfForm(FormSaveData value)
+        {
+            if (value.FormRecordId == 0)
+            {
+                FormRecord fromRecord = new FormRecord
+                {
+                    FormTemplatesId = value.TemplateId,
+                    MedInmatePrebookId = value.MedPrebookId,
+                    RecordsCheckRequestId = value.RcRequestId,
+                    InmatePrebookId = value.PrebookId,
+                    InmateId = value.InmateId,
+                    InmateClassificationId = value.InmateClassificationId,
+                    IncarcerationId = value.IncarcerationId,
+                    XmlData = value.Payload,
+                    CreateBy = _personnelId,
+                    CreateDate = DateTime.Now,
+                    BailTransactionId = value.BailTransactionId,
+                    SheetArrestId = value.SheetArrestId,
+                    PropertyIncarcerationId = value.PropertyIncarcerationId,
+                    PropReleaseInmateId = value.PropReleaseInmateId,
+                    PropReleaseDate = value.PropReleaseDate,
+                    FormNotes = value.FormNotes,
+                    DisciplinaryInmateId = value.DisciplinaryInmateId,
+                    DisciplinaryControlId = value.DisciplinaryIncidentId,
+                    ArrestId = value.ArrestId,
+                    ValidationFlag = value.ValidationFlag,
+                    Sig = value.SignValues.Signature1 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature1.Split(',')[1])
+                        : null,
+                    Sig2 = value.SignValues.Signature2 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature2.Split(',')[1])
+                        : null,
+                    Sig3 = value.SignValues.Signature3 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature3.Split(',')[1])
+                        : null,
+                    Sig4 = value.SignValues.Signature4 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature4.Split(',')[1])
+                        : null,
+                    Sig5 = value.SignValues.Signature5 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature5.Split(',')[1])
+                        : null,
+                    Sig6 = value.SignValues.Signature6 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature6.Split(',')[1])
+                        : null,
+                    Sig7 = value.SignValues.Signature7 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature7.Split(',')[1])
+                        : null,
+                    NoSignatureFlag = value.NoSignatureFlag,
+                    NoSignatureReason = value.NoSignatureReason == "" ? null : value.NoSignatureReason,
+                    BooksSheetIncarcerationId = value.BooksSheetIncarcerationId,
+                    FacilityId = value.FacilityId,
+                    InvestigationId = value.InvestigationId,
+                    PREAInmateId = value.PREAInmateId,
+                };
+                _context.Add(fromRecord);
+                await _context.SaveChangesAsync();
+            }
+            else
+            {
+                //update in form record table
+                FormRecord formRec = _context.FormRecord.SingleOrDefault(w => w.FormRecordId == value.FormRecordId);
+                if (formRec != null)
+                {
+                    formRec.XmlData = value.Payload;
+                    formRec.MedInmatePrebookId = value.MedPrebookId;
+                    formRec.FormTemplatesId = value.TemplateId;
+                    formRec.UpdateBy = _personnelId;
+                    formRec.UpdateDate = DateTime.Now;
+                    formRec.FormNotes = value.FormNotes;
+                    formRec.ValidationFlag = value.ValidationFlag;
+                    formRec.Sig = value.SignValues.Signature1 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature1.Split(',')[1])
+                        : null;
+                    formRec.Sig2 = value.SignValues.Signature2 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature2.Split(',')[1])
+                        : null;
+                    formRec.Sig3 = value.SignValues.Signature3 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature3.Split(',')[1])
+                        : null;
+                    formRec.Sig4 = value.SignValues.Signature4 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature4.Split(',')[1])
+                        : null;
+                    formRec.Sig5 = value.SignValues.Signature5 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature5.Split(',')[1])
+                        : null;
+                    formRec.Sig6 = value.SignValues.Signature6 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature6.Split(',')[1])
+                        : null;
+                    formRec.Sig7 = value.SignValues.Signature7 != null
+                        ? Convert.FromBase64String(value.SignValues.Signature7.Split(',')[1])
+                        : null;
+                    formRec.NoSignatureFlag = value.NoSignatureFlag;
+                    formRec.NoSignatureReason = value.NoSignatureReason;
+                }
+            }
+            if (value.PrebookId > 0 && value.EventHandleFlag)
+            {
+                _interfaceEngineService.Export(new ExportRequestVm
+                {
+                    EventName = EventNameConstants.PREBOOKFORMSAVE,
+                    PersonnelId = _personnelId,
+                    Param1 = value.PrebookId.Value.ToString(),
+                    Param2 = value.FormRecordId.ToString()
+                });
+            }
+
+            List<WebServiceEventAssign> lstEventAssign =
+                _context.WebServiceEventAssign.Where(ws => ws.FormTemplatesId == value.TemplateId).ToList();
+            _context.WebServiceEventType.SelectMany(wt => lstEventAssign.Where(wa => wa.WebServiceEventTypeId
+                                                             == wt.WebServiceEventTypeId &&
+                                                             wa.FormTemplatesId == value.TemplateId), (et, ea) => new
+                                                             {
+                                                                 et.WebServiceEventName,
+                                                                 et.WebServiceEventTypeId,
+                                                                 ea.FormTagName,
+                                                                 ea.FormTagValue,
+                                                                 ea.WebServiceEventAssignId
+                                                             }).
+                ToList().ForEach(eva =>
+                {
+                    if (!string.IsNullOrEmpty(eva.FormTagName) && !string.IsNullOrEmpty(eva.FormTagValue))
+                    {
+                        Dictionary<string, object> lst = JsonToKeyValuePair(value.Payload);
+                        if (lst.Count(a => a.Key == eva.FormTagName && a.Value.ToString() == eva.FormTagValue) >= 0)
+                        {
+                            _interfaceEngineService.Export(new ExportRequestVm
+                            {
+                                EventName = eva.WebServiceEventName,
+                                PersonnelId = _personnelId,
+                                Param1 = value.PersonId.ToString(),
+                                Param2 = value.FormRecordId.ToString()
+                            });
+                        }
+                    }
+                    else
+                    {
+                        _interfaceEngineService.Export(new ExportRequestVm
+                        {
+                            EventName = eva.WebServiceEventName,
+                            PersonnelId = _personnelId,
+                            Param1 = value.PersonId.ToString(),
+                            Param2 = value.FormRecordId.ToString()
+                        });
+                    }
+                });
+
+            await _context.SaveChangesAsync();
+            _interfaceEngineService.Export(new ExportRequestVm
+            {
+                EventName = EventNameConstants.FORMSAVE,
+                PersonnelId = _personnelId,
+                Param1 = value.PersonId?.ToString(),
+                Param2 = value.FormRecordId.ToString()
+            });
+            return value.FormRecordId;
+        }
+
+        public IEnumerable<FormHistory> GetFormHistory(int formRecordId)
+        {
+            List<FormHistory> lstFormHist = _context.FormRecordSaveHistory
+                .Where(x => x.FormRecordId == formRecordId)
+                .OrderByDescending(y => y.FormRecordSaveHistoryId)
+                .Select(y => new FormHistory
+                {
+                    FormRecordId = y.FormRecordId,
+                    FormNotes = y.FormNotes,
+                    SaveDate = y.SaveDate,
+                    SaveHistoryId = y.FormRecordSaveHistoryId,
+                    Officer = new PersonnelVm
+                    {
+                        PersonFirstName = y.SaveByNavigation.PersonNavigation.FknFirstName,
+                        PersonLastName = y.SaveByNavigation.PersonNavigation.FknLastName,
+                        OfficerBadgeNumber = y.SaveByNavigation.OfficerBadgeNum
+                    }
+                }).ToList();
+            return lstFormHist;
+        }
+
+        public Signature GetSignature(int formRecordId, int formTemplateId)
+        {
+            Signature signature = _context.FormRecord.Include(de => de.FormTemplates).Where(x => x.FormRecordId == formRecordId).Select(y =>
+                  new Signature
+                  {
+                      Label1 = y.FormTemplates.SignatureLabel,
+                      Label2 = y.FormTemplates.SignatureLabel2,
+                      Label3 = y.FormTemplates.SignatureLabel3,
+                      Label4 = y.FormTemplates.SignatureLabel4,
+                      Label5 = y.FormTemplates.SignatureLabel5,
+                      Label6 = y.FormTemplates.SignatureLabel6,
+                      Label7 = y.FormTemplates.SignatureLabel7,
+                      Signature1 = y.Sig != null ? $"data:image/png;base64,{Convert.ToBase64String(y.Sig)}" : null,
+                      Signature2 = y.Sig2 != null ? $"data:image/png;base64,{Convert.ToBase64String(y.Sig2)}" : null,
+                      Signature3 = y.Sig3 != null ? $"data:image/png;base64,{Convert.ToBase64String(y.Sig3)}" : null,
+                      Signature4 = y.Sig4 != null ? $"data:image/png;base64,{Convert.ToBase64String(y.Sig4)}" : null,
+                      Signature5 = y.Sig5 != null ? $"data:image/png;base64,{Convert.ToBase64String(y.Sig5)}" : null,
+                      Signature6 = y.Sig6 != null ? $"data:image/png;base64,{Convert.ToBase64String(y.Sig6)}" : null,
+                      Signature7 = y.Sig7 != null ? $"data:image/png;base64,{Convert.ToBase64String(y.Sig7)}" : null,
+                      NoSignatureFlag = (y.NoSignatureFlag.HasValue && y.NoSignatureFlag == true),
+                      NoSignatureReason = y.NoSignatureReason
+                  }).SingleOrDefault();
+            return signature ?? GetSignatureLabel(formTemplateId);
+        }
+
+        private Signature GetSignatureLabel(int formTemplateId)
+        {
+            Signature signLabel = _context.FormTemplates.Where(s => s.FormTemplatesId == formTemplateId)
+                .Select(x => new Signature
+                {
+                    Label1 = x.SignatureLabel,
+                    Label2 = x.SignatureLabel2,
+                    Label3 = x.SignatureLabel3,
+                    Label4 = x.SignatureLabel4,
+                    Label5 = x.SignatureLabel5,
+                    Label6 = x.SignatureLabel6,
+                    Label7 = x.SignatureLabel7
+                }).SingleOrDefault();
+
+            return signLabel;
+        }
+
+        public async Task<int> SaveSignature(Signature details)
+        {
+            FormRecord formRecord = _context.FormRecord.SingleOrDefault(x => x.FormRecordId == details.FormRecordId);
+            if (formRecord is null) return 0;
+
+            formRecord.Sig = details.Signature1 != null
+                ? Convert.FromBase64String(details.Signature1.Split(',')[1])
+                : null;
+            formRecord.Sig2 = details.Signature2 != null
+                ? Convert.FromBase64String(details.Signature2.Split(',')[1])
+                : null;
+            formRecord.Sig3 = details.Signature3 != null
+                ? Convert.FromBase64String(details.Signature3.Split(',')[1])
+                : null;
+            formRecord.Sig4 = details.Signature4 != null
+                ? Convert.FromBase64String(details.Signature4.Split(',')[1])
+                : null;
+            formRecord.Sig5 = details.Signature5 != null
+                ? Convert.FromBase64String(details.Signature5.Split(',')[1])
+                : null;
+            formRecord.Sig6 = details.Signature6 != null
+                ? Convert.FromBase64String(details.Signature6.Split(',')[1])
+                : null;
+            formRecord.Sig7 = details.Signature7 != null
+                ? Convert.FromBase64String(details.Signature7.Split(',')[1])
+                : null;
+
+            return await _context.SaveChangesAsync();
+        }
+
+        #region Utilities
+
+        //FR - what is this for???
+        private Dictionary<string, object> JsonToKeyValuePair(string xml)
+        {
+            Dictionary<string, object> data = JsonConvert.DeserializeObject<Dictionary<string, object>>(xml);
+            Dictionary<string, object> retVal = new Dictionary<string, object>();
+
+            foreach ((string s, object value) in data)
+            {
+                int i = 0;
+                string key = s;
+
+                while (retVal.ContainsKey(key))
+                {
+                    key = $"{value}_{i++}";
+                }
+
+                retVal.Add(key, value);
+            }
+
+            return retVal;
+        }
+
+        //TODO Don't we have this in CommonService?
+        private static Dictionary<string, object> RunStoredProc(string storedProcedure,
+            IEnumerable<KeyValuePair<string, object>> pairs)
+        {
+            //Total hack to debug stored procedures
+            Dictionary<string, object> results = new Dictionary<string, object>();
+            using (SqlConnection conn = new SqlConnection(GetConnectionString()))
+            {
+                SqlCommand cmd =
+                    new SqlCommand(storedProcedure, conn)
+                    { CommandType = CommandType.StoredProcedure };
+                cmd.Connection.Open();
+
+                foreach (KeyValuePair<string, object> pair in pairs)
+                {
+                    if (!(pair.Value is int) || (int?)pair.Value > 0)
+                    {
+                        SqlParameter param = new SqlParameter
+                        {
+                            ParameterName = pair.Key,
+                            Value = pair.Value
+                        };
+                        cmd.Parameters.Add(param);
+                    }
+                }
+
+                using (SqlDataReader rdr = cmd.ExecuteReader())
+                {
+                    if (!rdr.HasRows || !rdr.Read()) return results;
+                    for (int i = 0; i < rdr.FieldCount; i++)
+                    {
+                        results.Add(rdr.GetName(i), rdr.IsDBNull(i) ? null : rdr.GetValue(i));
+                    }
+
+                }
+
+            }
+
+            return results;
+
+        }
+
+        private static string GetConnectionString()
+        {
+            return Startup.ConnectionString;
+        }
+
+        private Dictionary<string, object> GetSavedFormData(int templateId, int formRecordId)
+        {
+            string data = _context.FormRecord.SingleOrDefault(x => x.FormTemplatesId == templateId
+                                                                   && x.FormRecordId == formRecordId)?.XmlData;
+            return string.IsNullOrEmpty(data) || data == "null"
+                ? null
+                : JsonToKeyValuePair(HttpUtility.HtmlDecode(data));
+        }
+
+        private Dictionary<string, object> GetFormData(int templateId, FormFieldName id)
+        {
+            //Note: TemplateID must match the file names of the corresponding css, js and html files
+            //Assign model values into param dynamically
+            //Type type = Id.GetType();
+            PropertyInfo[] properties = id.GetType().GetProperties();
+            List<KeyValuePair<string, object>> pairs =
+                (from property in properties
+                 where property.GetValue(id, null) != null
+                 select new KeyValuePair<string, object>(property.Name, property.GetValue(id, null))).ToList();
+            string storedProcedure = _context.FormTemplates.First(s => s.FormTemplatesId == templateId).StoredProcedure;
+            return RunStoredProc(storedProcedure, pairs);
+        }
+
+        public FormSavedHistoryObj GetSaveHistoryXml(int formSaveHistoryId)
+        {
+            FormSavedHistoryObj formSavedHistoryObj = new FormSavedHistoryObj();
+            string data = _context.FormRecordSaveHistory
+                .SingleOrDefault(x => x.FormRecordSaveHistoryId == formSaveHistoryId)
+                ?.XmlData;
+            formSavedHistoryObj.SavedHistoryObj = string.IsNullOrEmpty(data)
+                ? null
+                : JsonToKeyValuePair(HttpUtility.HtmlDecode(data));
+            formSavedHistoryObj.SavedHistorySignature = GetSavedFormSignature(formSaveHistoryId);
+            return formSavedHistoryObj;
+        }
+
+        #endregion
+
+        public List<KeyValuePair<string, int>> GetFormTemplateDetails(int categoryId, string filterName)
+        {
+            int? formCategoryFilterId = _context.FormCategoryFilter
+                .SingleOrDefault(fcf => fcf.FilterName == filterName && fcf.FormCategoryId == categoryId)
+                ?.FormCategoryFilterId;
+
+            return (from ft in _context.FormTemplates
+                    where ft.FormCategory.FormCategoryId == 10 &&
+                          ft.FormCategoryFilter.FormCategoryFilterId == formCategoryFilterId
+                          && (ft.Inactive == 0 || !ft.Inactive.HasValue)
+                    select new
+                    {
+                        ft.FormTemplatesId,
+                        ft.DisplayName
+                    }).ToDictionary(frm => frm.DisplayName, frm => frm.FormTemplatesId).ToList();
+        }
+
+        public List<GetFormTemplates> GetFormTemplates(int categoryId)
+        {
+            return _context.FormTemplates.Where(f => f.FormCategoryId == categoryId && f.Inactive != 1).Select(y =>
+                new GetFormTemplates
+                {
+                    DisplayName = y.DisplayName,
+                    HtmlPath = y.FormCategory.FormCategoryFolderName,
+                    HtmlFileName = y.HtmlFileName,
+                    FormTemplatesId = y.FormTemplatesId,
+                    CategoryId = y.FormCategoryId
+                }).ToList();
+        }
+
+        public MedicalFormVm GetInmateMedicalForms(int inmateId)
+        {
+            MedicalFormVm medForms = new MedicalFormVm
+            {
+                lstMedicalForms = _context.FormRecord.Where(frm => frm.InmateId == inmateId).Select(
+                    frm => new MedicalForms
+                    {
+                        InmateId = frm.InmateId.Value,
+                        CreateDate = frm.CreateDate.Value,
+                        DeleteFlag = frm.DeleteFlag == 1,
+                        CreateById = frm.CreateBy,
+                        FormTemplateId = frm.FormTemplatesId,
+                        DisplayName = frm.FormTemplates.DisplayName,
+                        FormNotes = frm.FormNotes,
+                        DeleteById = frm.DeleteBy
+                    }).ToList()
+            };
+
+            List<InmateHousing> lstPersonDetails =
+                GetInmateDetails(medForms.lstMedicalForms.Select(i => i.InmateId).ToList());
+
+            List<int> officerIds =
+                medForms.lstMedicalForms.Select(i => new[] { i.CreateById, i.DeleteById })
+                    .SelectMany(i => i)
+                    .Where(i => i.HasValue)
+                    .Select(i => i.Value)
+                    .ToList();
+
+            List<PersonnelVm> lstOfficers = _personService.GetPersonNameList(officerIds.ToList());
+
+            medForms.lstMedicalForms.ForEach(
+                medForm =>
+                {
+                    medForm.CreateBy = lstOfficers.Single(off => off.PersonnelId == medForm.CreateById);
+                    if (medForm.DeleteById.HasValue)
+                    {
+                        medForm.DeleteBy = lstOfficers.Single(off => off.PersonnelId == medForm.DeleteById);
+                    }
+
+                    medForm.InmateDetails = lstPersonDetails.Single(per => per.InmateId == medForm.InmateId);
+                });
+
+            medForms.lstGetFormTemplates = GetFormTemplates(NumericConstants.FOUR);
+
+            return medForms;
+        }
+
+        private List<InmateHousing> GetInmateDetails(List<int> inmateIds) =>
+            _context.Inmate.Where(x => inmateIds.Contains(x.InmateId))
+                .Select(a => new InmateHousing
+                {
+                    InmateId = a.InmateId,
+                    PersonId = a.PersonId,
+                    PersonFirstName = a.Person.PersonFirstName,
+                    PersonMiddleName = a.Person.PersonMiddleName,
+                    PersonLastName = a.Person.PersonLastName,
+                    PersonSuffix = a.Person.PersonSuffix,
+                    InmateNumber = a.InmateNumber,
+                    FacilityId = a.FacilityId,
+                    LastReviewDate = a.LastReviewDate,
+                    InmateCurrentTrack = a.InmateCurrentTrack,
+                    HousingUnitId = a.HousingUnitId,
+                    HousingLocation = a.HousingUnit.HousingUnitLocation,
+                    HousingNumber = a.HousingUnit.HousingUnitNumber,
+                    HousingBedLocation = a.HousingUnit.HousingUnitBedLocation,
+                    HousingBedNumber = a.HousingUnit.HousingUnitBedNumber
+                }).ToList();
+
+        public string GetLastIncarcerationFormRecord(string inmateNumber, int formTemplatesId)
+        {
+            FormRecord formRecord = _context.FormRecord
+                .Where(w => w.FormTemplatesId == formTemplatesId &&
+                            w.Incarceration.Inmate.InmateNumber == inmateNumber &&
+                            w.Incarceration.ReleaseOut != null).Select(s => s).FirstOrDefault();
+            return HttpUtility.HtmlDecode(formRecord?.XmlData);
+        }
+
+        public KeyValuePair<int, int> GetFormRecordByRms(int inmatePrebookStagingId)
+        {
+            return _context.FormRecord.Where(f => f.InmatePrebookStagingId == inmatePrebookStagingId)
+                .Select(a => new KeyValuePair<int, int>(a.FormRecordId, a.FormTemplatesId))
+                .OrderByDescending(o => o.Key).FirstOrDefault();
+        }
+
+        private Signature GetSavedFormSignature(int formSaveHistoryId) => _context.FormRecordSaveHistory
+            .Where(x => x.FormRecordSaveHistoryId == formSaveHistoryId).Select(y => new Signature
+            {
+                Signature1 = y.Sig != null ? $"data:image/png;base64,{Convert.ToBase64String(y.Sig)}" : null,
+                Signature2 = y.Sig2 != null ? $"data:image/png;base64,{Convert.ToBase64String(y.Sig2)}" : null,
+                Signature3 = y.Sig3 != null ? $"data:image/png;base64,{Convert.ToBase64String(y.Sig3)}" : null,
+                Signature4 = y.Sig4 != null ? $"data:image/png;base64,{Convert.ToBase64String(y.Sig4)}" : null,
+                Signature5 = y.Sig5 != null ? $"data:image/png;base64,{Convert.ToBase64String(y.Sig5)}" : null,
+                Signature6 = y.Sig6 != null ? $"data:image/png;base64,{Convert.ToBase64String(y.Sig6)}" : null,
+                Signature7 = y.Sig7 != null ? $"data:image/png;base64,{Convert.ToBase64String(y.Sig7)}" : null,
+                NoSignatureFlag = y.NoSignatureFlag != false,
+                NoSignatureReason = y.NoSignatureReason
+
+            }).SingleOrDefault();
+
+        public List<GetFormTemplates> GetRequiredForms(FormCategories categoryName, string facilityAbbr,
+            int incarcerationId, int arrestId, int inmatePrebookId, bool isOptionalForms, string caseTypeId)
+        {
+            string[] caseTypeValue =
+                GetCaseTypeValues(categoryName, incarcerationId, arrestId, inmatePrebookId, caseTypeId);
+
+            List<GetFormTemplates> requiredForm =
+                GetRequiredFormTemplateValue(categoryName, facilityAbbr, caseTypeValue, isOptionalForms);
+
+            requiredForm.ForEach(item =>
+            {
+                List<FormRecord> lstFormRecords;
+                switch (categoryName)
+                {
+                    case FormCategories.Booking:
+                        lstFormRecords = _context.FormRecord
+                            .Where(fr => fr.FormTemplatesId == item.FormTemplatesId
+                                         && fr.IncarcerationId == incarcerationId
+                                         && fr.DeleteFlag == 0)
+                            .ToList();
+                        break;
+                    case FormCategories.Case:
+                        lstFormRecords = _context.FormRecord
+                            .Where(fr => fr.FormTemplatesId == item.FormTemplatesId
+                                         && fr.ArrestId == arrestId
+                                         && fr.DeleteFlag == 0)
+                            .ToList();
+                        break;
+                    default:
+                        lstFormRecords = _context.FormRecord
+                            .Where(fr => fr.FormTemplatesId == item.FormTemplatesId
+                                         && fr.InmatePrebookId == inmatePrebookId
+                                         && fr.DeleteFlag == 0).OrderByDescending(fr => fr.FormRecordId)
+                            .ToList();
+                        break;
+                }
+
+                if (lstFormRecords.Count == 0) return;
+                item.FormRecordId = lstFormRecords[0].FormRecordId;
+                item.CreateDate = lstFormRecords[0].CreateDate;
+                item.Id = categoryName == FormCategories.Prebook
+                    ? lstFormRecords[0].InmatePrebookId
+                    : categoryName == FormCategories.Booking
+                        ? lstFormRecords[0].IncarcerationId
+                        : lstFormRecords[0].ArrestId;
+                item.FormNotes = lstFormRecords[0].FormNotes;
+                item.Cnt = lstFormRecords.Count;
+            });
+
+            return requiredForm;
+        }
+
+        public string[] GetRequiredCaseType(FormCategories categoryName, string facilityAbbr, int incarcerationId,
+            int arrestId, int inmatePrebookId, string caseTypeId)
+        {
+            string[] caseTypeValue = GetCaseTypeValues(categoryName, incarcerationId, arrestId, inmatePrebookId);
+
+            List<GetFormTemplates> requiredForm =
+                GetRequiredFormTemplateValue(categoryName, facilityAbbr, caseTypeValue);
+
+            string[] filteredCaseType = caseTypeValue.Where(b =>
+                requiredForm.Where(f => f.RequireUponCompleteBookTypeString.Split(",").Contains(b)).Any()).ToArray();
+
+            return filteredCaseType;
+        }
+
+        private string[] GetCaseTypeValues(FormCategories categoryName, int incarcerationId, int arrestId, int inmatePrebookId, string caseTypeId = "")
+        {
+            List<KeyValuePair<int?, string>> lstPairs = new List<KeyValuePair<int?, string>>();
+            if (categoryName == FormCategories.Booking)
+            {
+                // incarceration
+                string[] caseType = new string[] { };
+                if (!string.IsNullOrEmpty(caseTypeId))
+                {
+                    caseType = caseTypeId.Split(',');
+                }
+                lstPairs = _context.IncarcerationArrestXref
+                    .Where(i => i.IncarcerationId == incarcerationId && !string.IsNullOrEmpty(i.Arrest.ArrestType)
+                     && (caseType.Length == 0 || caseType.Contains(i.Arrest.ArrestType)))
+                    .Select(i => new KeyValuePair<int?, string>(
+                        i.ArrestId,
+                        i.Arrest.ArrestType
+                    )).ToList();
+            }
+            else if (categoryName == FormCategories.Case)
+            {
+                // case
+                lstPairs.Add(new KeyValuePair<int?, string>(arrestId,
+                    _context.Arrest.Single(a => a.ArrestId == arrestId).ArrestType));
+            }
+            else if (categoryName == FormCategories.Prebook)
+            {
+                // prebook
+                lstPairs = _context.InmatePrebookCase
+                    .Where(i => i.InmatePrebookId == inmatePrebookId && !i.DeleteFlag)
+                    .Select(i => new KeyValuePair<int?, string>(
+                        i.InmatePrebookId,
+                        Convert.ToInt32(i.ArrestType).ToString()
+                    )).ToList();
+            }
+
+            string[] caseTypeValue = _context.Lookup
+                .Where(l => lstPairs.Count(b => b.Value == l.LookupIndex.ToString()) > 0
+                            && l.LookupType == LookupConstants.ARRTYPE)
+                            .OrderByDescending(l => l.LookupOrder)
+                            .ThenBy(l => l.LookupDescription)
+                .Select(l => l.LookupDescription).ToArray();
+
+            return caseTypeValue;
+        }
+
+        private List<GetFormTemplates> GetRequiredFormTemplateValue(FormCategories categoryName, string facilityAbbr,
+            string[] caseTypeValue, bool isOptionalForms = false)
+        {
+            List<GetFormTemplates> requiredForm =
+                _context.FormTemplates
+                    .Where(f => (isOptionalForms || f.RequireUponComplete == 1)
+                                && f.Inactive != 1 && (isOptionalForms ||
+                                f.RequireUponCompleteFacilityString.Contains(facilityAbbr))
+                                && (categoryName != FormCategories.Booking ||
+                                    f.FormCategoryId == (int?)FormCategories.Booking)
+                                && (categoryName != FormCategories.Case ||
+                                    f.FormCategoryId == (int?)FormCategories.Case)
+                                && (categoryName != FormCategories.Prebook ||
+                                    f.FormCategoryId == (int?)FormCategories.Prebook))
+                    .Select(y => new GetFormTemplates
+                    {
+                        DisplayName = y.DisplayName,
+                        HtmlPath = y.FormCategory.FormCategoryFolderName,
+                        HtmlFileName = y.HtmlFileName,
+                        FormTemplatesId = y.FormTemplatesId,
+                        FormInterfaceFlag = y.FormInterfaceFlag ?? 0,
+                        CategoryId = y.FormCategoryId,
+                        RequireUponCompleteBookTypeString = string.IsNullOrEmpty(y.RequireUponCompleteBookTypeString)
+                            ? ""
+                            : y.RequireUponCompleteBookTypeString,
+                        RequireUponCompleteFacilityString = string.IsNullOrEmpty(y.RequireUponCompleteFacilityString) ?
+                        "" : y.RequireUponCompleteFacilityString,
+                        RequireUponComplete = y.RequireUponComplete
+                    }).OrderBy(f => f.DisplayName).ToList();
+
+            if (caseTypeValue.Length == 0 && !isOptionalForms) return new List<GetFormTemplates>();
+            requiredForm = requiredForm
+                .Where(f => (isOptionalForms ||
+                f.RequireUponCompleteBookTypeString.Split(",").Any(caseTypeValue.Contains))
+                && (!isOptionalForms || !f.RequireUponCompleteBookTypeString.Split(",")
+                .Any(caseTypeValue.Contains) || !f.RequireUponCompleteFacilityString
+                .Contains(facilityAbbr) || !f.RequireUponComplete.HasValue || f.RequireUponComplete == 0)).ToList();
+            return requiredForm;
+        }
+        public FacilityFormListVm LoadFacilityFormDetails(int facilityId, int formTemplateId)
+        {
+            FacilityFormListVm facilityFormDetails = new FacilityFormListVm();
+            IQueryable<FormRecord> lstRecordsDetails = _context.FormRecord.Where(f =>
+               f.FacilityId == facilityId
+               && f.FormTemplates.FormCategory.FormCategoryId == (int?)FormCategories.FacilityForms
+               && (f.FormTemplates.Inactive ?? 0) == 0
+               && (formTemplateId == 0 || f.FormTemplatesId == formTemplateId));
+
+            List<PersonnelVm> lstPersonnel = _context.Personnel.Select(s => new PersonnelVm
+            {        
+                PersonnelNumber = s.PersonnelNumber,
+                PersonnelId = s.PersonnelId,
+                PersonId = s.PersonId,
+            }).ToList();
+
+            int[] personIds = lstPersonnel.Select(a => a.PersonId).ToArray();
+            List<PersonInfoVm> lstPersonInfoVms = _context.Person.Where(a=> personIds.Contains(a.PersonId))
+                .Select(s=> new PersonInfoVm
+                { 
+                    PersonId = s.PersonId,
+                    PersonLastName = s.PersonLastName,
+                    PersonFirstName = s.PersonFirstName,
+                    PersonMiddleName = s.PersonMiddleName
+                }).ToList();            
+            lstPersonnel.ForEach(item => { 
+                PersonInfoVm personInfoVm = lstPersonInfoVms.Single(a=> a.PersonId == item.PersonId);
+                item.PersonLastName = personInfoVm.PersonLastName;
+                item.PersonFirstName = personInfoVm.PersonFirstName;
+                item.PersonMiddleName = personInfoVm.PersonMiddleName;
+            });
+
+            facilityFormDetails.FacilityForms = _context.FormRecord
+                .Where(f => f.FacilityId == facilityId
+                            && f.FormTemplates.FormCategory.FormCategoryId == 24).Select(s => new IncarcerationForms
+                            {
+                                FormRecordId = s.FormRecordId,
+                                DisplayName = s.FormTemplates.DisplayName,
+                                FormNotes = s.FormNotes,
+                                ReleaseOut = s.Incarceration.ReleaseOut,
+                                DateIn = s.Incarceration.DateIn,
+                                DeleteFlag = s.DeleteFlag,
+                                XmlData = HttpUtility.HtmlDecode(s.XmlData),
+                                FormCategoryFolderName = s.FormTemplates.FormCategory.FormCategoryFolderName,
+                                HtmlFileName = s.FormTemplates.HtmlFileName,
+                                FormTemplatesId = s.FormTemplatesId,
+                                FormInterfaceFlag = s.FormTemplates.FormInterfaceFlag,
+                                FormInterfaceSent = s.FormInterfaceSent,
+                                FormInterfaceByPassed = s.FormInterfaceBypassed,
+                                CreateDate = s.CreateDate,
+                                UpdateDate = s.UpdateDate,
+                                FormCategoryFilterId = s.FormTemplates.FormCategoryFilterId,
+                                FilterName = s.FormTemplates.FormCategoryFilter.FilterName,
+                                InmateNumber = s.Incarceration.Inmate.InmateNumber,
+                                CreatedBy = lstPersonnel.SingleOrDefault(w => w.PersonnelId == s.CreateBy),
+                                UpdatedBy = lstPersonnel.SingleOrDefault(w => w.PersonnelId == s.UpdateBy),
+                                NoSignature = s.NoSignatureReason
+                            }).ToList();
+            List<FormTemplateCount> formTemplateCounts = new List<FormTemplateCount>
+            {
+                //All filter grid list           
+                new FormTemplateCount
+                {
+                    CategoryName = CommonConstants.ALL.ToString(),
+                    LstFormTemplate = lstRecordsDetails.Select(s => s.FormTemplatesId).ToList(),
+                    Count = lstRecordsDetails.Count()
+                }       
+             
+            };
+            facilityFormDetails.FormTemplateCountList = formTemplateCounts.GroupBy(i => i.CategoryName)
+                .Select(g => g.First()).ToList();
+            return facilityFormDetails;
+        }
+
+        public bool CheckFormTemplate(int templateId) => !string.IsNullOrEmpty(_context.FormTemplates.First(s => s.FormTemplatesId == templateId).StoredProcedure);
+
+        public bool IsPBPCFormsExists(int inmatePrebookId)
+        {
+            return _context.FormRecord.Any(a => a.InmatePrebookId == inmatePrebookId);
+        }
+    }
+}

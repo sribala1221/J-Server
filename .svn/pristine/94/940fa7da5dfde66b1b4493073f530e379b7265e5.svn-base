@@ -1,0 +1,180 @@
+﻿using System.Collections.Generic;
+using System.Linq;
+using GenerateTables.Models;
+using ServerAPI.ViewModels;
+using ServerAPI.Utilities;
+
+// ReSharper disable once CheckNamespace
+namespace ServerAPI.Services
+{
+    public class EnrouteService : IEnrouteService
+    {
+        private readonly AAtims _context;
+        private readonly IPhotosService _photo;
+        private readonly ICommonService _commonService;
+        private readonly IFacilityPrivilegeService _facilityPrivilegeService;
+
+        public EnrouteService(AAtims context, IPhotosService photosService, ICommonService commonService,
+            IFacilityPrivilegeService facilityPrivilegeService)
+        {
+            _context = context;
+            _photo = photosService;
+            _commonService = commonService;
+            _facilityPrivilegeService = facilityPrivilegeService;
+        }
+
+        public EnrouteLocationVm GetEnrouteLocations(int facilityId)
+        {
+            IQueryable<Inmate> lstInmate = _context.Inmate.Where(w =>
+                w.InmateActive == 1
+                && w.InmateCurrentTrackId.HasValue
+                && (w.InmateCurrentTrackNavigation.FacilityId ==
+                    facilityId
+                    || w.InmateCurrentTrackNavigation
+                        .FacilityId == 0
+                    || !w.InmateCurrentTrackNavigation.FacilityId
+                        .HasValue));
+
+            List<int> inmateIds = lstInmate.Select(s => s.InmateId).ToList();
+
+            IQueryable<InmateTrak> lstInmateTrakElapsed = _context.InmateTrak.Where(w =>
+                w.EnrouteFinalLocationId.HasValue && inmateIds.Contains(w.InmateId));
+
+            IQueryable<InmateTrak> lstInmateTrak = lstInmateTrakElapsed.Where(w => !w.InmateTrakDateIn.HasValue);
+
+            List<Privileges> lstPrivileges = _context.Privileges.ToList();
+
+            EnrouteLocationVm enrouteLocationVm = new EnrouteLocationVm
+            {
+                LstEnrouteLocationInmate = lstInmate.SelectMany(inm =>
+                        lstInmateTrak.Where(inmtrk => inm.InmateId == inmtrk.InmateId),
+                    (sinm, sinmtrk) => new EnrouteLocationInmate
+                    {
+                        InmateId = sinm.InmateId,
+                        InmateNumber = sinm.InmateNumber,
+                        LocationId = sinm.InmateCurrentTrackId,
+                        Location = sinm.InmateCurrentTrack,
+                        RefusalFlag = lstPrivileges.Where(p =>
+                                p.PrivilegeId == sinm.InmateCurrentTrackId)
+                            .Select(x => x.TrackingAllowRefusal ?? 0).FirstOrDefault(),
+                        DestinationId = sinmtrk.EnrouteFinalLocationId,
+                        Destination = sinmtrk.EnrouteFinalLocation.PrivilegeDescription,
+                        EnrouteFinalFlag = sinmtrk.EnrouteFinalFlag,
+                        EnrouteInFlag = sinmtrk.EnrouteInFlag,
+                        EnrouteOutFlag = sinmtrk.EnrouteOutFlag,
+                        ApptAlertEndDate = sinm.InmateCurrentTrackNavigation.AppointmentAlertApptEndDate == 1,
+                        HousingDetail = new HousingUnitVm
+                        {
+                            HousingUnitLocation = sinm.HousingUnit.HousingUnitLocation,
+                            HousingUnitNumber = sinm.HousingUnit.HousingUnitNumber,
+                            HousingUnitBedLocation = sinm.HousingUnit.HousingUnitBedLocation,
+                            HousingUnitBedNumber = sinm.HousingUnit.HousingUnitBedNumber
+                        },
+                        Person = new PersonInfoVm
+                        {
+                            PersonId = sinm.PersonId
+                        },
+                        FacilityAbbr = sinm.Facility.FacilityAbbr,
+                    }).ToList()
+            };
+            List<EnrouteLocationInmate> lstInmateApptTraks = _context.InmateAppointmentTrack
+                .Where(w => !w.InmateTrakDateIn.HasValue && w.FacilityId == facilityId
+                && w.Inmate.InmateActive == 1
+                && w.Inmate.InmateCurrentTrackId.HasValue
+                && (w.Inmate.InmateCurrentTrackNavigation.FacilityId ==
+                    facilityId
+                    || w.Inmate.InmateCurrentTrackNavigation
+                        .FacilityId == 0
+                    || !w.Inmate.InmateCurrentTrackNavigation.FacilityId
+                        .HasValue)
+                )
+                .Select(s => new EnrouteLocationInmate
+                {
+                    InmateId = s.InmateId,
+                    AppointmentEndDate = s.Schedule.EndDate ?? null,
+                    ReoccurFlag = s.Schedule.IsSingleOccurrence,
+                    ApptLocationId = s.Schedule.LocationId,
+                    ScheduleId = s.ScheduleId
+                }).ToList();
+
+            enrouteLocationVm.LstEnrouteLocationInmate.ForEach(item =>
+            {
+                PersonVm personVm = _context.Person.Where(p => p.PersonId == item.Person.PersonId)
+                    .Select(a => new PersonVm{ 
+                        PersonFirstName = a.PersonFirstName,
+                        PersonLastName = a.PersonLastName,
+                        PersonMiddleName = a.PersonMiddleName,
+                        PersonSuffix = a.PersonSuffix
+                    }).Single();
+                item.Person.PersonFirstName = personVm.PersonFirstName;
+                item.Person.PersonLastName = personVm.PersonLastName;
+                item.Person.PersonMiddleName = personVm.PersonMiddleName;
+                item.Person.PersonSuffix = personVm.PersonSuffix;
+                List<Identifiers> identifiers = _context.Identifiers
+                    .Where(i => i.PersonId == item.Person.PersonId).ToList();
+                Person person = new Person
+                {
+                    PersonId = item.Person.PersonId,
+                    PersonFirstName = personVm.PersonFirstName,
+                    PersonLastName = personVm.PersonLastName,
+                    PersonMiddleName = personVm.PersonMiddleName,
+                    PersonSuffix = personVm.PersonSuffix,
+                    Identifiers = identifiers
+                };
+                item.ImageName = _photo.GetPhotoByPerson(person);
+                item.DateOut = lstInmateTrakElapsed.Where(w => w.EnrouteFinalLocationId == item.DestinationId
+                                       && w.InmateId == item.InmateId)
+                                      .OrderBy(o => o.InmateTrakId).FirstOrDefault()?.InmateTrakDateOut;
+                item.EnrouteStartOut = lstInmateTrakElapsed.Where(w => w.EnrouteFinalLocationId == item.DestinationId
+                                       && w.InmateId == item.InmateId)
+                                      .OrderBy(o => o.InmateTrakId).LastOrDefault()?.EnrouteStartOut;
+                item.TrackNotes = lstInmateTrakElapsed.Where(w => w.EnrouteFinalLocationId == item.DestinationId
+                                       && w.InmateId == item.InmateId)
+                                      .OrderBy(o => o.InmateTrakId).LastOrDefault()?.InmateTrakNote;
+                item.VisitFlag = _context.Visit.Any(v => v.ScheduleId == item.ScheduleId);
+
+                EnrouteLocationInmate enroute = lstInmateApptTraks.SingleOrDefault(p => p.InmateId == item.InmateId);
+                if (enroute != null)
+                {
+                    item.AppointmentEndDate = enroute.AppointmentEndDate;
+                    item.ReoccurFlag = enroute.ReoccurFlag;
+                    item.ApptLocationId = enroute.ApptLocationId;
+                    item.ScheduleId = enroute.ScheduleId;
+                }
+            });
+
+            //Destination Location Count
+            enrouteLocationVm.LstDestinationLocationCount = enrouteLocationVm.LstEnrouteLocationInmate
+                .GroupBy(g => new { g.DestinationId, g.Destination })
+                .Select(s => new EnrouteLocationCount
+                {
+                    LocationId = s.Key.DestinationId,
+                    Location = s.Key.Destination,
+                    Count = s.Count()
+                }).ToList();
+
+            enrouteLocationVm.LstDestinationLocationCount.ForEach(item =>
+            {
+                //Enroute Location Count
+                item.LstEnrouteLocationCount = enrouteLocationVm.LstEnrouteLocationInmate
+                    .Where(w => w.DestinationId == item.LocationId)
+                    .GroupBy(g => new { g.LocationId, g.Location })
+                    .Select(s => new EnrouteLocationCount
+                    {
+                        LocationId = s.Key.LocationId,
+                        Location = s.Key.Location,
+                        Count = s.Count()
+                    }).ToList();
+            });
+
+            //Refusal Reason List
+            enrouteLocationVm.RefusalReasonList = _commonService.GetLookupKeyValuePairs(LookupConstants.TRACKREFUSALREAS);
+
+            //Enroute Location List
+            enrouteLocationVm.EnrouteLocationList = _facilityPrivilegeService.GetPrivilegeList(facilityId)
+                .OrderBy(a => a.PrivilegeDescription).ToList();
+
+            return enrouteLocationVm;
+        }
+    }
+}

@@ -1,0 +1,31 @@
+﻿namespace ServerAPI.ViewModels
+{
+    public class UserSettingsSaveRequest
+    {
+        public string settingsId { get; set; }
+        public string settings { get; set; }
+    }
+
+    public class WorkStationSettings {
+
+        public int WorkStationId { get; set; }
+        public int? HousingGroupId { get; set; }
+        public int? HousingUnitListId { get; set; }
+        public string WorkstationName { get; set; }
+        public string WorkstationDescription { get; set; }
+        public int? FacilityId { get; set; }
+        public string HousingLocation { get; set; }
+        public string HousingNumber { get; set; }
+        public string WorkstationIp { get; set; }
+        public bool IntakeFlag { get; set; }
+        public bool BookingFlag { get; set; }
+        public bool ClassificationFlag { get; set; }
+        public bool RecordsFlag { get; set; }
+        public bool FacilityFlag { get; set; }
+        public bool OffsiteFlag { get; set; }
+        public int? BankId { get; set; }
+        public int? DepositoryId { get; set; }
+        public int? CashDrawerId { get; set;}
+        public int? LiveScanLocationId { get; set;}
+    }
+}

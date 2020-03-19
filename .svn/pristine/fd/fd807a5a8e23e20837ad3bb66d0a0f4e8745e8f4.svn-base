@@ -1,0 +1,26 @@
+﻿using System.Collections.Generic;
+using System.Threading.Tasks;
+using ServerAPI.ViewModels;
+
+namespace ServerAPI.Services
+{
+    public interface IProgramRequestService
+    {
+        List<ProgramEligibility> GetProgramRequestEligibility(int facilityId, int inmateId, int programId);
+        List<ProgramEligibility> GetProgramClassNameList(int facilityId, int inmateId);
+        List<ProgramEligibility> GetProgramClassList(int facilityId, int inmateId);
+        Task<int> SaveProgramRequestDetails(ProgramRequestInputVm values);
+        int ProgramRequestValid(int programId, int inmateId);
+        Task<int> SaveDenyandSentProgramRequest(ProgramCatogoryVm Inputs);
+        List<ProgramEligibility> GetProgramRequestAppeal(int facilityId);
+        Task<int> SaveAppealProgramRequest(ProgramCatogoryVm Inputs);
+        Task<int> SaveAssignRequest(List<ProgramEligibility> Inputs);
+        Task<int> DeleteDenied(int Inputs, bool DeleteFlag);
+        Task<int> DeleteProgramRequest(ProgramEligibility ProgramRequest);
+        Task<int> SaveAppealAssignRequest(ProgramEligibility Inputs);
+
+        List<ProgramEligibility> GetRequestByCourse(int programCourseId);
+          List<ProgramEligibility> GetRequestByInmate(int inmateId);
+
+    }
+}

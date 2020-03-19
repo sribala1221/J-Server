@@ -1,0 +1,12 @@
+using System.Collections.Generic;
+using ServerAPI.ViewModels;
+
+namespace ServerAPI.Services
+{
+    public interface IMoneyClearService
+    {
+        MoneyClearVm GetMoneyClearClearDetails(MoneyAccountFilterVm searchValue);
+        int UpdateMoneyClearClearTransaction(List<int> checkedTransIdList);
+        MoneyAccountVoidDetailsVm DoVoidMoneyClearClear(int transId, MoneyAccountTransactionFlagType pFlag);
+    }
+}

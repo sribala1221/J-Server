@@ -1,0 +1,224 @@
+﻿using Microsoft.AspNetCore.Mvc;
+using ServerAPI.Services;
+using ServerAPI.ViewModels;
+using System.Threading.Tasks;
+using System;
+using System.Collections.Generic;
+using ServerAPI.Authorization;
+
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    public class AppointmentController : Controller
+    {
+        private readonly IAppointmentService _appointmentService;
+        private readonly IAoScheduleAppointmentService _aoAppointmentService;
+        private readonly IInmateIncidentAppointmentService _inmateIncidentAppointmentService;
+        private readonly IBookingService _iBookingService;
+        private readonly IAppointmentViewerService _appointmentViewerService;
+
+        public AppointmentController(IAppointmentService appointmentService, IAoScheduleAppointmentService aoAppointmentService,
+            IInmateIncidentAppointmentService inmateIncidentAppointmentService, IBookingService iBookingService,
+            IAppointmentViewerService iAppointmentViewerService)
+        {
+            _appointmentService = appointmentService;
+            _aoAppointmentService = aoAppointmentService;
+            _inmateIncidentAppointmentService = inmateIncidentAppointmentService;
+            _iBookingService = iBookingService;
+            _appointmentViewerService = iAppointmentViewerService;
+        }
+
+        [HttpGet("ListAoAppointments")]
+        public IActionResult ListAoAppointments(int facilityId, int? inmateId, DateTime fromDate, DateTime toDate,bool isActive)
+        {
+            return Ok(_appointmentService.ListAoAppointments(facilityId, inmateId, fromDate, toDate, isActive));
+        }
+
+        [HttpGet("GetAppointmentLocation")]
+        public IActionResult GetAppointmentLocation(int inmateId, int? facilityId, ApptLocationFlag apptFlag)
+        {
+            return Ok(_appointmentService.GetAppointmentLocation(inmateId, facilityId, apptFlag));
+        }
+        
+        [FuncPermission(493, FuncPermissionType.Add)]
+        [HttpGet("ScheduleGetAppointmentLocation")]
+        public IActionResult ScheduleGetAppointmentLocation(int inmateId, int? facilityId, ApptLocationFlag apptFlag)
+        {
+            return Ok(_appointmentService.GetAppointmentLocation(inmateId, facilityId, apptFlag));
+        }
+
+        [FuncPermission(493, FuncPermissionType.Add)]
+        [HttpPost("InsertSchedule")]
+        public async Task<IActionResult> InsertSchedule([FromBody] InmateApptDetailsVm inmateApptDetails)
+        {
+            return Ok(await _appointmentService.InsertSchedule(inmateApptDetails));
+        }
+
+		//FuncPermission for Incident Schedule Hearing
+		[FuncPermission(1135, FuncPermissionType.Add)]
+		[HttpPost("InsertIncidentSchedule")]
+		public async Task<IActionResult> InsertIncidentSchedule([FromBody] InmateApptDetailsVm inmateApptDetails)
+		{
+			return Ok(await _inmateIncidentAppointmentService.InsertSchedule(inmateApptDetails));			
+		}
+
+        [HttpPost("DeleteIncidentAppointment")]
+        public async Task<IActionResult> DeleteIncidentAppointment([FromBody] DeleteUndoInmateAppt deleteInmateAppt)
+        {
+            return Ok(await _inmateIncidentAppointmentService.DeleteIncidentAppointment(deleteInmateAppt));
+        }
+
+
+        //FuncPermission for Transfer Eligliblity
+        [FuncPermission(1212, FuncPermissionType.Add)]
+        [HttpPost("InsertScheduleTransfer")]
+        public async Task<IActionResult> InsertScheduleTransfer([FromBody] InmateApptDetailsVm inmateApptDetails)
+        {
+            return Ok(await _appointmentService.InsertSchedule(inmateApptDetails));
+        }
+
+        [HttpPut("UpdateSchedule")]
+        public async Task<IActionResult> UpdateSchedule([FromBody] InmateApptDetailsVm inmateApptDetails)
+        {
+            return Ok(await _appointmentService.UpdateSchedule(inmateApptDetails));
+        }
+
+        //FuncPermission for Transfer Eligliblity
+        [FuncPermission(1212, FuncPermissionType.Edit)]
+        [HttpPut("UpdateScheduleTransfer")]
+        public async Task<IActionResult> UpdateScheduleTransfer([FromBody] InmateApptDetailsVm inmateApptDetails)
+        {
+            return Ok(await _appointmentService.UpdateSchedule(inmateApptDetails));
+        }
+
+        [HttpGet("GetInmateApptConflictCheck")]
+        public IActionResult GetInmateApptConflictCheck([FromQuery]InmateApptDetailsVm inmateApptDetails)
+        {
+            return Ok(_appointmentService.CheckAppointmentConflict(inmateApptDetails));
+        }
+
+        [FuncPermission(493, FuncPermissionType.Edit)]
+        [HttpGet("GetAppointmentSchedule")]
+        public IActionResult GetAppointmentSchedule(int scheduleId)
+        {
+            return Ok(_appointmentService.GetAppointmentSchedule(scheduleId));
+        }
+
+        [HttpGet("GetBumpQueueDetails")]
+        public IActionResult GetBumpQueueDetails(int facilityId, string fromModule)
+        {
+            return Ok(_appointmentService.GetBumpQueueDetails(facilityId, fromModule));
+        }
+
+        [HttpGet("GetBumpQueueHousingDetails")]
+        public IActionResult GetBumpQueueHousingDetails(int facilityId, string housingUnitLocation)
+        {
+            return Ok(_appointmentService.GetBumpQueueHousingDetails(facilityId, housingUnitLocation));
+        }
+
+        [HttpGet("GetBumpQueueInfo")]
+        public IActionResult GetBumpQueueInfo(int facilityId, bool isActiveBump, DateTime? startDate, DateTime? endDate,
+            string housingUnitLocation, string housingUnitNumber, int? inmateId, string fromModule)
+        {
+            return Ok(_appointmentService.GetBumpQueueInfo(facilityId, isActiveBump, startDate, endDate,
+                housingUnitLocation,
+                housingUnitNumber, inmateId, fromModule));
+        }
+
+        [HttpPost("ClearBumpQueue")]
+        public async Task<IActionResult> ClearBumpQueue([FromBody] KeyValuePair<int, string> clearBumpQueue)
+        {
+            return Ok(await _appointmentService.ClearBumpQueue(clearBumpQueue));
+        }
+
+        [HttpPost("DeleteApptBumpQueue")]
+        [FuncPermission(493, FuncPermissionType.Delete)]
+        public IActionResult DeleteApptBumpQueue()
+        {
+            return Ok(); //Here we are returning empty (200 ok) response
+        }
+
+        [HttpPost("DeleteVisitorBumpQueue")]
+        [FuncPermission(922, FuncPermissionType.Delete)]
+        public IActionResult DeleteVisitorBumpQueue()
+        {
+            return Ok(); //Here we are returning empty (200 ok) response
+        }
+
+        [FuncPermission(1212, FuncPermissionType.Add)]
+        [HttpPost("InsertMultiInmateAppt")]
+        public async Task<IActionResult> InsertMultiInmateAppt([FromBody] InmateApptDetailsVm inmateApptDetails, List<int> inmateIds)
+        {
+            await _appointmentService.InsertMultiInmateAppt(inmateApptDetails, inmateIds);
+            return Created($"/Appointment/ListAoApointment/{inmateApptDetails.AoScheduleDetails.InmateId}/{DateTime.Now.Date}/{DateTime.Now.Date.AddDays(30)}", inmateApptDetails.AoScheduleDetails);
+        }
+
+        [HttpGet("GetApptDeleteReason")]
+        public IActionResult GetApptDeleteReason()
+        {
+            return Ok(_appointmentService.GetApptDeleteReason());
+        }
+
+        //Instead of HttpDelete to use HttpPost, Because cannot send long query string in HttpDelete
+        [FuncPermission(493, FuncPermissionType.Delete)]
+        [HttpPost("DeleteInmateAppointment")]
+        public async Task<IActionResult> DeleteInmateAppointment([FromBody] DeleteUndoInmateAppt deleteInmateAppt)
+        {
+            return Ok(await _appointmentService.DeleteInmateAppointment(deleteInmateAppt));
+        }
+
+        [HttpPost("UndoInmateAppointment")]
+        public async Task<IActionResult> UndoInmateAppointment([FromBody] DeleteUndoInmateAppt undoInmateAppt)
+        {
+            return Ok(await _appointmentService.UndoInmateAppointment(undoInmateAppt));
+        }
+
+        [HttpPost("CreateAppointment")]
+        public IActionResult CreateAppointment([FromBody] CreateAppointmentRequest appointmentRequest)
+        {
+            return Ok(_aoAppointmentService.CreateInmateAppointment(appointmentRequest, Convert.ToInt32(User.FindFirst("personnelId")?.Value)));
+        }
+
+        [HttpPost("GetInmateDetails")]
+        public IActionResult GetInmateDetails([FromBody] List<int> inmateIds)
+        {
+            return Ok(_iBookingService.GetInmateDetails(inmateIds));
+        }
+
+        [HttpGet("AppointmentViewer")]
+        public IActionResult AppointmentViewer([FromQuery] CalendarInputs inputs)
+        {
+            return Ok(_appointmentViewerService.AppointmentViewer(inputs));
+        }
+
+        [HttpGet("ProgramAppointmentDropDowns")]
+        public IActionResult ProgramAppointmentDropDowns(int facilityId)
+        {
+            return Ok(_appointmentService.ProgramAppointmentDropDowns(facilityId));
+        }
+
+        [HttpGet("GetProgramInstructorDetails")]
+        public IActionResult GetProgramInstructorDetails(int programId = 0, int appointmentId = 0)
+        {
+            return Ok(_appointmentService.GetProgramInstructorDetails(programId, appointmentId));
+        }
+        [FuncPermission(1135,FuncPermissionType.Edit)]
+        [HttpPut("EditIncidentSchdule")]
+        public IActionResult EditIncidentSchdule()
+        {
+            return Ok();
+        }
+        [FuncPermission(1136,FuncPermissionType.Edit)]
+        [HttpPut("EditIncidentHearing")]
+        public IActionResult EditIncidentHearing()
+        {
+            return Ok();
+        }
+
+        [HttpGet("GetScheduleSaveHistory")]
+        public IActionResult GetScheduleSaveHistory(int scheduleId)
+        {
+            return Ok(_appointmentService.GetScheduleSaveHistory(scheduleId));
+        }
+    }
+}

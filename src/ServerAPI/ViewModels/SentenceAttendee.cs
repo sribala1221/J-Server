@@ -1,0 +1,110 @@
+﻿using System;
+using System.Collections.Generic;
+
+namespace ServerAPI.ViewModels
+{
+    public class SentenceAttendee
+    {
+    }
+
+    public class AttendanceVm
+    {
+        public int ArrestSentenceAttendanceId { get; set; }
+        public int InmateId { get; set; }
+        public AttendanceDayVm AttendanceDay { get; set; }
+        public InmateDetailsList InmateDetails { get; set; }
+        public int? ArrestId { get; set; }
+        public int? IncarcerationId { get; set; }
+        public bool WorkCrewFlag { get; set; }
+        public bool ProgramFlag { get; set; }
+        public bool AttendanceFlag { get; set; }
+        public double? AttendanceCredit { get; set; }
+        public bool NoDayForDayFlag { get; set; }
+        public bool NoDayForDaySentence { get; set; }
+        public bool ReCalcComplete { get; set; }
+        public string Note { get; set; }
+        public bool DeleteFlag { get; set; }
+        public string BookingNumber { get; set; }
+        public bool ReleaseOut { get; set; }
+        public bool AdditionalFlag { get; set; }
+        public int AttendCredit { get; set; }
+        public bool AttendFlag { get; set; }
+        public string AgencyAbbreviation { get; set; }
+        public string CaseNumber { get; set; }
+        public int PersonId { get; set; }
+
+    }
+
+    public class AttendanceDayVm
+    {
+        public int ArrestSentenceAttendanceDayId { get; set; }
+        public DateTime? AttendanceDate { get; set; }
+    }
+
+    public class NoDayForDayFlagVm
+    {
+        public int InmateId { get; set; }
+        public bool DayForDayAllowed { get; set; }
+        public DateTime? ReleaseDate { get; set; }
+        public bool NoDayForDay { get; set; }
+        public int? DayForDayFixed { get; set; }
+        public int? DayForDayFactor { get; set; }
+        public string DayForDaySql { get; set; }
+    }
+
+    public class RecentAttendanceVm
+    {
+        public DateTime? AttendanceDate { get; set; }
+        public int Pending { get; set; }
+        public int NoDayForDayFlag { get; set; }
+        public int SentenceAdjacent { get; set; }
+        public int Recalculate { get; set; }
+    }
+
+    public class AttendanceSentenceVm
+    {
+        public int ArrestId { get; set; }
+        public int? InmateId { get; set; }
+        public string BookingNumber { get; set; }
+        public string Status { get; set; }
+        public string Type { get; set; }
+        public int? SentenceCode { get; set; }
+        public bool ConsecutiveFlag { get; set; }
+        public DateTime? StartDate { get; set; }
+        public int? DaysToServe { get; set; }
+        public string SentenceMethod { get; set; }
+        public int? NoDayForDay { get; set; }
+        public int? DayForDayAllowed { get; set; }
+        public int? DayForDayDays { get; set; }
+        public int? ActualDaysToServe { get; set; }
+        public DateTime? ClearDate { get; set; }
+        public int? MethodId { get; set; }
+        public bool ActiveBookingFlag { get; set; }
+        public int DdFixed { get; set; }
+        public int DdFactor { get; set; }
+        public string DdSql { get; set; }
+        public bool ReleasedOut { get; set; }
+    }
+
+    public class AttendanceParam
+    {
+        public List<AttendanceVm> LstAttendanceVms { get; set; }
+        public List<AttendanceSentenceVm> LstAttendanceSentenceVm { get; set; }
+        public AttendanceVm AttendanceVm { get; set; }
+        public int[] AttendanceIds { get; set; }
+    }
+    
+    public class AttendanceSchedule
+    {
+        public int ScheduleId { get; set; }
+        public int? ApplyAttendSentenceCredit { get; set; }
+        public int? ApplyAttendSentenceCreditFactor { get; set; }
+    }
+
+    public class WorkAttendanceVm
+    {
+        public int ArrestSentenceAttendanceDayId { get; set; }
+        public List<AttendanceVm> Attendance { get; set; }
+        public DateTime? AttendanceDate { get; set; }
+    }
+}

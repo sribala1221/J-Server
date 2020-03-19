@@ -1,0 +1,118 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace ServerAPI.ViewModels
+{
+    public class ProgramClassInput
+    {
+        public int FacilityId { get; set; }
+        public bool LastChecked { get; set; }
+        public string FilterType { get; set; }
+        public bool ByDateChecked { get; set; }
+        public DateTime DateFrom { get; set; }
+        public DateTime DateTo { get; set; }
+        public String DeniedReason { get; set; }
+        public bool IncludeDeleted { get; set; }
+        public bool RouteToClass { get; set; }
+
+    }
+
+
+    //  public class ProgramCatogoryVm
+    // {
+
+    //     public int ProgramRequestId { get; set; }
+    //     public string DenyReason { get; set; }
+    //     public int SentReason { get; set; }
+    //     public Boolean Catogory {get;set;}
+    //      public Boolean DeniedFlag {get;set;}
+    //       public Boolean ClassifyRouteFlag {get;set;}
+    //     public string Notes { get; set; }
+    //     public string AppealReason{get;set;}
+
+    // }
+
+    public class ProgramClassVm
+    {
+        public List<FloorNoteTypeCount> ProgramCount { get; set; }
+        public List<ProgramDataVm> RequestClassLst { get; set; }
+
+    }
+
+    public class ProgramClassNameVm
+    {
+        public string ProgramclassName { get; set; }
+        public int ProgramId { get; set; }
+        public int? ClassOrServiceNumber { get; set; }
+        public string ProgramCategory1 { get; set; }
+        public string ClassOrServiceName { get; set; }
+    }
+
+    public class ProgramDataVm
+    {
+        public int? ProgramRequestId { get; set; }
+        public int ProgramId { get; set; }
+        public int? PriorityLevel { get; set; }
+        public string Note { get; set; }
+        public PersonVm InmateInfo { get; set; }
+        public int InmateId { get; set; }
+        public int PersonId { get; set; }
+        public int InmateActive { get; set; }
+        public int? HousingUnitId { get; set; }
+        public HousingUnitVm Housing { get; set; }
+
+        public string TrackLocation { get; set; }
+        public DateTime? RequestDate { get; set; }
+
+        public string PhotoFilePath { get; set; }
+        public int DeleteFlag { get; set; }
+        public string ProgramUnassignReason { get; set; }
+
+        public int RDays { get; set; }
+        public int InmateFacility { get; set; }
+        public int ProgramFacility { get; set; }
+        public int? ClassifyRouteFlag { get; set; }
+        public string Eligibility { get; set; }
+        public int? AssignBy { get; set; }
+        public OfficerVm AssignDetail { get; set; }
+        public OfficerVm DenyDetail { get; set; }
+        public int? DenyBy { get; set; }
+        public OfficerVm RouteToClassifyDetail { get; set; }
+        public int? RouteToClassifyBy { get; set; }
+        public string DeleteDetail { get; set; }
+        public int? ProgramAssignId { get; set; }
+        public int? ProgramComplete { get; set; }
+        public int? ProgramNotComplete { get; set; }
+        public int DeniedFlag { get; set; }
+        public string DeniedReason { get; set; }
+
+        public int AppointmentId { get; set; }
+        public int AppointmentDelFlag { get; set; }
+        public string ProgramClass { get; set; }
+        public string ProgramServiceName { get; set; }
+        public int ApDeleteFlag { get; set; }
+    }
+
+    public class OfficerVm
+    {
+        public int PersonnelId { get; set; }
+        public string PersonFirstName { get; set; }
+        public string PersonLastName { get; set; }
+        public string OfficerBadgeNumber { get; set; }
+        public string Note { get; set; }
+        public DateTime? Date { get; set; }
+    }
+    public class ProgramRequestCountVm
+    {
+        public int ApproveRequestCount { get; set; }
+        public int ActiveRequestCount { get; set; }
+        public int AvailableCapacityCount { get; set; }
+        public int CourrentEnrolledCount { get; set; }
+        public int TotalCapacityCount { get; set; }
+        public int ProgramRequestId { get; set; }
+        public int InmateId { get; set; }
+
+    }
+}

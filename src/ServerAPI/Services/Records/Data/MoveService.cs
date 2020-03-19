@@ -1,0 +1,621 @@
+﻿using System;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+using Microsoft.AspNetCore.Http;
+using GenerateTables.Models;
+using ServerAPI.ViewModels;
+using ServerAPI.Utilities;
+
+namespace ServerAPI.Services
+{
+    public class MoveService : IMoveService
+    {
+        private readonly AAtims _context;
+        private readonly int _personnelId;
+        private readonly IDataMergeService _dataMergeService;
+
+        public MoveService(AAtims context, IHttpContextAccessor httpContextAccessor, IDataMergeService dataMergeService)
+        {
+            _context = context;
+            _personnelId =
+                Convert.ToInt32(httpContextAccessor.HttpContext.User.FindFirst(AuthDetailConstants.PERSONNELID)?.Value);
+            _dataMergeService = dataMergeService;
+        }
+
+        public List<RecordsDataVm> GetMovePersonSearch(RecordsDataVm searchValue)
+        {
+            //Get Inmate details
+            List<RecordsDataVm> lstMovePersonSearch = _context.Inmate.Where(w =>
+                    (string.IsNullOrEmpty(searchValue.PersonLastName) ||
+                     w.Person.PersonLastName.StartsWith(searchValue.PersonLastName)) &&
+                    (string.IsNullOrEmpty(searchValue.PersonFirstName) ||
+                     w.Person.PersonFirstName.StartsWith(searchValue.PersonFirstName)) &&
+                    (string.IsNullOrEmpty(searchValue.PersonMiddleName) ||
+                     w.Person.PersonMiddleName.StartsWith(searchValue.PersonMiddleName)) &&
+                    (string.IsNullOrEmpty(searchValue.InmateNumber) ||
+                     w.InmateNumber.StartsWith(searchValue.InmateNumber)) &&
+                    (!searchValue.PersonDob.HasValue || w.Person.PersonDob == searchValue.PersonDob) &&
+                    (string.IsNullOrEmpty(searchValue.Ssn) || w.Person.PersonSsn.StartsWith(searchValue.Ssn)) &&
+                    (string.IsNullOrEmpty(searchValue.Fbi) || w.Person.PersonFbiNo.StartsWith(searchValue.Fbi)) &&
+                    (string.IsNullOrEmpty(searchValue.AlienNo) ||
+                     w.Person.PersonAlienNo.StartsWith(searchValue.AlienNo)) &&
+                    (string.IsNullOrEmpty(searchValue.AfisNumber) ||
+                     w.Person.AfisNumber.StartsWith(searchValue.AfisNumber)) && (string.IsNullOrEmpty(searchValue.Cii) ||
+                     w.Person.PersonCii.StartsWith(searchValue.Cii)))
+                .Select(s => new RecordsDataVm
+                {
+                    InmateId = s.InmateId,
+                    PersonId = s.PersonId,
+                    PersonDuplicateId = s.Person.PersonDuplicateId,
+                    PersonLastName = s.Person.PersonLastName,
+                    PersonFirstName = s.Person.PersonFirstName,
+                    PersonMiddleName = s.Person.PersonMiddleName,
+                    PersonDob = s.Person.PersonDob,
+                    InmateNumber = s.InmateNumber,
+                    Dln = s.Person.PersonDlNumber,
+                    Ssn = s.Person.PersonSsn,
+                    Cii = s.Person.PersonCii,
+                    Fbi = s.Person.PersonFbiNo,
+                    AlienNo = s.Person.PersonAlienNo,
+                    AfisNumber = s.Person.AfisNumber
+                }).OrderBy(o => o.PersonId).Take(searchValue.Results).ToList();
+
+            if (searchValue.IsInclAka)
+            {
+                //Get Aka details
+                lstMovePersonSearch.AddRange(_context.Aka.Where(w =>
+                        (string.IsNullOrEmpty(searchValue.PersonLastName) ||
+                         w.AkaLastName.StartsWith(searchValue.PersonLastName)) &&
+                        (string.IsNullOrEmpty(searchValue.PersonFirstName) ||
+                         w.AkaFirstName.StartsWith(searchValue.PersonFirstName)) &&
+                        (string.IsNullOrEmpty(searchValue.PersonMiddleName) ||
+                         w.AkaMiddleName.StartsWith(searchValue.PersonMiddleName)) &&
+                        (!searchValue.PersonDob.HasValue || w.AkaDob == searchValue.PersonDob) &&
+                        (string.IsNullOrEmpty(searchValue.Ssn) || w.AkaSsn.StartsWith(searchValue.Ssn)) &&
+                        (string.IsNullOrEmpty(searchValue.Fbi) || w.AkaFbi.StartsWith(searchValue.Fbi)) &&
+                        (string.IsNullOrEmpty(searchValue.AlienNo) || w.AkaAlienNo.StartsWith(searchValue.AlienNo)) &&
+                        (string.IsNullOrEmpty(searchValue.AfisNumber) ||
+                         w.AkaAfisNumber.StartsWith(searchValue.AfisNumber)) &&
+                        (string.IsNullOrEmpty(searchValue.Cii) ||
+                         w.AkaCii.StartsWith(searchValue.Cii)))
+                    .Select(s => new RecordsDataVm
+                    {
+                        PersonId = s.PersonId ?? 0,
+                        AkaId = s.AkaId,
+                        PersonLastName = s.Person.PersonLastName,
+                        PersonFirstName = s.Person.PersonFirstName,
+                        PersonMiddleName = s.Person.PersonMiddleName,
+                        PersonDob = s.Person.PersonDob,
+                        Dln = s.Person.PersonDlNumber,
+                        Ssn = s.Person.PersonSsn,
+                        Cii = s.Person.PersonCii,
+                        Fbi = s.Person.PersonFbiNo,
+                        AlienNo = s.Person.PersonAlienNo,
+                        AfisNumber = s.AkaAfisNumber
+                    }).ToList());
+            }
+
+            int[] personIds = lstMovePersonSearch.Select(s => s.PersonId).ToArray();
+            List<Inmate> lstInmates = _context.Inmate.Where(p => personIds.Contains(p.PersonId)).ToList();
+            lstMovePersonSearch.ForEach(item =>
+            {
+                Inmate inmate = lstInmates.FirstOrDefault(p => p.PersonId == item.PersonId);
+                if (inmate != null)
+                {
+                    item.InmateId = inmate.InmateId;
+                    item.InmateNumber = inmate.InmateNumber;
+                    item.InmateActive = inmate.InmateActive == 1;
+                    item.SiteInmateNo = inmate.InmateSiteNumber;
+                    item.AkaInmateNumber ??= "";
+                }
+            });
+
+            lstMovePersonSearch = lstMovePersonSearch.Where(x =>
+                    (string.IsNullOrEmpty(searchValue.InmateNumber) ||
+                     x.InmateNumber.StartsWith(searchValue.InmateNumber)) &&
+                    (!searchValue.InmateActive || x.InmateActive) &&
+                    (string.IsNullOrEmpty(searchValue.SiteInmateNo) ||
+                     x.SiteInmateNo.StartsWith(searchValue.SiteInmateNo)))
+                .ToList();
+
+            if (searchValue.IsInclAka)
+            {
+                lstMovePersonSearch = lstMovePersonSearch.Distinct().ToList();
+            }
+
+            lstMovePersonSearch = lstMovePersonSearch.OrderBy(o => o.PersonId).ThenBy(tb => tb.AkaId)
+                .Take(searchValue.Results).ToList();
+
+            return lstMovePersonSearch;
+        }
+
+        public List<DataHistoryVm> GetDataHistory(DataHistoryVm searchValue)
+        {
+            //Get DataAoHistory details
+            List<DataHistoryVm> lstHistory = GetDataInfo(searchValue, null, false);
+
+            List<int> historyPersonIds = lstHistory.Select(s => s.DataPersonId ?? 0).ToList();
+            historyPersonIds.AddRange(lstHistory.Select(s => s.KeepPersonId).ToList());
+
+            //Get Person details
+            List<PersonVm> lstPersonInfo = _context.Person.Where(w => historyPersonIds.Contains(w.PersonId))
+                .Select(a => new PersonVm
+                {
+                    PersonLastName = a.PersonLastName,
+                    PersonFirstName = a.PersonFirstName,
+                    PersonMiddleName = a.PersonMiddleName,
+                    PersonDob = a.PersonDob,
+                    PersonId = a.PersonId,
+                    PersonSuffix = a.PersonSuffix
+                }).ToList();
+
+            //Get Person ids using filter
+            List<int> personIds = lstPersonInfo.Where(w =>
+                    (string.IsNullOrEmpty(searchValue.PersonLastName) || w.PersonLastName.ToUpper().StartsWith(searchValue.PersonLastName.ToUpper())) &&
+                    (string.IsNullOrEmpty(searchValue.PersonFirstName) || w.PersonFirstName.ToUpper().StartsWith(searchValue.PersonFirstName.ToUpper())) &&
+                    (string.IsNullOrEmpty(searchValue.PersonMiddleName) || w.PersonMiddleName.ToUpper().StartsWith(searchValue.PersonMiddleName.ToUpper())) &&
+                    (!searchValue.PersonDob.HasValue || w.PersonDob == searchValue.PersonDob))
+                    .Select(s => s.PersonId).ToList();
+
+            List<int> historyInmateIds = lstHistory.Select(s => s.DataInmateId ?? 0).ToList();
+            historyInmateIds.AddRange(lstHistory.Select(s => s.KeepInmateId ?? 0).ToList());
+
+            //Get Inmate details
+            List<Inmate> lstInmateInfo = _context.Inmate.Where(w => historyInmateIds.Contains(w.InmateId)).ToList();
+
+            //Get Inmate ids using filter
+            List<int> inmateIds = lstInmateInfo.Where(w => !string.IsNullOrEmpty(w.InmateNumber) &&
+                        (string.IsNullOrEmpty(searchValue.InmateNumber) ||
+                        w.InmateNumber.ToUpper().StartsWith(searchValue.InmateNumber.ToUpper())))
+                    .Select(s => s.InmateId).ToList();
+
+            lstHistory = lstHistory.Where(w => (personIds.Contains(w.DataPersonId ?? 0) || personIds.Contains(w.KeepPersonId)) &&
+                              (inmateIds.Contains(w.DataInmateId ?? 0) || inmateIds.Contains(w.KeepInmateId ?? 0))).ToList();
+
+            lstHistory.ForEach(item =>
+            {
+                //Assign Data Person Info
+                item.DataPersonInfo =
+                    AssignInmateAndPersonInfo(item.DataPersonId, item.DataInmateId, lstPersonInfo, lstInmateInfo);
+
+                //Assign Keep Person Info
+                item.KeepPersonInfo =
+                    AssignInmateAndPersonInfo(item.KeepPersonId, item.KeepInmateId, lstPersonInfo, lstInmateInfo);
+            });
+
+            return lstHistory;
+        }
+
+        public List<DataHistoryVm> GetDataInfo(DataHistoryVm searchValue, List<int?> personIds, bool sealPerson)
+        {
+            List<DataHistoryVm> dataInfo = _context.DataAoHistory.Where(w =>
+                      (sealPerson || w.HistoryType.Contains(searchValue.DataHistoryType.ToString().ToUpper())) &&
+                      (!sealPerson || w.HistoryType == SealHistoryConstants.SEALPERSON) &&
+                      (!sealPerson || personIds.Contains(w.DataPersonId)) &&
+                      (!searchValue.MergeDateFrom.HasValue || !searchValue.MergeDateTo.HasValue ||
+                       searchValue.MergeDateFrom.Value.Date <= w.DataDate.Value.Date &&
+                       searchValue.MergeDateTo.Value.Date >= w.DataDate.Value.Date) &&
+                      (sealPerson || w.KeepPerson.PersonFirstName != SealHistoryConstants.RECORD &&
+                          w.KeepPerson.PersonLastName != SealHistoryConstants.SEALED))
+                .Select(s => new DataHistoryVm
+                {
+                    DataPersonId = s.DataPersonId,
+                    DataInmateId = s.DataInmateId,
+                    KeepPersonId = s.KeepPersonId,
+                    KeepInmateId = s.KeepInmateId,
+                    DataHistoryId = s.DataAoHistoryId,
+                    DataDate = s.DataDate,
+                    DataByPersonnel = new PersonnelVm
+                    {
+                        PersonLastName = s.DataByNavigation.PersonNavigation.PersonLastName,
+                        PersonFirstName = s.DataByNavigation.PersonNavigation.PersonFirstName,
+                        OfficerBadgeNumber = s.DataByNavigation.OfficerBadgeNum
+                    },
+                    DataTitle = s.DataTitle,
+                    HistoryType = s.HistoryType,
+                    UndoFlag = s.UndoFlag,
+                    UndoDate = s.UndoDate,
+                    UndoBy = _personnelId,
+                    UndoByPersonnel = new PersonnelVm
+                    {
+                        PersonLastName = s.UndoByNavigation.PersonNavigation.PersonLastName,
+                        PersonFirstName = s.UndoByNavigation.PersonNavigation.PersonFirstName,
+                        OfficerBadgeNumber = s.UndoByNavigation.OfficerBadgeNum
+                    }
+                }).OrderByDescending(o => o.DataHistoryId).Take(searchValue.Results).ToList();
+
+            return dataInfo;
+        }
+
+        private PersonInfoVm AssignInmateAndPersonInfo(int? personId, int? inmateId,
+            List<PersonVm> lstPersonInfo, List<Inmate> lstInmateInfo)
+        {
+            PersonVm personInfo = lstPersonInfo.Single(s => !personId.HasValue || s.PersonId == personId);
+            Inmate inmateInfo = lstInmateInfo.FirstOrDefault(s => !inmateId.HasValue || s.InmateId == inmateId);
+
+            PersonInfoVm personInfoVm = new PersonInfoVm
+            {
+                PersonId = personInfo?.PersonId ?? 0,
+                PersonLastName = personInfo?.PersonLastName,
+                PersonFirstName = personInfo?.PersonFirstName,
+                PersonMiddleName = personInfo?.PersonMiddleName,
+                PersonSuffix = personInfo?.PersonSuffix,
+                PersonDob = personInfo?.PersonDob,
+                InmateId = inmateInfo?.InmateId,
+                InmateNumber = inmateInfo?.InmateNumber
+            };
+
+            return personInfoVm;
+        }
+
+        public List<DataHistoryFieldVm> GetDataHistoryFields(int historyId) =>
+            _context.DataAoHistoryField.Where(w => w.DataAoHistoryId == historyId)
+                .Select(s => new DataHistoryFieldVm
+                    {
+                        TableName = s.TableName,
+                        PrimaryKey = s.PrimaryKey,
+                        FieldName = s.FieldName,
+                        FromId = s.FromId,
+                        ToId = s.ToId,
+                        PrimaryKeyId = s.PrimaryKeyId
+                    }
+                ).ToList();
+
+        public async Task<int> DoMove(DoMoveParam objParam)
+        {
+            //DataAoHistory insert
+            DataAoHistory dataAoHistory = new DataAoHistory
+            {
+                HistoryType = objParam.DataHistoryParam.HistoryType,
+                DataDate = DateTime.Now,
+                DataBy = _personnelId,
+                KeepPersonId = objParam.DataHistoryParam.KeepPersonId,
+                DataPersonId = objParam.DataHistoryParam.DataPersonId,
+                KeepInmateId = objParam.DataHistoryParam.KeepInmateId,
+                DataInmateId = objParam.DataHistoryParam.DataInmateId,
+                DataTitle = objParam.DataHistoryParam.DataTitle,
+                DataReason = objParam.DataHistoryParam.DataReason,
+                DataNote = objParam.DataHistoryParam.DataNote
+            };
+
+            _context.DataAoHistory.Add(dataAoHistory);
+            _context.SaveChanges();
+
+            int dataAoHistoryId = dataAoHistory.DataAoHistoryId;
+
+            //Get From and To inmate details
+            Inmate fromInmate = _context.Inmate.Single(s => s.InmateId == objParam.FromInmateId);
+            Inmate toInmate = _context.Inmate.Single(s => s.InmateId == objParam.ToInmateId);
+
+            if (objParam.LstDataAoLookupId != null)
+            {
+                //Get DataAoLookup details
+                List<DataAoLookup> lstDataAoLookup = _context.DataAoLookup.Where(w =>
+                                                objParam.LstDataAoLookupId.Contains(w.DataAoLookupId)).ToList();
+
+                //Loop DataAoLookup details
+                lstDataAoLookup.ForEach(dataAo =>
+                {
+                    int fromId = dataAo.IsInmate == 1 ? objParam.FromInmateId : objParam.FromPersonId;
+                    int toId = dataAo.IsInmate == 1 ? objParam.ToInmateId : objParam.ToPersonId;
+
+                    //Get reference details list
+                    List<int> lstRefId = objParam.DataHistoryParam.MoveType switch
+                    {
+                        MoveType.Reference => objParam.LstLookupAndRefId.Where(w => w.Key == dataAo.DataAoLookupId)
+                            .Select(s => s.Value)
+                            .ToList(),
+                        MoveType.Incarceration => _dataMergeService.GetReferenceDetail(dataAo, objParam.FromInmateId,
+                                objParam.FromPersonId, objParam.FromIncarcerationId ?? 0)
+                            .Select(s => s.ReferenceId ?? 0)
+                            .ToList(),
+                        MoveType.Booking => _dataMergeService
+                            .GetReferenceDetail(dataAo, objParam.FromInmateId, objParam.FromPersonId, 0)
+                            .Select(s => s.ReferenceId ?? 0)
+                            .ToList(),
+                        _ => new List<int>()
+                    };
+
+                    lstRefId.ForEach(refId =>
+                    {
+                        //Create DataAoHistoryField
+                        DataAoHistoryField dataAoHistoryField = new DataAoHistoryField
+                        {
+                            DataAoHistoryId = dataAoHistoryId,
+                            TableName = dataAo.TableName,
+                            PrimaryKey = dataAo.PrimaryKey,
+                            FieldName = dataAo.FieldName,
+                            FromId = fromId,
+                            ToId = toId,
+                            PrimaryKeyId = refId
+                        };
+
+                        _context.DataAoHistoryField.Add(dataAoHistoryField);
+                        _context.SaveChanges();
+
+                        if (MoveType.Booking == objParam.DataHistoryParam.MoveType) return;
+                        switch (dataAo.ReferenceName)
+                        {
+                            //MergeRecords
+                            case MoveRecordsConstants.InmateForms:
+                                MoveForms(dataAo, toId, refId, fromId);
+                                break;
+                            case MoveRecordsConstants.Classification:
+                                MoveClassification(toId, refId, fromId);
+                                break;
+                            default:
+                                _dataMergeService.MergeRecords(dataAo, toId, refId);
+                                break;
+                        }
+
+                        //MoveRecords
+                        if (MoveRecordsConstants.Appointment == dataAo.ReferenceName)
+                        {
+                            objParam.ScheduleId = refId;
+                        }
+
+                        MoveRecords(objParam, fromInmate, toInmate, dataAo.ReferenceName);
+                    });
+                });
+            }
+
+            switch (objParam.DataHistoryParam.MoveType)
+            {
+                case MoveType.Booking:
+                {
+                    //Update SupBookingMove
+                    Arrest arrest = _context.Arrest.Single(w => w.ArrestId == objParam.FromArrestId);
+                    arrest.InmateId = objParam.ToInmateId;
+
+                    IncarcerationArrestXref incarcerationArrestXref = _context.IncarcerationArrestXref
+                        .Single(w => w.ArrestId == objParam.FromArrestId);
+                    incarcerationArrestXref.IncarcerationId = objParam.ToIncarcerationId;
+                    break;
+                }
+                case MoveType.Incarceration when fromInmate.InmateActive == 1 && toInmate.InmateActive == 0:
+                    //UpdateInmateMove
+                    UpdateInmateStatusAndHousing(true, fromInmate, toInmate);
+                    UpdateInmateStatusAndHousing(false, toInmate, fromInmate);
+                    break;
+            }
+
+            if (objParam.IsVerify)
+                UpdateVerifyFlag(toInmate);
+            return await _context.SaveChangesAsync();
+        }
+        
+        private void MoveForms(DataAoLookup dataAo, int? toId, int? refId, int? fromId)
+        {
+
+            FormRecord formRecord = _context.FormRecord.Find(refId);
+            if (formRecord is null) return;
+            FormTemplates formTemplates = _context.FormTemplates.Single(w => w.FormTemplatesId == formRecord.FormTemplatesId);
+            FormCategory categoryId = _context.FormCategory.Find(formTemplates.FormCategoryId);
+            if (!(categoryId is null))
+            {
+                switch (categoryId.FormCategoryId)
+                {
+                    case (int) FormCategories.Booking:
+                    case (int) FormCategories.Case:
+                    {
+                        List<Incarceration> incarceration = _context.Incarceration
+                            .Where(s => s.InmateId == toId)
+                            .OrderByDescending(q => q.IncarcerationId).ToList();
+                        int incarcerationId = incarceration.Select(s => s.IncarcerationId).First();
+                        List<Arrest> arrest = _context.Arrest.Where(s => s.InmateId == toId)
+                            .OrderByDescending(q => q.ArrestId).ToList();
+                        int arrestId = arrest.Select(s => s.ArrestId).First();
+                        formRecord.IncarcerationId = incarcerationId;
+                        formRecord.ArrestId = arrestId;
+                        formRecord.InmateId = toId;
+                        break;
+                    }
+                    case (int) FormCategories.ClassificationInitial:
+                    case (int) FormCategories.ClassificationReclass:
+                    {
+                        int? inmateClassificationId = formRecord.InmateClassificationId;
+                        Inmate toInmateData = _context.Inmate.Find(toId);
+                        Inmate fromInmateData = _context.Inmate.Find(fromId);
+                        if (inmateClassificationId > 0)
+                        {
+                            if (fromInmateData.InmateClassificationId == inmateClassificationId)
+                            {
+                                if (toInmateData.InmateClassificationId < inmateClassificationId)
+                                {
+                                    toInmateData.InmateClassificationId = inmateClassificationId;
+                                    List<InmateClassification> inmateClassification = _context
+                                        .InmateClassification.Where(w => w.InmateId == fromInmateData.InmateId
+                                            && w.InmateClassificationId != inmateClassificationId)
+                                        .OrderByDescending(d => d.InmateClassificationId).ToList();
+                                    int inmateFirst = inmateClassification.Select(s => s.InmateClassificationId).First();
+                                    fromInmateData.InmateClassificationId =
+                                        fromInmateData.InmateClassificationId > inmateFirst ? (int?) inmateFirst : null;
+                                }
+                            }
+                            else if (fromInmateData.InmateClassificationId != inmateClassificationId)
+                            {
+                                if (toInmateData.InmateClassificationId < inmateClassificationId)
+                                {
+                                    toInmateData.InmateClassificationId = inmateClassificationId;
+                                }
+                            }
+
+                            formRecord.InmateId = toInmateData.InmateId;
+                            InmateClassification inmateClassification1 =
+                                _context.InmateClassification.Find(inmateClassificationId);
+                            inmateClassification1.InmateId = toInmateData.InmateId;
+                        }
+
+                        break;
+                    }
+                    default:
+                        _dataMergeService.MergeRecords(dataAo, toId, refId);
+                        break;
+                }
+            }
+            _context.SaveChanges();
+
+        }
+
+        private void MoveClassification(int? toId, int? refId, int? fromId)
+        {
+            InmateClassification inmateClassification1 = _context.InmateClassification.Find(refId);
+            FormRecord formRecord = _context.FormRecord.SingleOrDefault(s =>
+                s.InmateClassificationId == inmateClassification1.InmateClassificationId);
+            if (!(formRecord is null))
+            {
+                FormTemplates formTemplates = _context.FormTemplates.Single(w => w.FormTemplatesId == formRecord.FormTemplatesId);
+                FormCategory categoryId = _context.FormCategory.Find(formTemplates.FormCategoryId);
+                if (categoryId.FormCategoryId != (int) FormCategories.ClassificationInitial &&
+                    categoryId.FormCategoryId != (int) FormCategories.ClassificationReclass) return;
+                int? inmateClassificationId = inmateClassification1.InmateClassificationId;
+                Inmate toInmateData = _context.Inmate.Find(toId);
+                Inmate fromInmateData = _context.Inmate.Find(fromId);
+                if (inmateClassificationId == 0) return;
+                if (fromInmateData.InmateClassificationId == inmateClassificationId)
+                {
+                    if (toInmateData.InmateClassificationId < inmateClassificationId)
+                    {
+                        toInmateData.InmateClassificationId = inmateClassificationId;
+                        List<InmateClassification> inmateClassification = _context.InmateClassification.Where(w =>
+                                w.InmateId == fromInmateData.InmateId
+                                && w.InmateClassificationId != inmateClassificationId)
+                            .OrderByDescending(d => d.InmateClassificationId).ToList();
+                        int inmateFirst = inmateClassification.Select(s => s.InmateClassificationId).First();
+                        fromInmateData.InmateClassificationId = fromInmateData.InmateClassificationId > inmateFirst ? inmateFirst : (int?)null;
+                    }
+                    else if (toInmateData.InmateClassificationId == null)
+                    {
+                        toInmateData.InmateClassificationId = inmateClassificationId;
+                    }
+                }
+                else if (fromInmateData.InmateClassificationId != inmateClassificationId)
+                {
+                    if (toInmateData.InmateClassificationId < inmateClassificationId)
+                    {
+                        toInmateData.InmateClassificationId = inmateClassificationId;
+                    }
+
+                }
+                formRecord.InmateId = toInmateData.InmateId;
+                inmateClassification1.InmateId = toInmateData.InmateId;
+            } else {
+                  inmateClassification1.InmateId = toId ?? 0;
+            }
+        }
+
+        private void MoveRecords(DoMoveParam objParam, Inmate fromInmate, Inmate toInmate, string referenceName)
+        {
+            switch (referenceName)
+            {
+                case MoveRecordsConstants.Appointment:
+                    UpdateAppointment(objParam);
+                    break;
+
+                case MoveRecordsConstants.HousingMove:
+                    toInmate.HousingUnitId = fromInmate.HousingUnitId;
+                    fromInmate.HousingUnitId = null;
+                    break;
+
+                case MoveRecordsConstants.InmateTracking:
+                    toInmate.InmateCurrentTrack = fromInmate.InmateCurrentTrack;
+                    toInmate.InmateCurrentTrackId = fromInmate.InmateCurrentTrackId;
+                    fromInmate.InmateCurrentTrack = null;
+                    fromInmate.InmateCurrentTrackId = null;
+                    break;
+
+                case MoveRecordsConstants.MedicalChartNumber:
+                    toInmate.MedicalChartNumber = fromInmate.MedicalChartNumber;
+                    fromInmate.MedicalChartNumber = null;
+                    break;
+
+                case MoveRecordsConstants.MedChartLastUpdateHistory:
+                    toInmate.MedicalChartLastUpdate = fromInmate.MedicalChartLastUpdate;
+                    fromInmate.MedicalChartLastUpdate = null;
+                    break;
+
+                case MoveRecordsConstants.MedicalChartLocation:
+                    toInmate.MedicalChartLocation = fromInmate.MedicalChartLocation;
+                    toInmate.MedicalChartLocationBox = fromInmate.MedicalChartLocationBox;
+                    fromInmate.MedicalChartLocation = null;
+                    fromInmate.MedicalChartLocationBox = null;
+                    break;      
+            }
+
+            _context.SaveChanges();
+        }
+
+        private void UpdateAppointment(DoMoveParam objParam)
+        {
+            //Code needs to be checked after doing Appointment rework
+            ScheduleInmate appointment = _context.ScheduleInmate.Single(s => s.ScheduleId == objParam.ScheduleId);
+            appointment.Notes = objParam.AppointmetNotes;
+
+            // TO DO
+            /*
+            AppointmentArrestXref appArrestXref =
+                _context.AppointmentArrestXref.Single(ax => ax.AppointmentId == objParam.AoscheduleId);
+            _context.AppointmentArrestXref.Remove(appArrestXref);
+            */
+
+            List<InmateAppointmentTrack> lstAoappointment =
+                _context.InmateAppointmentTrack.Where(oc => oc.ScheduleId == objParam.ScheduleId).ToList();
+            lstAoappointment.ForEach(app => { app.InmateId = objParam.ToInmateId; });
+        }
+
+        private static void UpdateInmateStatusAndHousing(bool inmateActive, Inmate inmateOne, Inmate inmateTwo)
+        {
+            inmateTwo.InmateActive = inmateActive ? 1 : 0;
+            inmateTwo.HousingUnitId = inmateActive ? inmateOne.HousingUnitId : null;
+            inmateTwo.InmateSecurityLevel = inmateActive ? inmateOne.InmateSecurityLevel : null;
+            inmateTwo.InmateScheduledReleaseDate = inmateActive ? inmateOne.InmateScheduledReleaseDate : null;
+            inmateTwo.InmateOfficerId = inmateActive ? inmateOne.InmateOfficerId : null;
+            inmateTwo.InmateContractHousing = inmateActive ? inmateOne.InmateContractHousing : null;
+            inmateTwo.InmateFootlocker = inmateActive ? inmateOne.InmateFootlocker : null;
+            inmateTwo.InmateJuvenileFlag = inmateActive ? inmateOne.InmateJuvenileFlag : null;
+            inmateTwo.InmateClassificationId = inmateActive ? inmateOne.InmateClassificationId : null;
+            inmateTwo.InmatePersonalInventory = inmateActive ? inmateOne.InmatePersonalInventory : null;
+            inmateTwo.InmateCurrentTrack = inmateActive ? inmateOne.InmateCurrentTrack : null;
+            inmateTwo.InmateCurrentTrackId = inmateActive ? inmateOne.InmateCurrentTrackId : null;
+            inmateTwo.InmateBalance = inmateActive ? inmateOne.InmateBalance : null;
+            inmateTwo.InmateDepositedBalance = inmateActive ? inmateOne.InmateDepositedBalance : null;
+            inmateTwo.InmateDebt = inmateActive ? inmateOne.InmateDebt : null;
+            inmateTwo.InmateMedicalFlags = inmateActive ? inmateOne.InmateMedicalFlags : null;
+            inmateTwo.InmateClassFlags = inmateActive ? inmateOne.InmateClassFlags : null;
+            inmateTwo.WorkCrewId = inmateActive ? inmateOne.WorkCrewId : null;
+            inmateTwo.SupplyShirt = inmateActive ? inmateOne.SupplyShirt : null;
+            inmateTwo.SupplyBra = inmateActive ? inmateOne.SupplyBra : null;
+            inmateTwo.SupplyPants = inmateActive ? inmateOne.SupplyPants : null;
+            inmateTwo.SupplyShoes = inmateActive ? inmateOne.SupplyShoes : null;
+            inmateTwo.SupplyUnderwear = inmateActive ? inmateOne.SupplyUnderwear : null;
+            inmateTwo.InmateWristbandId = inmateActive ? inmateOne.InmateWristbandId : null;
+            inmateTwo.InmateStatus = inmateActive ? inmateOne.InmateStatus : null;
+            inmateTwo.SpecialClassQueueInterval = inmateActive ? inmateOne.SpecialClassQueueInterval : null;
+            if (inmateActive)
+            {
+                inmateTwo.FacilityId = inmateOne.FacilityId;
+                inmateTwo.LastReviewDate = inmateOne.LastReviewDate;
+                inmateTwo.LastReviewBy = inmateOne.LastReviewBy;
+                inmateTwo.LastClassReviewDate = inmateOne.LastClassReviewDate;
+                inmateTwo.LastClassReviewBy = inmateOne.LastClassReviewBy;
+            }
+            else
+            {
+                inmateTwo.InmateSiteNumber = null;
+                inmateTwo.PhonePin = null;
+            }
+        }
+
+        private void UpdateVerifyFlag(Inmate keepName)
+        {
+            Incarceration inc = _context.Incarceration.SingleOrDefault(x => !x.ReleaseOut.HasValue &&
+                x.Inmate.InmateActive == 1 && x.InmateId == keepName.InmateId);
+            if (inc == null) return;
+            inc.VerifyIDFlag = (int)BookingVerifyType.NotVerified;
+            inc.VerifyIDDate = DateTime.Now;
+            inc.VerifyIDBy = _personnelId;
+            _context.SaveChanges();
+        }
+    }
+}

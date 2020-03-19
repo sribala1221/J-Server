@@ -1,0 +1,220 @@
+using Microsoft.AspNetCore.Mvc;
+using ServerAPI.ViewModels;
+using ServerAPI.Services;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using jsreport.Client;
+using jsreport.Types;
+using Microsoft.Extensions.Configuration;
+using Newtonsoft.Json;
+using System;
+using ServerAPI.Authorization;
+
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    public class InmateMailController : Controller
+    {
+        private readonly IInmateMailService _inmateMailService;
+        private readonly ICommonService _commonService;
+        private readonly IConfiguration _configuration;
+        public InmateMailController(IInmateMailService inmateMailService, ICommonService commonService, IConfiguration configuration)
+        {
+            _inmateMailService = inmateMailService;
+            _commonService = commonService;
+            _configuration = configuration;
+        }
+
+        [HttpGet("GetHousingDetails")]
+        public IActionResult GetHousingDetails(int inmateId)
+        {
+            return Ok(_inmateMailService.GetHousingDetails(inmateId));
+        }
+
+        [HttpGet("GetMailRecordDefaultList")]
+        public IActionResult GetMailRecordDefaultList(int facilityId)
+        {
+            return Ok(_inmateMailService.GetMailRecordDefaultList(facilityId));
+        }
+
+        [FuncPermission(7200, FuncPermissionType.Add)]
+        [HttpPost("InsertMailRecord")]
+        public IActionResult InsertMailRecord([FromBody]MailRecordVm value)
+        {
+            return Ok(_inmateMailService.InsertMailRecord(value));
+        }
+
+        [FuncPermission(7204, FuncPermissionType.Add)]
+        [HttpPost("InsertMailVendorSubscribe")]
+        public IActionResult InsertMailVendorSubscribe([FromBody]MailVendorSubscribeVm value)
+        {
+            return Ok(_inmateMailService.InsertMailVendorSubscribe(value));
+        }
+
+        [FuncPermission(7205, FuncPermissionType.Add)]
+        [HttpPost("InsertMailVendor")]
+        public IActionResult InsertMailVendor([FromBody]MailVendorVm value)
+        {
+
+            return Ok(_inmateMailService.MailVendorInsert(value));
+        }
+
+        [FuncPermission(7200, FuncPermissionType.Edit)]
+        [HttpPost("updateMailRecord")]
+        public IActionResult UpdateMailRecord([FromBody]MailRecordVm value)
+        {
+            return Ok(_inmateMailService.UpdateMailRecord(value));
+        }
+
+        [FuncPermission(7200, FuncPermissionType.Delete)]
+        [HttpPost("deleteMailRecord")]
+        public IActionResult DeleteMailRecord([FromBody]MailRecordVm value)
+        {
+            return Ok(_inmateMailService.DeleteMailRecord(value));
+        }
+
+        [HttpPost("undoMailRecord")]
+        public IActionResult UndoMailRecord([FromBody]MailRecordVm value)
+        {
+            return Ok(_inmateMailService.DeleteMailRecord(value));
+        }
+
+        [HttpGet("GetRefusalNotificationPdf")]
+        public async Task<IActionResult> GetRefusalNotificationPdf([FromQuery]PrintRefusalNotificationVm value)
+        {
+            string json = JsonConvert.SerializeObject(value);
+            ReportingService rs = new ReportingService(_configuration.GetSection("SiteVariables")["ReportUrl"]);
+            //try catch used for to handle 2 exceptions (10061 & 404) from jsreport.
+            try
+            {
+                Report report = await rs.RenderByNameAsync(value.Type, json);
+                FileContentResult result =
+                    new FileContentResult(_commonService.ConvertStreamToByte(report.Content), "application/pdf");
+                return result;
+            }
+            catch (Exception ex)
+            {
+                //10061 is status code for no connection could be made because the target machine actively refused it
+                //404 for file not found in jsreport
+                return ex.InnerException != null ? Ok(10061) : Ok(404);
+            }
+        }
+
+        [HttpGet("vendorForSelect")]
+        public IActionResult VendorForSelect()
+        {
+            return Ok(_inmateMailService.VendorForSelect());
+        }
+
+        [HttpGet("GetMailSubscribeList")]
+        public IActionResult GetMailSubscribeList()
+        {
+            return Ok(_inmateMailService.LoadMailVendorSubscribe());
+        }
+
+        [HttpGet("GetHousingList")]
+        public IActionResult GetHousingList(int facilityId)
+        {
+            return Ok(_inmateMailService.GetHousingList(facilityId));
+        }
+
+        [FuncPermission(7204, FuncPermissionType.Delete)]
+        [HttpPost("DeleteMailVendorSubscribe")]
+        public IActionResult DeleteMailVendorSubscribe([FromBody]int subscribeId)
+        {
+            return Ok(_inmateMailService.DeleteVendorSubscribe(subscribeId));
+        }
+
+        [HttpPost("UndoMailVendorSubscribe")]
+        public IActionResult UndoMailVendorSubscribe([FromBody]int subscribeId)
+        {
+            return Ok(_inmateMailService.UndoVendorSubscribe(subscribeId));
+        }
+
+        [FuncPermission(7204, FuncPermissionType.Edit)]
+        [HttpPost("UpdateMailVendorSubscribe")]
+        public IActionResult UpdateMailVendorSubscribe([FromBody]MailVendorSubscribeVm value)
+        {
+            return Ok(_inmateMailService.InsertMailVendorSubscribe(value));
+        }
+
+        [HttpGet("getPrivilege")]
+        public IActionResult GetPrivilege(int facilityId)
+        {
+            return Ok(_inmateMailService.GetPrivilegeByOfficer(facilityId));
+        }
+
+        [HttpGet("LoadMailAttachment")]
+        public IActionResult LoadMailAttachment(string attachType, int id)
+        {
+            return Ok(_inmateMailService.LoadMailAttachment(attachType, id));
+        }
+
+        [FuncPermission(7203, FuncPermissionType.Edit)]
+        [HttpPost("UpdateDeliveryData")]
+        public IActionResult UpdateDeliveryData([FromBody]List<MailRecordVm> value)
+        {
+            return Ok(_inmateMailService.UpdateDeliveryData(value));
+        }
+        [HttpGet("GetMailSearchRecord")]
+        public IActionResult GetMailSearchRecord([FromQuery]MailSearchRecordVm record)
+        {
+            return Ok(_inmateMailService.MailSearchRecord(record));
+        }
+
+        [HttpGet("GetHousingNumber")]
+        public IActionResult GetHousingNumber()
+        {
+            return Ok(_inmateMailService.GetHousingNumber());
+        }
+
+        [HttpGet("GetMailRecordByFacilityId")]
+        public IActionResult GetMailRecordByFacilityId(int facilityId)
+        {
+            return Ok(_inmateMailService.GetMailRecordList(facilityId));
+        }
+
+        [HttpGet("GetMailRecordByHousingId")]
+        public IActionResult GetMailRecordByHousingId(int housingUnitListId = 0, int facilityId = 0, int housingGroupId = 0)
+        {
+            return Ok(_inmateMailService.LoadMailRecordByHousingId(housingUnitListId, facilityId, housingGroupId));
+        }
+        [FuncPermission(7202, FuncPermissionType.Edit)]
+        [HttpGet("UpdateHoldSearchData")]
+        public IActionResult UpdateHoldSearchData()
+        {
+            return Ok();
+        }
+        [FuncPermission(7201, FuncPermissionType.Edit)]
+        [HttpGet("UpdateMailSearchData")]
+        public IActionResult UpdateMailSearchData()
+        {
+            return Ok();
+        }
+        [FuncPermission(7200, FuncPermissionType.Print)]
+        [HttpGet("PrintMailInmate")]
+        public IActionResult PrintMailInmate()
+        {
+            return Ok();
+        }
+        [FuncPermission(7200, FuncPermissionType.Access)]
+        [HttpGet("InmateMailAccess")]
+        public IActionResult InmateMailAccess()
+        {
+            return Ok();
+        }
+        [HttpGet("GetMailRecordById")]
+        public IActionResult GetMailRecordById(int id, int facilityId)
+        {
+            return Ok(_inmateMailService.GetMailRecordById(id, facilityId));
+        }
+
+
+        [HttpGet("GetBinDetailsList")]
+        public IActionResult GetBinDetailsList(int facilityId)
+        {
+            return Ok(_inmateMailService.GetBinDetailsList(facilityId));
+        }
+
+    }
+}

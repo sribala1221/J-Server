@@ -1,0 +1,296 @@
+﻿using System;
+using System.Collections.Generic;
+using GenerateTables.Models;
+using ServerAPI.ViewModels;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
+
+// ReSharper disable once CheckNamespace
+namespace ServerAPI.Services
+{
+    public class MoneyVoidCashDrawerService : IMoneyVoidCashDrawerService
+    {
+        private readonly AAtims _context;
+        private readonly int _personnelId;
+        private MoneyAccountVoidDetailsVm _moneyAccountVoidDetails;
+        private readonly IMoneyService _moneyService;
+        public MoneyVoidCashDrawerService(AAtims context, IHttpContextAccessor httpContextAccessor,
+            IMoneyService moneyService)
+        {
+            _context = context;
+            _personnelId = Convert.ToInt32(httpContextAccessor.HttpContext.User
+                .FindFirst("personnelId")?.Value);
+            _moneyService = moneyService;
+        }
+
+        #region Get Void Details for CashDrawer and Vault
+        public MoneyAccountVoidDetailsVm GetCashDrawerVoidDetails(int transId, bool voidFlag, MoneyAccountTransactionFlagType pFlag)
+        {
+            _moneyAccountVoidDetails = new MoneyAccountVoidDetailsVm();
+            switch (pFlag)
+            {
+                case MoneyAccountTransactionFlagType.CASHDRAWER:
+                    CashDrawerTransactionDetails(transId, voidFlag);
+                    break;
+                case MoneyAccountTransactionFlagType.VAULT:
+                    VaultTransactionDetails(transId, voidFlag);
+                    break;
+            }
+
+            return _moneyAccountVoidDetails;
+        }
+        #endregion
+
+        #region SetVoid For CashDrawer and Vault
+        public async Task<int> DoVoidCashDrawerAndVault(SetVoidVm setVoid)
+        {
+            switch (setVoid.Flag)
+            {
+                case MoneyAccountTransactionFlagType.CASHDRAWER:
+                    SetVoidForCashDrawer(setVoid);
+                    break;
+                case MoneyAccountTransactionFlagType.VAULT:
+                    SetVoidForVault(setVoid);
+                    break;
+            }
+            return await _context.SaveChangesAsync();
+        }
+        #endregion
+
+        #region Show Detail for CashDrawer and Vault
+        public List<MoneyAccountTransactionVm> GetCashDrawerTransactionDetails(int transId)
+        {
+            MoneyBankVm bankVm = _moneyService.GetBankDetails();
+            List<MoneyAccountTransactionVm> lstTransaction = _context.AccountAoCashDrawer.Where(x =>
+                    x.AccountAoCashDrawerId == transId || x.AccountAoCashDrawerFromId == transId ||
+                    x.AccountAoCashDrawerToId==transId || x.TransactionVoidCashDrawerId == transId)
+                .Select(s => new MoneyAccountTransactionVm
+                {
+                    TransactionDate = s.TransactionDate,
+                    TransactionAmount = s.TransactionAmount,
+                    TransactionDescription = s.TransactionDescription,
+                    TransId = s.AccountAoCashDrawerId,
+                    VoidFlag = s.TransactionVoidFlag == 1,
+                    BalanceAccount = s.BalanceCashDrawer,
+                    TransactionType = s.TransactionType,
+                    TransactionNotes = s.TransactionNotes,
+                    BankAccountAbbr = bankVm.BankName,
+                    PersonnelBy = new PersonnelVm
+                    {
+                        PersonFirstName = s.CreatedByNavigation.PersonNavigation.PersonFirstName,
+                        PersonLastName = s.CreatedByNavigation.PersonNavigation.PersonLastName,
+                        OfficerBadgeNumber = s.CreatedByNavigation.OfficerBadgeNum
+                    }
+                }).ToList();
+            return lstTransaction;
+        }
+
+
+        #endregion
+
+        #region Get Void For CashDrawer(deposit and withdraw)
+        private void CashDrawerTransactionDetails(int transId, bool voidFlag)
+        {
+            _moneyAccountVoidDetails.Flag = MoneyAccountTransactionFlagType.CASHDRAWER;
+            if (voidFlag)
+            {
+                MoneyAccountTransactionVm lstCash = CashDrawerDetail(transId, false);
+                MoneyAccountTransactionVm voidCash = CashDrawerDetail(transId, true);
+                if (lstCash.TransId < voidCash.TransId)
+                {
+                    _moneyAccountVoidDetails.ApplyFeeList.Add(lstCash);
+                    _moneyAccountVoidDetails.NewFeeAppliedList.Add(voidCash);
+                }
+                else
+                {
+                    _moneyAccountVoidDetails.ApplyFeeList.Add(voidCash);
+                    _moneyAccountVoidDetails.NewFeeAppliedList.Add(lstCash);
+                }
+            }
+            else
+            {
+                MoneyAccountTransactionVm lstCash = CashDrawerDetail(transId, false);
+                _moneyAccountVoidDetails.CashDrawerList.Add(lstCash);
+            }
+        }
+        #endregion
+
+        #region Get Void For Vault(Vault to Cash,Cash to Vault,Between Valut to cash)
+        private void VaultTransactionDetails(int transId, bool voidFlag)
+        {
+            _moneyAccountVoidDetails.Flag = MoneyAccountTransactionFlagType.VAULT;
+            if (voidFlag)
+            {
+                MoneyAccountTransactionVm voidOne = CashDrawerDetail(transId, false);
+                MoneyAccountTransactionVm voidTwo = CashDrawerDetail(transId, true);
+                AddVoidTransaction(voidOne, voidTwo);
+                int voidId = voidOne.TransFromId > 0 ? voidOne.TransFromId ?? 0 : voidOne.TransToId ?? 0;
+                MoneyAccountTransactionVm voidThree = CashDrawerDetail(voidId, false);
+                MoneyAccountTransactionVm voidFour = CashDrawerDetail(voidId, true);
+                AddVoidTransaction(voidThree, voidFour);
+            }
+            else
+            {
+                MoneyAccountTransactionVm cash = CashDrawerDetail(transId, false);
+                int cashId = cash.TransFromId > 0 ? cash.TransFromId ?? 0 : cash.TransToId??0;
+                MoneyAccountTransactionVm vault = CashDrawerDetail(cashId, false);
+                if (vault.TransId < cash.TransId)
+                {
+                    _moneyAccountVoidDetails.CashDrawerList.Add(cash);
+                    _moneyAccountVoidDetails.ReturnCashList.Add(vault);
+                }
+                else
+                {
+                    _moneyAccountVoidDetails.CashDrawerList.Add(vault);
+                    _moneyAccountVoidDetails.ReturnCashList.Add(cash);
+                }
+            }
+        }
+        private void AddVoidTransaction(MoneyAccountTransactionVm voidOne, MoneyAccountTransactionVm voidTwo)
+        {
+            if (voidOne.TransId < voidTwo.TransId)
+            {
+                _moneyAccountVoidDetails.ApplyFeeList.Add(voidOne);
+                _moneyAccountVoidDetails.NewFeeAppliedList.Add(voidTwo);
+            }
+            else
+            {
+                _moneyAccountVoidDetails.ApplyFeeList.Add(voidTwo);
+                _moneyAccountVoidDetails.NewFeeAppliedList.Add(voidOne);
+            }
+        }
+        private MoneyAccountTransactionVm CashDrawerDetail(int transId, bool voidFlag)
+        {
+            MoneyAccountTransactionVm lstCash = _context.AccountAoCashDrawer.Where(x =>
+                    (voidFlag || x.AccountAoCashDrawerId == transId) &&
+                    (!voidFlag || x.TransactionVoidCashDrawerId == transId))
+                .Select(s => new MoneyAccountTransactionVm
+                {
+                    TransactionDate = s.TransactionDate,
+                    TransactionAmount = s.TransactionAmount,
+                    TransactionDescription = s.TransactionDescription,
+                    TransFromId = s.AccountAoCashDrawerFromId,
+                    TransToId = s.AccountAoCashDrawerToId,
+                    VoidFlag = s.TransactionVoidFlag == 1,
+                    InmateId = s.InmateId,
+                    FacilityAbbr = s.Inmate.HousingUnit.Facility.FacilityAbbr,
+                    TransId = s.AccountAoCashDrawerId,
+                    TransactionType = s.TransactionType,
+                    VoidDate = s.TransactionVoidDate,
+                    Officer = new PersonnelVm
+                    {
+                        PersonFirstName = s.TransactionOfficer.PersonNavigation.PersonFirstName,
+                        PersonLastName = s.TransactionOfficer.PersonNavigation.PersonLastName,
+                        OfficerBadgeNumber = s.TransactionOfficer.OfficerBadgeNum
+                    }
+                }).FirstOrDefault();
+            return lstCash;
+        }
+        #endregion
+
+
+        #region Set Void For CashDrawer(Deposit and Withdraw)
+        public void SetVoidForCashDrawer(SetVoidVm setVoid)
+        {
+            AccountAoCashDrawer drawer =
+                _context.AccountAoCashDrawer.First(s => s.AccountAoCashDrawerId == setVoid.TransId);
+            AccountAoCashDrawer cash = InsertVoidTransaction(drawer);
+            drawer.TransactionVoidFlag = 1;
+            drawer.TransactionVoidCashDrawerId = cash.AccountAoCashDrawerId;
+            drawer.TransactionVoidBy = _personnelId;
+            drawer.TransactionVoidDate = DateTime.Now;
+            drawer.UpdateDate = DateTime.Now;
+            drawer.UpdatedBy = _personnelId;
+            _context.SaveChanges();
+        }
+
+        #endregion
+
+        #region Set Void For Vault(Vault to Cash,Cash to Vault,Between Valut to cash)
+        public void SetVoidForVault(SetVoidVm setVoid)
+        {
+            List<AccountAoCashDrawer> drawers = new List<AccountAoCashDrawer>();
+            AccountAoCashDrawer drawer =
+                _context.AccountAoCashDrawer.First(s => s.AccountAoCashDrawerId == setVoid.TransId);
+            int cashId = drawer.AccountAoCashDrawerFromId > 0 ? drawer.AccountAoCashDrawerFromId ?? 0
+                : drawer.AccountAoCashDrawerToId ?? 0;
+            AccountAoCashDrawer vault =
+                _context.AccountAoCashDrawer.First(s => s.AccountAoCashDrawerId == cashId);
+            drawers.Add(drawer);
+            drawers.Add(vault);
+            drawers.ForEach(item =>
+            {
+                AccountAoCashDrawer drawerDetail = InsertVoidTransaction(item);
+                item.TransactionVoidFlag = 1;
+                item.TransactionVoidCashDrawerId = drawerDetail.AccountAoCashDrawerId;
+                item.TransactionVoidBy = _personnelId;
+                item.TransactionVoidDate = DateTime.Now;
+                item.UpdateDate = DateTime.Now;
+                item.UpdatedBy = _personnelId;
+            });
+            _context.SaveChanges();
+            UpdateCashDrawerFromAndToId(drawers[0].TransactionVoidCashDrawerId ?? 0,
+                drawers[1].TransactionVoidCashDrawerId ?? 0);
+        }
+        #endregion
+
+        #region Insert Void And Update Cash Balance
+        public AccountAoCashDrawer InsertVoidTransaction(AccountAoCashDrawer drawer)
+        {
+            AccountAoCashBalance balance = UpdateAoCashBalance(drawer);
+            AccountAoCashDrawer cashDrawer = new AccountAoCashDrawer
+            {
+                BalanceCashDrawer = balance.CurrentBalance ?? default,
+                TransactionAmount = -1 * (drawer.TransactionAmount),
+                TransactionDate = DateTime.Now,
+                TransactionDescription = $"VOID - {drawer.TransactionDescription}",
+                TransactionOfficerId = _personnelId,
+                TransactionType = drawer.TransactionType == MoneyTransactionType.CREDIT.ToString() ?
+                    MoneyTransactionType.DEBIT.ToString() : MoneyTransactionType.CREDIT.ToString(),
+                TransactionNotes = drawer.TransactionNotes,
+                CashBalanceId = balance.AccountAoCashBalanceId,
+                TransactionVoidFlag = 1,
+                TransactionVoidBy = _personnelId,
+                TransactionVoidDate = DateTime.Now,
+                TransactionVoidCashDrawerId = drawer.AccountAoCashDrawerId,
+                CreateDate = DateTime.Now,
+                CreatedBy = _personnelId,
+                UpdateDate = DateTime.Now,
+                UpdatedBy = _personnelId
+            };
+            _context.AccountAoCashDrawer.Add(cashDrawer);
+            _context.SaveChanges();
+            return cashDrawer;
+        }
+        public void UpdateCashDrawerFromAndToId(int firstVoid ,int secondVoid)
+        {
+            AccountAoCashDrawer voidOne =
+                _context.AccountAoCashDrawer.First(s => s.AccountAoCashDrawerId == firstVoid);
+            AccountAoCashDrawer voidTwo =
+                _context.AccountAoCashDrawer.First(s => s.AccountAoCashDrawerId == secondVoid);
+            if (voidOne.TransactionType == MoneyTransactionType.CREDIT.ToString())
+            {
+                voidOne.AccountAoCashDrawerFromId = voidTwo.AccountAoCashDrawerId;
+                voidTwo.AccountAoCashDrawerToId = voidOne.AccountAoCashDrawerId;
+            }
+            else if(voidTwo.TransactionType == MoneyTransactionType.CREDIT.ToString())
+            {
+                voidTwo.AccountAoCashDrawerFromId = voidOne.AccountAoCashDrawerId;
+                voidOne.AccountAoCashDrawerToId = voidTwo.AccountAoCashDrawerId;
+            }
+            _context.SaveChanges();
+        }
+        public AccountAoCashBalance UpdateAoCashBalance(AccountAoCashDrawer drawer)
+        {
+            AccountAoCashBalance aoCashBalance =
+                _context.AccountAoCashBalance.First(s => s.AccountAoCashBalanceId == drawer.CashBalanceId);
+            aoCashBalance.CurrentBalance = aoCashBalance.CurrentBalance != null
+                ? aoCashBalance.CurrentBalance - drawer.TransactionAmount
+                : drawer.TransactionAmount;
+            _context.SaveChanges();
+            return aoCashBalance;
+        }
+        #endregion
+    }
+}

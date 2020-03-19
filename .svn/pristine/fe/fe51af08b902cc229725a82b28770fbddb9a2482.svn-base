@@ -1,0 +1,40 @@
+using Microsoft.AspNetCore.Mvc;
+using ServerAPI.Services;
+using ServerAPI.ViewModels;
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    public class MoneyInmateController : Controller
+    {
+        private readonly IMoneyInmateService _moneyInmateService;
+        public MoneyInmateController(IMoneyInmateService moneyInmateService)
+        {
+            _moneyInmateService = moneyInmateService;
+        } 
+
+        [HttpGet("GetMoneyInmateLedger")]
+        public IActionResult GetMoneyInmateLedger(int iBankId, int iInmateId)
+        {
+            return Ok(_moneyInmateService.GetMoneyInmateLedger(iBankId, iInmateId));
+        }
+        [HttpGet("GetMoneyInmateDeposit")]
+        public IActionResult GetMoneyInmateDeposit(int iBankId, int iInmateId)
+        {
+            return Ok(_moneyInmateService.GetMoneyInmateDeposit(iBankId, iInmateId));
+        }
+
+
+        [HttpGet("GetMoneyInmateFeeDetails")]
+        public IActionResult GetMoneyInmateFeeDetails(int bankId, int inmateId)
+        {
+            return Ok(_moneyInmateService.GetMoneyInmateFeeDetails(bankId, inmateId));
+        }  
+
+        [HttpGet("GetMoneyInmateReference")]    
+        public IActionResult GetMoneyInmateReference(int? bankId,int? inmateId)
+        {
+            return Ok(_moneyInmateService.GetMoneyInmateReference(bankId,inmateId));
+        }
+    }
+}
+

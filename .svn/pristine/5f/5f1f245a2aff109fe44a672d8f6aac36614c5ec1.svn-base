@@ -1,0 +1,61 @@
+﻿{
+  "ConnectionStrings": {
+    "DefaultConnection": "Data Source=atims-db2017;Initial Catalog=DSD_V2;Integrated Security=true;"
+  },
+  "Version": "2.0.0-beta.191 $Rev$",
+  "Logging": {
+    "IncludeScopes": false,
+    "LogLevel": {
+      "Default": "Warning",
+      "System": "Information",
+      "Microsoft": "Information"
+    }
+  },
+  "SecretKey": "iNivDmHLpUA223sqsfhqGbMRdRj1PVkH",
+  "JwtIssuerOptions": {
+    "Issuer": "AtimsJms",
+    "Audience": "http://localhost:5151/"
+  },
+  "SiteVariables": {
+    "PhotoPath": "\\\\web2019-v2\\D$\\ATIMS_Images\\SSD_6111",
+    "AtimsPhotoPath": "http://localhost:5151/atims_dir/",
+    "FormtemplatePath": "\\\\web2019-v2\\D$\\ATIMS_Images\\SSD_6111\\V2Forms",
+    "AuditLogPath": "\\\\web2019-v2\\D$\\ATIMS_Images\\SSD_6111\\V2Forms\\logs",
+    "InterfaceEngine": "http://localhost:10661/",
+    "ReportUrl": "http://192.168.250.178:5488/",
+    "JMSUrl": "http://localhost:4200",
+    "ClientExternalPhotoPath": "https://photos.sacjustice.ca.gov:8425/",
+    "JSReportLog": false,
+    "ClientExternalAppletsPath": "\\\\web2019-v2\\D$\\ATIMS_Images\\SSD_6111\\",
+    "AtimsExternalAppletsPath": "\\\\web2019-v2\\D$\\ATIMS_Images\\SSD_6111\\"
+  },
+  "AttachmentPaths": {
+    "MEDATTACHTYPE": "\\APPLETSMED\\",
+    "BOOKATTACHTYPE": "\\APPLETSBooking\\",
+    "CLASATTACHTYPE": "\\APPLETSClassify\\",
+    "INCATTACHTYPE": "\\APPLETSIncident\\",
+    "INCARATTACHTYPE": "\\APPLETSIncarceration\\",
+    "REGATTACHTYPE": "\\APPLETSRegistrant\\",
+    "HOUSATTACHTYPE": "\\APPLETSHousing\\", // In V1, APPLETSHousing path has been same for both HOUSATTACHTYPE and PBPCATTACHTYPE.
+    "PBPCATTACHTYPE": "\\APPLETSPrebook\\", //  For Ref at V1 code: Attach.ascx.vb line no(671 - 674).
+    "ALTSENTREQATTYPE": "\\APPLETSAltSent\\",
+    "ALTSENTATTACHTYPE": "\\APPLETSAltSentFile\\",
+    "GRIEVATTACHTYPE": "\\APPLETSGrievance\\",
+    "PROGCASEATTACHTYPE": "\\APPLETSPrograms\\"
+  },
+  "LdapAuth": {
+    "Hostname": "<<ldap server host name goes here>>",
+    "Port": 389
+  },
+  "Saml": {
+    "Required": false,
+    "Certificate": "-----BEGIN CERTIFICATE-----\r\nMIIB7jCCAVegAwIBAgIBCjANBgkqhkiG9w0BAQQFADAcMRowGAYDVQQDExFnb3Z3bHMzdC5nb3YuZG52cjAeFw0xNjA4MjIyMTUwMzNaFw0yNjA4MjAyMTUwMzNaMBwxGjAYBgNVBAMTEWdvdndsczN0Lmdvdi5kbnZyMIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCbRvvJc+sI8t+JKyMZ0riYw8XVyTM+l2UWIfIn5T543CCzN80XfYdWQ650268NOfGvAyhaxaTQgUVho0klVxvm+5bW99oUaAsdCy59kR8z6Ju8WPGirRmnG0KBm/4HspAzxoBKNa4XRJElxFszz85YMKobeDd+uFD1Qp8pMIhV8wIDAQABo0AwPjAMBgNVHRMBAf8EAjAAMA8GA1UdDwEB/wQFAwMH2AAwHQYDVR0OBBYEFGYPzokctuK0oc/JaAExSPLtrSZSMA0GCSqGSIb3DQEBBAUAA4GBACDxmN7m5COjuL0N3X9p7NLkdzJNwnsY+3789Fe40rP1mI058wg7T5IBaILSezTi/tBZZ5S3gZkkygNj4bGidg5c0z8a2adws7dOw/wBq5/zvHa6GFyLD+h+rWtbKh5+6bMaRY09GCOTz07EaGtqAKraTDJgPwFkqdvSWn+GhQcU\r\n-----END CERTIFICATE-----\r\n",
+    "IdpTargetUrl": "https://testsecure.denvergov.org/oamfed/idp/samlv20",
+    "IdpLogoutUrl": "https://testsecure.denvergov.org/oamfed/idp/samlv20",
+    "assertionConsumerServiceUrlJMS": "https://denver-saml-api.atimsonline.com/auth/SamlLoginJms", //"https://denverssotest.questica.com/login.aspx", //
+    "AttributeName": "saml:NameID",
+    "Issuer": "https://www.atims.com" //"https://denverssotest.questica.com" //
+  }
+
+
+}

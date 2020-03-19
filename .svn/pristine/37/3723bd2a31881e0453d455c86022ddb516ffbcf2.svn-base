@@ -1,0 +1,97 @@
+﻿using ServerAPI.Services;
+using Xunit;
+using System.Linq;
+using ServerAPI.ViewModels;
+using ServerAPI.Tests;
+using Moq;
+using Microsoft.Extensions.Configuration;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Caching.Memory;
+using ServerAPI.JMS.Tests.Helper;
+using JwtDb.Models;
+using Microsoft.AspNetCore.Identity;
+using ServerAPI.Policies;
+
+// ReSharper disable once CheckNamespace
+namespace ServerAPI.JMS.Tests
+{
+    [Collection("Database collection")]
+    public class InmateHeaderServiceTest
+    {
+        private readonly InmateHeaderService _inmateHeaderService;
+        private readonly IConfigurationRoot _configuration = MockHelpers.GetIConfigurationRoot();
+        private readonly Mock<IMemoryCache> _memory = new Mock<IMemoryCache>();
+
+        public InmateHeaderServiceTest(DbInitialize fixture)
+        {
+            PersonService personService = new PersonService(fixture.Db);
+            PhotosService photosService = new PhotosService(fixture.Db, _configuration);
+            AppletsSavedService appletsSavedService = new AppletsSavedService(fixture.Db, _configuration);
+            AtimsHubService atimsHubService = new AtimsHubService(fixture.HubContext.Object);
+            HttpContextAccessor httpContext = new HttpContextAccessor { HttpContext = fixture.Context.HttpContext };
+            Mock<UserManager<AppUser>> userMgr = MockHelpers.MockUserManager<AppUser>();
+            InterfaceEngineService interfaceEngineService = new InterfaceEngineService(fixture.Db, _configuration,
+                _memory.Object);
+            Mock<RoleManager<IdentityRole>> roleMgr = MockHelpers.MockRoleManager<IdentityRole>();
+            UserPermissionPolicy userePermissionPolicy =
+                new UserPermissionPolicy(fixture.Db, userMgr.Object, roleMgr.Object, httpContext);
+            CommonService commonService = new CommonService(fixture.Db, _configuration, httpContext, personService, appletsSavedService, interfaceEngineService);
+            FacilityHousingService facilityHousingService = new FacilityHousingService(fixture.Db, _configuration,
+                httpContext);
+            RecordsCheckService recordsCheckService = new RecordsCheckService(fixture.Db, commonService, httpContext);
+            FacilityPrivilegeService facilityPrivilegeService = new FacilityPrivilegeService(fixture.Db, httpContext,
+                personService);
+
+            InmateService inmateService = new InmateService(fixture.Db, commonService, personService, httpContext,
+                facilityPrivilegeService, photosService);
+            PersonCharService personCharService = new PersonCharService(fixture.Db, commonService, httpContext, personService);
+            PersonPhotoService personPhotoService = new PersonPhotoService(fixture.Db, _configuration,
+                httpContext, personService, photosService);
+            AlertService alertService = new AlertService(fixture.Db, httpContext, commonService, personService,
+                interfaceEngineService, userePermissionPolicy);
+            KeepSepAlertService keepSepAlertService = new KeepSepAlertService(fixture.Db, httpContext,
+                facilityHousingService);
+            CellService cellService = new CellService(fixture.Db, commonService, httpContext,
+                facilityPrivilegeService, facilityHousingService, fixture.JwtDb, userMgr.Object);
+            BookingReleaseService bookingReleaseService = new BookingReleaseService(
+                fixture.Db, commonService, httpContext, personService, inmateService, recordsCheckService,
+                facilityHousingService, interfaceEngineService);
+            AltSentService altSentService = new AltSentService(fixture.Db, commonService, httpContext, photosService,
+                personService);
+
+            PrebookWizardService prebookWizardService = new PrebookWizardService(fixture.Db,
+                _configuration, commonService, cellService, httpContext, atimsHubService,
+                personService, inmateService, bookingReleaseService, altSentService, interfaceEngineService,
+                photosService, appletsSavedService);
+            WizardService wizardService = new WizardService(fixture.Db, atimsHubService);
+            SentenceService sentenceService = new SentenceService(fixture.Db, commonService, httpContext,
+                personService, interfaceEngineService);
+
+            PrebookActiveService prebookActiveService = new PrebookActiveService(fixture.Db, httpContext, atimsHubService);
+            BookingService bookingService = new BookingService(fixture.Db, commonService, httpContext, bookingReleaseService,
+                prebookWizardService, prebookActiveService, sentenceService, wizardService, personService, inmateService,
+                photosService, interfaceEngineService);
+            _inmateHeaderService = new InmateHeaderService(fixture.Db, commonService, personCharService, personPhotoService,
+                alertService, keepSepAlertService, bookingService, personService,
+                photosService, facilityHousingService);
+        }
+
+        [Fact]
+        public void InmateHeaderService_GetInmateHeaderDetail()
+        {
+            //Act
+            InmateHeaderVm inmateHeader = _inmateHeaderService.GetInmateHeaderDetail(101);
+
+            //Assert
+            Assert.Equal("MADURAI", inmateHeader.MyInmateDetail.CurrentTrack);
+            AlertFlagsVm alertflag = inmateHeader.InmateAlerts.Single(a => a.AlertColor == "2");
+            Assert.Equal("MEDICAL ISOLATION", alertflag.Description);
+            Assert.Equal("PPT COPY", alertflag.FlagNote);
+            IdentifierVm identifyvm = inmateHeader.InmatePhoto.Single(p => p.IdentifierId == 50);
+            Assert.Equal("http://localhost:5151/atims_dir/IDENTIFIERS\\PERSON\\FRONT_VIEW\\201509\\1_FACE.jpg", identifyvm.PhotographRelativePath);
+            ObservationLogVm observation = inmateHeader.LstObservationLog.Single(l => l.Description == "MEDICAL");
+            Assert.NotNull(observation);
+        }
+
+    }
+}

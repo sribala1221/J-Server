@@ -1,0 +1,48 @@
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
+using ServerAPI.Services;
+using ServerAPI.ViewModels;
+
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    public class DarkDaysController : ControllerBase
+    {
+        private readonly IDarkDaysService _darkDaysService;
+
+        public DarkDaysController(IDarkDaysService darkDaysService)
+        {
+            _darkDaysService = darkDaysService;
+        }
+
+        [HttpGet("GetDarkDays")]
+        public IActionResult GetDarkDays()
+        {
+            return Ok(_darkDaysService.GetDarkDays());
+        }
+
+        [HttpPost("InsertDarkDays")]
+        public async Task<IActionResult> InsertDarkDays([FromBody] DarkDayInfo model)
+        {
+            return Ok(await _darkDaysService.InsertDarkDays(model));
+        }
+
+        [HttpPost("UpdateDarkDays")]
+        public async Task<IActionResult> UpdateDarkDays([FromBody] DarkDayInfo model)
+        {
+            return Ok(await _darkDaysService.UpdateDarkDays(model));
+        }
+
+        [HttpPut("DeleteDarkDays")]
+        public IActionResult DeleteDarkDays([FromBody] DarkDayInfo model)
+        {
+            return Ok(_darkDaysService.DeleteDarkDays(model));
+        }
+
+        [HttpPut("UpdateDarkDays")]
+        public IActionResult UndoDarkDays([FromBody] DarkDayInfo model)
+        {
+            return Ok(_darkDaysService.UndoDarkDays(model));
+        }
+    }
+}

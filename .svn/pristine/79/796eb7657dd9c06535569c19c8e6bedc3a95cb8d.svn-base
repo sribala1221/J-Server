@@ -1,0 +1,114 @@
+﻿using Microsoft.AspNetCore.Mvc;
+using ServerAPI.Services;
+using ServerAPI.ViewModels;
+using System.Threading.Tasks;
+using ServerAPI.Authorization;
+
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    public class PreaController : Controller
+    {
+        private readonly IPREAService _PREAService;
+        public PreaController(IPREAService PREAService)
+        {
+            _PREAService = PREAService;
+        }
+
+        [HttpGet("GetClassFileDetails")]
+        public IActionResult GetClassFileDetails(int personId, int inmateId)
+        {
+            return Ok(_PREAService.GetClassFileDetails(personId, inmateId));
+        }
+
+        [HttpGet("GetPREAQueueDetails")]
+        public IActionResult GetPREAQueue(int facilityId)
+        {
+            return Ok(_PREAService.GetPreaQueue(facilityId));
+        }
+
+        [HttpPost("GetQueueDetails")]
+        public IActionResult GetQueueDetails([FromBody] PreaQueueSearch input)
+        {
+            return Ok(_PREAService.GetQueueDetails(input));
+        }
+
+        // Save PREA Review details
+        [HttpPost("InsertPREAReview")]
+        public async Task<IActionResult> InsertPREAReview([FromBody] PreaReviewVm review)
+        {
+            return Ok(await _PREAService.InsertPreaReview(review));
+        }
+
+        // Save PREA Notes details
+        [HttpPost("InsertPREANotes")]
+        public async Task<IActionResult> InsertPREANotes([FromBody] PreaNotesVm notes)
+        {
+            return Ok(await _PREAService.InsertPreaNotes(notes));
+        }
+
+        // Update PREA Review details
+        [HttpPost("UpdatePREAReview")]
+        public async Task<IActionResult> UpdatePREAReview([FromBody] PreaReviewVm review)
+        {
+            return Ok(await _PREAService.UpdatePreaReview(review));
+        }
+
+        // Update PREA Notes details
+        [HttpPost("UpdatePREANotes")]
+        public async Task<IActionResult> UpdatePREANotes([FromBody] PreaNotesVm notes)
+        {
+            return Ok(await _PREAService.UpdatePreaNotes(notes));
+        }
+
+        #region Assoc Alert
+
+        //[FuncPermission(1175, FuncPermissionType.Add)]
+        [HttpPost("InsertUpdateAssocDetails")]
+        public async Task<IActionResult> InsertUpdateAssocDetails([FromBody] PersonClassificationDetails personAssocDetails)
+        {
+            return Ok(await _PREAService.InsertUpdateAssocDetails(personAssocDetails));
+        }
+
+        ////[FuncPermission(1175, FuncPermissionType.Edit)]
+        //[HttpPost("InsertUpdateAssocDetailsEdit")]
+        //public async Task<IActionResult> InsertUpdateAssocDetailsEdit([FromBody] PersonClassificationDetails personAssocDetails)
+        //{
+        //    return Ok(await _PREAService.InsertUpdateAssocDetails(personAssocDetails));
+        //}
+
+        //[FuncPermission(1175, FuncPermissionType.Delete)]
+        [HttpPost("DeleteAssocDetails")]
+        public async Task<IActionResult> DeleteAssocDetails([FromBody] PersonClassificationDetails personAssocDetails)
+        {
+            return Ok(await _PREAService.DeleteAssocDetails(personAssocDetails));
+        }
+
+        #endregion
+
+        #region Permission region
+        [FuncPermission(7017, FuncPermissionType.Add)]
+        [HttpPut("AddAssociation")]
+        
+            public IActionResult AddAssociation()
+            {
+                return Ok();
+            }
+            [FuncPermission(7017, FuncPermissionType.Edit)]
+        [HttpPut("EditAssociation")]
+        
+            public IActionResult EditAssociation()
+            {
+                return Ok();
+            }
+            [FuncPermission(7017, FuncPermissionType.Delete)]
+            [HttpPut("DeleteAttachment")]
+            public IActionResult DeleteAttachment()
+            {
+                return Ok();
+            }
+        #endregion
+        
+
+    }
+}

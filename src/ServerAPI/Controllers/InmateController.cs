@@ -1,0 +1,113 @@
+﻿using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using ServerAPI.ViewModels;
+using ServerAPI.Services;
+using System.Collections.Generic;
+using ServerAPI.Authorization;
+
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    public class InmateController : ControllerBase
+    {
+        private readonly IInmateService _inmateService;
+
+        public InmateController(IInmateService inmateService)
+        {
+            _inmateService = inmateService;
+        }
+
+        // To get Inmate Note Details
+        [HttpGet("GetInmateNoteDetails")]
+        public IActionResult GetInmateNoteDetails(int facilityId, int inmateId)
+        {
+            return Ok(_inmateService.GetInmateNote(facilityId, inmateId));
+        }
+
+        //Creating Intake Notes Entry
+        [HttpPost("InsertInmateNote")]
+        public async Task<IActionResult> InsertInmateNote([FromBody] FloorNotesVm value)
+        {
+            return Ok(await _inmateService.InsertInmateNote(value));
+        }
+
+        /// <summary>
+        /// Update Inmate Note Details
+        /// </summary>
+        /// <param name="value"></param>
+        /// <returns></returns>
+        [FuncPermission(494, FuncPermissionType.Edit)]
+        [HttpPut("UpdateInmateNote")]
+        public async Task<IActionResult> UpdateInmateNote([FromBody] FloorNotesVm value)
+        {
+            return Ok(await _inmateService.UpdateInmateNote(value));
+        }
+        [FuncPermission(494, FuncPermissionType.Edit)]
+        [HttpPut("UpdateInmateNotePermission")]
+        public IActionResult UpdateInmateNotePermission()
+        {
+            return Ok();
+        }
+        [FuncPermission(494,FuncPermissionType.Delete)]
+        [HttpPut("DeleteInmateNote")]
+        public IActionResult DeleteInmateNote([FromBody]FloorNotesVm value)
+        {
+            return Ok( _inmateService.DeleteInmateNote(value));
+        }
+
+        /// <summary>
+        /// Get Inmate Note details for edit
+        /// </summary>
+        /// <param name="floorNoteId"></param>
+        /// <returns></returns>
+        [HttpGet("GetInmateNoteEdit")]
+        public IActionResult GetInmateNoteEdit(int floorNoteId)
+        {
+            return Ok(_inmateService.GetInmateNoteEdit(floorNoteId));
+        }
+
+        [HttpPost("LoadInmates")]
+        public IActionResult LoadInmates([FromBody] InmateSearchVm inmate)
+        {
+            return Ok(_inmateService.GetInmateSearchDetails(inmate));
+        }
+
+        [HttpPost("LoadDashboardInmates")]
+        public IActionResult LoadDashboardInmates([FromBody] InmateSearchVm inmate)
+        {
+            return Ok(_inmateService.GetDashboardInmateSearchDetails(inmate));
+        }
+
+        [HttpGet("LoadBookingNumber")]
+        public IActionResult LoadBookingNumber(string searchText, int inmateActive)
+        {
+            return Ok(_inmateService.GetBookingNumber(searchText, inmateActive));
+        }
+
+        [AllowAnonymous]
+        [HttpPost("InsertUpdateInmate")]
+        public async Task<IActionResult> InsertUpdateInmate([FromBody] InmateVm inmate)
+        {
+            return Ok(await _inmateService.InsertUpdateInmate(inmate));
+        }
+
+        [HttpGet("GetInmateTasks")]
+        public IActionResult GetInmateTasks(int inmateId, TaskValidateType validateType)
+        {
+            return Ok(_inmateService.GetInmateTasks(inmateId, validateType));
+        }
+
+        [HttpPost("GetInmates")]
+        public IActionResult GetInmates([FromBody] List<int> inmateIds)
+        {
+            return Ok(_inmateService.GetInmateDetails(inmateIds));
+        }
+
+        [HttpGet("IsActiveInmate")]
+        public IActionResult IsActiveInmate(int inmateId, int juvenileFlag)
+        {
+            return Ok(_inmateService.IsActiveInmate(inmateId, juvenileFlag));
+        }
+    }
+}

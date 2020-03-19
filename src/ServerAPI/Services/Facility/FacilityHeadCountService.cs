@@ -1,0 +1,918 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using ServerAPI.ViewModels;
+using GenerateTables.Models;
+using ServerAPI.Utilities;
+using Microsoft.AspNetCore.Http;
+using Newtonsoft.Json;
+
+namespace ServerAPI.Services
+{
+    public class FacilityHeadCountService : IFacilityHeadCountService
+    {
+        private readonly AAtims _context;
+        private readonly ICommonService _commonService;
+        private readonly ICellService _cellService;
+        private readonly int _personnelId;
+        private List<HeadCountSchedule> _headCountSchedules;
+        private List<PrivilegesVm> _privileges;
+        private readonly IAtimsHubService _atimsHubService;
+        private List<HousingUnitScheduleCount> _housingUnitScheduleCounts;
+        private readonly IPhotosService _photos;
+        private readonly IInterfaceEngineService _interfaceEngineService;
+
+        public FacilityHeadCountService(AAtims context, ICommonService commonService, ICellService cellService,
+            IHttpContextAccessor httpContextAccessor, IAtimsHubService atimsHubService, IPhotosService photosService,
+            IInterfaceEngineService interfaceEngineService)
+        {
+            _context = context;
+            _commonService = commonService;
+            _cellService = cellService;
+            _personnelId = Convert.ToInt32(httpContextAccessor.HttpContext.User.FindFirst("personnelId")?.Value);
+            _atimsHubService = atimsHubService;
+            _photos = photosService;
+            _interfaceEngineService = interfaceEngineService;
+        }
+
+        // Get cell headcount master details.
+        public CellHeadCountDetails LoadCellHeadCountMaster(int facilityId, int cellLogId, int housingUnitListId = 0,
+            int cellLogLocationId = 0)
+        {
+            CellHeadCountDetails cellHeadCountMaster = new CellHeadCountDetails
+            {
+                FacilityList = _commonService.GetFacilities().Where(a => !string.IsNullOrEmpty(a.FacilityAbbr))
+                    .OrderBy(a => a.FacilityAbbr) // Get facility combobox list.
+                    .Select(a => new KeyValuePair<int, string>(a.FacilityId, a.FacilityAbbr)).ToList(),
+                LocationList = _context.Privileges.Where(a => a.RemoveFromPrivilegeFlag == 1 &&
+                                                              a.RemoveFromTrackingFlag == 0 && a.InactiveFlag == 0 &&
+                                                              a.FacilityId == facilityId)
+                    .OrderByDescending(a => a.FacilityId).ThenBy(a => a.PrivilegeDescription)
+                    .Select(a => new PrivilegesVm // Location list for location combobox.
+                    {
+                        PrivilegesId = a.PrivilegeId,
+                        PrivilegesDescription = a.PrivilegeDescription,
+                        FacilityId = a.FacilityId ?? 0
+                    }).ToList(),
+                HeadCountDetail = _context.CellLog.Where(a => a.CellLogId == cellLogId).Select(a => new HeadCountDetail
+                {
+                    CellLogId = a.CellLogId,
+                    CellLogHeadCountId = a.CellLogHeadcountId,
+                    Assigned = a.CellLogAssigned,
+                    CheckedOut = a.CellLogCheckout,
+                    Actual = a.CellLogActual,
+                    Count = a.CellLogCount,
+                    Note = a.CellLogComments,
+                    HousingUnitLocation = a.HousingUnitLocation,
+                    HousingUnitNumber = a.HousingUnitNumber,
+                    HousingUnitListId = a.HousingUnitListId,
+                    CellLogLocation = a.CellLogLocation,
+                    CellLogLocationId = a.CellLogLocationId,
+                    CellLogDate = a.CellLogDate,
+                    CellLogSchedule = a.CellLogHeadcount.CellLogSchedule,
+                    FacilityId = a.FacilityId,
+                    FacilityAbbr = a.Facility.FacilityAbbr,
+                    ByInmateFlag = a.ByInmateFlag,
+                    CreateDate = a.CreateDate,
+                    CreateOfficerName = new PersonnelVm
+                    {
+                        PersonLastName = a.CreateByNavigation.PersonNavigation.PersonLastName,
+                        PersonFirstName = a.CreateByNavigation.PersonNavigation.PersonFirstName,
+                        PersonMiddleName = a.CreateByNavigation.PersonNavigation.PersonMiddleName,
+                        OfficerBadgeNumber = a.CreateByNavigation.OfficerBadgeNum
+                    },
+                    UpdateDate = a.UpdateDate,
+                    UpdateOfficerName = new PersonnelVm
+                    {
+                        PersonLastName = a.UpdateByNavigation.PersonNavigation.PersonLastName,
+                        PersonFirstName = a.UpdateByNavigation.PersonNavigation.PersonFirstName,
+                        PersonMiddleName = a.UpdateByNavigation.PersonNavigation.PersonMiddleName,
+                        OfficerBadgeNumber = a.UpdateByNavigation.OfficerBadgeNum
+                    }
+                }).SingleOrDefault(),
+                CellLogInmateDetails = // Get inmate list by housing or location.
+                    _context.CellLogInmate
+                        .Where(a => a.FacilityId == facilityId
+                                    && a.CellLogId == cellLogId && (housingUnitListId == 0 ||
+                                                                    a.HousingUnitListId == housingUnitListId)
+                                    && (cellLogLocationId == 0 || a.CellLogLocationId == cellLogLocationId))
+                        .OrderBy(a => a.HousingUnitLocation)
+                        .ThenBy(a => a.HousingUnitNumber)
+                        .ThenBy(a => a.HousingUnitBedNumber)
+                        .Select(a => new CellLogInmateInfo
+                        {
+                            CellLogInmateId = a.CellLogInmateId,
+                            CellLogId = a.CellLogId,
+                            InmateId = a.InmateId,
+                            FacilityId = a.FacilityId,
+                            InmateLastName = a.Inmate.Person.PersonLastName,
+                            InmateFirstName = a.Inmate.Person.PersonFirstName,
+                            InmateMiddleName = a.Inmate.Person.PersonMiddleName,
+                            HousingUnitLocation = a.HousingUnitLocation,
+                            HousingUnitNumber = a.HousingUnitNumber,
+                            HousingUnitBedNumber = a.HousingUnitBedNumber,
+                            ByInmateCountFlag = a.ByInmateCountFlag,
+                            PersonId = a.Inmate.PersonId,
+                            InmateIdCheckoutLocation =
+                                cellLogLocationId > 0 ? a.CellLogLocation : a.InmateIdCheckoutLocation,
+                            Number = a.Inmate.InmateNumber,
+                            PhotoGraphPath = _photos.GetPhotoByCollectionIdentifier(a.Inmate.Person.Identifiers)
+                        }).ToList()
+            };
+            return cellHeadCountMaster;
+        }
+
+        // Get head count viewer details
+        public HeadCountViewerDetails LoadHeadCountMaster(HeadCountFilter headCountFilter) => new HeadCountViewerDetails
+        {
+            HeadCountSchedules = LoadHeadCountSchedule(headCountFilter.FacilityId),
+            HeadCountViewDetails = LoadHeadCountViewerDetails(headCountFilter),
+            ActiveHeadCount = GetActiveCellHeadCountString(headCountFilter.FacilityId)?.CellLogSchedule
+        };
+
+        // Get head count reconcile details.
+        public List<HeadCountDetail> LoadHeadCountReconcile(int facilityId, int cellLogHeadcountId = 0,
+            int housingUnitListId = 0, int cellLogLocationId = 0, bool checkClearBy = false) => _context.CellLog.Where(
+                a => (facilityId == 0 || a.CellLogHeadcount.FacilityId == facilityId)
+                     && (cellLogHeadcountId == 0 ||
+                         a.CellLogHeadcountId == cellLogHeadcountId)
+                     && (housingUnitListId == 0 || a.HousingUnitListId == housingUnitListId)
+                     && (cellLogLocationId == 0 || a.CellLogLocationId == cellLogLocationId)
+                     && (!checkClearBy ||
+                         !a.CellLogHeadcount.ClearedBy.HasValue &&
+                         !a.CellLogHeadcount.ClearedDate.HasValue))
+            .Select(a => new HeadCountDetail
+            {
+                CellLogId = a.CellLogId,
+                CellLogHeadCountId = a.CellLogHeadcountId,
+                Assigned = a.CellLogAssigned,
+                CheckedOut = a.CellLogCheckout,
+                Actual = a.CellLogActual,
+                Count = a.CellLogCount,
+                Note = a.CellLogComments,
+                HousingUnitLocation = a.HousingUnitLocation,
+                HousingUnitNumber = a.HousingUnitNumber,
+                HousingUnitListId = a.HousingUnitListId,
+                CellLogLocation = a.CellLogLocation,
+                CellLogLocationId = a.CellLogLocationId,
+                CellLogDate = a.CellLogDate,
+                CellLogSchedule = a.CellLogHeadcount.CellLogSchedule,
+                FacilityId = a.FacilityId,
+                FacilityAbbr = a.Facility.FacilityAbbr,
+                CreateDate = a.CreateDate,
+                CreateOfficerName = new PersonnelVm
+                {
+                    PersonLastName = a.CreateByNavigation.PersonNavigation.PersonLastName,
+                    PersonFirstName = a.CreateByNavigation.PersonNavigation.PersonFirstName,
+                    PersonMiddleName = a.CreateByNavigation.PersonNavigation.PersonMiddleName,
+                    OfficerBadgeNumber = a.CreateByNavigation.OfficerBadgeNum
+                },
+                UpdateDate = a.UpdateDate,
+                UpdateOfficerName = new PersonnelVm
+                {
+                    PersonLastName = a.UpdateByNavigation.PersonNavigation.PersonLastName,
+                    PersonFirstName = a.UpdateByNavigation.PersonNavigation.PersonFirstName,
+                    PersonMiddleName = a.UpdateByNavigation.PersonNavigation.PersonMiddleName,
+                    OfficerBadgeNumber = a.UpdateByNavigation.OfficerBadgeNum
+                }
+            }).ToList();
+
+        // Get head count schedules based on facility Id.
+        private List<DateTime> LoadHeadCountSchedule(int facilityId)
+        {
+            List<DateTime> scheduleCounts = _context.HousingUnitScheduleCount
+                .Where(a => (facilityId == 0 || a.FacilityId == facilityId) && a.CountTime.HasValue)
+                .Select(a => new DateTime(
+                    DateTime.Now.Year,
+                    DateTime.Now.Month,
+                    DateTime.Now.Day,
+                    a.CountTime.Value.Hours,
+                    a.CountTime.Value.Minutes,
+                    a.CountTime.Value.Seconds
+                )).Distinct().ToList();
+            scheduleCounts.AddRange(scheduleCounts.Select(a => a.AddDays(1)).ToList());
+            scheduleCounts = scheduleCounts.Where(a => a <= DateTime.Now.AddHours(1) && a >= DateTime.Now.AddHours(-2))
+                .ToList();
+            List<DateTime?> cellLogSchedules = _context.CellLogHeadcount
+                .Where(a => (facilityId == 0 || a.FacilityId == facilityId) && a.CellLogSchedule >= DateTime.Now.Date &&
+                            a.CellLogSchedule < DateTime.Now.AddDays(2).Date)
+                .Select(a => a.CellLogSchedule).Distinct().ToList();
+            return scheduleCounts.Where(a => !cellLogSchedules.Contains(a)).OrderBy(a => a).ToList();
+        }
+
+        // Get head count viewer details based on conditional filters
+        private List<HeadCountViewDetail> LoadHeadCountViewerDetails(HeadCountFilter headCountFilter)
+        {
+            IQueryable<CellLogHeadcount> cellLogHeadCounts = _context.CellLogHeadcount
+                .Where(a => (headCountFilter.FacilityId == 0 || a.FacilityId == headCountFilter.FacilityId)
+                            && (headCountFilter.HeadCountId == 0 || a.CellLogHeadcountId == headCountFilter.HeadCountId)
+                            && (!headCountFilter.FromDate.HasValue || !headCountFilter.ToDate.HasValue ||
+                                a.StartDate.HasValue && a.StartDate.Value.Date >= headCountFilter.FromDate.Value.Date
+                                                     && a.StartDate.Value.Date <= headCountFilter.ToDate.Value.Date)
+                            && (headCountFilter.PersonnelId == 0 || a.StartedBy == headCountFilter.PersonnelId));
+            return cellLogHeadCounts.Take(headCountFilter.SelectTop ?? cellLogHeadCounts.Count())
+                .Select(a => new HeadCountViewDetail
+                {
+                    FacilityId = a.FacilityId,
+                    CellLogHeadCountId = a.CellLogHeadcountId,
+                    HeadCountLog = a.CellLogSchedule,
+                    Assigned = a.CellLogAssignedSum,
+                    CheckedOut = a.CellLogCheckoutSum,
+                    Actual = a.CellLogActualSum,
+                    Count = a.CellLogCountSum,
+                    Location = a.CellLogLocationSum,
+                    LocationCount = a.CellLogLocationCount,
+                    HousingNote = a.ClearNote,
+                    LocationNote = a.ClearLocationNote,
+                    ClearedBy = a.ClearedBy,
+                    StartedDate = a.StartDate,
+                    StartedPersonnel = new PersonnelVm
+                    {
+                        PersonnelNumber = a.StartedByNavigation.PersonnelNumber,
+                        PersonLastName = a.StartedByNavigation.PersonNavigation.PersonLastName,
+                        PersonFirstName = a.StartedByNavigation.PersonNavigation.PersonFirstName
+                    },
+                    ClearedDate = a.ClearedDate,
+                    ClearedPersonnel = new PersonnelVm
+                    {
+                        PersonnelNumber = a.ClearedByNavigation.PersonnelNumber,
+                        PersonLastName = a.ClearedByNavigation.PersonNavigation.PersonLastName,
+                        PersonFirstName = a.ClearedByNavigation.PersonNavigation.PersonFirstName
+                    }
+                }).OrderByDescending(a => a.CellLogHeadCountId).ToList();
+        }
+
+        // Insert or update cell log head count details.
+        public async Task<int> InsertOrUpdateCellLog(CellHeadCount cellHeadCount)
+        {
+            CellLog cellLog;
+            if (cellHeadCount.CellLogId <= 0)
+            {
+                cellLog = _context.CellLog.SingleOrDefault(a => a.CellLogHeadcountId == cellHeadCount.CellLogHeadcountId
+                                                                && a.CellLogLocation == cellHeadCount.Location);
+                if (!(cellLog is null))
+                {
+                    LoadCellLogObject(cellLog, cellHeadCount, false);
+                }
+                else
+                {
+                    LoadCellLogObject(cellLog = new CellLog(), cellHeadCount, true);
+                    _context.CellLog.Add(cellLog);
+                }
+            }
+            else
+            {
+                cellLog = _context.CellLog.Single(a => a.CellLogId == cellHeadCount.CellLogId);
+                LoadCellLogObject(cellLog, cellHeadCount, false);
+            }
+
+            _context.Add(new CellLogSaveHistory // Create history for cell log head count.
+            {
+                CellLogId = cellLog.CellLogId,
+                PersonnelId = _personnelId,
+                CreateDate = DateTime.Now,
+                CellLogSaveHistoryList = cellHeadCount.CellLogSaveHistoryList
+            });
+
+            List<int> inmateCountLst = _context.CellLogInmate
+                .Where(w => !cellHeadCount.InmateIdList.Contains(w.CellLogInmateId)
+                            && w.ByInmateCountFlag == 1
+                            && w.CellLogId == cellHeadCount.CellLogId)
+                .Select(s => s.CellLogInmateId).ToList();
+
+            inmateCountLst.ForEach(i =>
+            {
+                CellLogInmate cellLogInmate = _context.CellLogInmate
+                    .Single(s => s.CellLogInmateId == i);
+                {
+                    cellLogInmate.ByInmateCountFlag = 0;
+                }
+            });
+
+            cellHeadCount.InmateIdList.ForEach(item =>
+            {
+                CellLogInmate cellLogInmate = _context.CellLogInmate
+                    .Single(s => s.CellLogInmateId == item);
+                {
+                    cellLogInmate.ByInmateCountFlag = 1;
+                    cellLogInmate.ByInmateCountPersonnelId = _personnelId;
+                    cellLogInmate.ByInmateCountDateTime = DateTime.Now;
+                }
+            });
+
+            return await _context.SaveChangesAsync();
+        }
+
+        private void LoadCellLogObject(CellLog cellLog, CellHeadCount cellHeadCount, bool isInsert)
+        {
+            if (isInsert)
+            {
+                cellLog.CellLogOfficerId = _personnelId;
+                cellLog.CreateDate = DateTime.Now;
+                cellLog.FacilityId = cellHeadCount.FacilityId;
+                cellLog.CellLogHeadcountId = cellHeadCount.CellLogHeadcountId;
+                cellLog.CellLogLocation = cellHeadCount.Location;
+                cellLog.CreateBy = _personnelId;
+                cellLog.CellLogLocationId = cellHeadCount.CellLogLocationId;
+            }
+            else
+            {
+                cellLog.UpdateDate = DateTime.Now;
+                cellLog.UpdateBy = _personnelId;
+            }
+
+            cellLog.CellLogComments = cellHeadCount.Notes;
+            cellLog.CellLogDate = cellHeadCount.CellLogDate;
+            cellLog.CellLogTime = cellHeadCount.CellLogTime;
+            cellLog.CellLogCount = cellHeadCount.CellLogCount;
+        }
+
+        // Get head count save histories.
+        public List<HistoryVm> LoadHeadCountSaveHistories(int cellLogId)
+        {
+            List<HistoryVm> cellLogSaveHistories = _context.CellLogSaveHistory
+                .Where(a => a.CellLogId == cellLogId).OrderByDescending(a => a.CreateDate)
+                .Select(a => new HistoryVm
+                {
+                    HistoryId = a.CellLogSaveHistoryId,
+                    CreateDate = a.CreateDate,
+                    PersonId = a.Personnel.PersonId,
+                    OfficerBadgeNumber = a.Personnel.OfficerBadgeNum,
+                    PersonLastName = a.Personnel.PersonNavigation.PersonLastName,
+                    HistoryList = a.CellLogSaveHistoryList
+                }).ToList();
+            cellLogSaveHistories.Where(a => !string.IsNullOrEmpty(a.HistoryList)).ToList().ForEach(a =>
+                a.Header = JsonConvert.DeserializeObject<Dictionary<string, string>>(a.HistoryList)
+                    .Select(x => new PersonHeader
+                    {
+                        Header = x.Key,
+                        Detail = x.Value
+                    }).ToList());
+
+            return cellLogSaveHistories;
+        }
+
+        // Get active head count schedule based on facility.
+        public HeadCountDetail GetActiveCellHeadCountString(int facilityId, int housingUnitListId = 0,
+            int cellLogLocationId = 0, int housingGroupId = 0, int cellLogId = 0)
+        {
+            List<HeadCountDetail> headCountDetails = LoadHeadCountReconcile(facilityId, NumericConstants.ZERO,
+                housingUnitListId, cellLogLocationId, true);
+            if (housingGroupId <= 0) return headCountDetails.FirstOrDefault();
+            List<int?> housingUnitListIds = _context.HousingGroupAssign
+                .Where(a => a.HousingGroupId == housingGroupId)
+                .Select(a => a.HousingUnitListId).ToList();
+            headCountDetails = headCountDetails.Where(a => housingUnitListIds.Contains(a.HousingUnitListId)
+                                                           && (cellLogId == 0 || a.CellLogId == cellLogId))
+                .ToList();
+            return headCountDetails.FirstOrDefault();
+        }
+
+        // Get head count view details based on cellLogHeadCountId.
+        public HeadCountViewDetail LoadHeadCountViewDetail(int cellLogHeadCountId) => _context.CellLog
+            .Where(a => a.CellLogHeadcountId == cellLogHeadCountId)
+            .Select(a => new HeadCountViewDetail
+            {
+                FacilityId = a.CellLogHeadcount.FacilityId,
+                CellLogHeadCountId = a.CellLogHeadcount.CellLogHeadcountId,
+                HeadCountLog = a.CellLogHeadcount.CellLogSchedule,
+                Assigned = a.CellLogHeadcount.CellLogAssignedSum,
+                CheckedOut = a.CellLogHeadcount.CellLogCheckoutSum,
+                Actual = a.CellLogHeadcount.CellLogActualSum,
+                Count = a.CellLogHeadcount.CellLog.Where(x => string.IsNullOrEmpty(x.CellLogLocation))
+                    .Sum(x => x.CellLogCount),
+                Location = a.CellLogHeadcount.CellLogLocationSum,
+                LocationCount = a.CellLogHeadcount.CellLog.Where(x => !string.IsNullOrEmpty(x.CellLogLocation))
+                    .Sum(x => x.CellLogCount),
+                HousingNote = a.CellLogHeadcount.ClearNote,
+                LocationNote = a.CellLogHeadcount.ClearLocationNote,
+                CellLogDate = a.CellLogDate,
+                OffierName = new PersonnelVm
+                {
+                    PersonLastName = a.CellLogOfficer.PersonNavigation.PersonLastName,
+                    PersonFirstName = a.CellLogOfficer.PersonNavigation.PersonFirstName,
+                    PersonMiddleName = a.CellLogOfficer.PersonNavigation.PersonMiddleName,
+                    OfficerBadgeNumber = a.CellLogOfficer.OfficerBadgeNum
+                },
+                ClearedBy = a.CellLogHeadcount.ClearedBy,
+                ClearedDate = a.CellLogHeadcount.ClearedDate
+            }).FirstOrDefault();
+
+        // Update head count clear.
+        public async Task<int> UpdateHeadCountClear(HeadCountViewDetail headCountViewDetail)
+        {
+            CellLogHeadcount cellLogHeadcount = _context.CellLogHeadcount
+                .Single(a => a.CellLogHeadcountId == headCountViewDetail.CellLogHeadCountId);
+            cellLogHeadcount.CellLogCountSum = headCountViewDetail.Count;
+            cellLogHeadcount.CellLogLocationCount = headCountViewDetail.LocationCount;
+            cellLogHeadcount.ClearNote = headCountViewDetail.HousingNote;
+            cellLogHeadcount.ClearLocationNote = headCountViewDetail.LocationNote;
+            cellLogHeadcount.ClearedDate = headCountViewDetail.ClearedDate;
+            cellLogHeadcount.ClearedBy = headCountViewDetail.ClearedBy;
+            int res = await _context.SaveChangesAsync();
+            await _atimsHubService.GetHeadCount();
+            return res;
+        }
+
+        // Start head count schedule.
+        public async Task<int> InsertCellLogHeadCount(HeadCountStart headCountStart)
+        {
+            List<CellLogInmate> cellLogInmates = new List<CellLogInmate>();
+            List<CellLogSaveHistory> cellLogSaveHistories = new List<CellLogSaveHistory>();
+            List<CellHousingCount> cellHousingCounts = !headCountStart.Unscheduled
+                ? GetHousingCount(headCountStart.FacilityId,
+                    headCountStart.HeadCountShedule.TimeOfDay)
+                : GetHousingCountUnScheduled(headCountStart.FacilityId);
+            CellLogHeadcount cellLogHeadcount; // Add cell log headcount details.
+            _context.CellLogHeadcount.Add(cellLogHeadcount = new CellLogHeadcount
+            {
+                FacilityId = headCountStart.FacilityId,
+                CellLogSchedule = headCountStart.HeadCountShedule,
+                StartedBy = _personnelId,
+                StartDate = DateTime.Now
+            });
+            cellHousingCounts.ForEach(a =>
+            {
+                CellLog cellLog; // Add cell log details by housing counts.
+                _context.CellLog.Add(cellLog = new CellLog
+                {
+                    CellLogDate = DateTime.Now,
+                    CellLogTime = DateTime.Now.ToString(HeadCountConstants.TimeFormat),
+                    CellLogOfficerId = _personnelId,
+                    CreateDate = DateTime.Now,
+                    FacilityId = headCountStart.FacilityId,
+                    HousingUnitLocation = a.HousingUnitLocation,
+                    HousingUnitNumber = a.HousingUnitNumber,
+                    CellLogActual = a.AssignedCount - a.CheckOutCount,
+                    CellLogAssigned = a.AssignedCount,
+                    CellLogCheckout = a.CheckOutCount,
+                    CellLogHeadcountId = cellLogHeadcount.CellLogHeadcountId,
+                    CreateBy = _personnelId,
+                    ByInmateFlag = headCountStart.Unscheduled ? headCountStart.Type : a.ByInmateFlagDefault,
+                    HousingUnitListId = a.HousingUnitListId
+                });
+                cellLogInmates.AddRange(GetInmateByHousing(headCountStart.FacilityId,
+                    cellLog.CellLogId, a.HousingUnitListId)); // Get list of inmates.
+                cellLogSaveHistories.Add(new CellLogSaveHistory // Add cell log save histories.
+                {
+                    CellLogId = cellLog.CellLogId,
+                    PersonnelId = _personnelId,
+                    CreateDate = DateTime.Now,
+                    CellLogSaveHistoryList = JsonConvert.SerializeObject(new
+                    {
+                        Schedule = headCountStart.HeadCountShedule
+                            .ToString("MM/dd/yyyy HH:mm").Replace('-', '/'),
+                        Housing = a.HousingUnitLocation == RosterConstants.NoHousing
+                            ? a.HousingUnitLocation // Concatenation using string interpolation operator
+                            : $@"{headCountStart.FacilityName} {a.HousingUnitLocation} {a.HousingUnitNumber}",
+                        Assigned = a.AssignedCount,
+                        Checkout = a.CheckOutCount,
+                        Actual = a.AssignedCount - a.CheckOutCount
+                    })
+                });
+            });
+            cellLogHeadcount.CellLogAssignedSum = cellHousingCounts.Sum(a => a.AssignedCount);
+            cellLogHeadcount.CellLogActualSum = cellHousingCounts.Sum(a => a.AssignedCount - a.CheckOutCount);
+            cellLogHeadcount.CellLogCheckoutSum = cellHousingCounts.Sum(a => a.CheckOutCount);
+            List<CellHousingCount> checkedOutCounts = GetCheckedOutCount(headCountStart.FacilityId);
+            checkedOutCounts.ForEach(a =>
+            {
+                CellLog cellLog; // Add cell log details by checkedout counts.
+                _context.CellLog.Add(cellLog = new CellLog
+                {
+                    CellLogDate = DateTime.Now,
+                    CellLogTime = DateTime.Now.ToString(HeadCountConstants.TimeFormat),
+                    CellLogOfficerId = _personnelId,
+                    CreateDate = DateTime.Now,
+                    FacilityId = a.FacilityId ?? 0,
+                    CellLogActual = a.InmateCount,
+                    CellLogHeadcountId = cellLogHeadcount.CellLogHeadcountId,
+                    CellLogLocation = a.Location,
+                    ByInmateFlag = headCountStart.Unscheduled ? headCountStart.Type : a.ByInmateFlagDefault,
+                    CreateBy = _personnelId,
+                    CellLogLocationId = a.PrivilegeId
+                }); // Get list of inmates.
+                cellLogInmates.AddRange(GetInmateByLocation(headCountStart.FacilityId, cellLog.CellLogId, a.Location));
+                cellLogSaveHistories.Add(new CellLogSaveHistory // Add cell log save histories.
+                {
+                    CellLogId = cellLog.CellLogId,
+                    PersonnelId = _personnelId,
+                    CreateDate = DateTime.Now,
+                    CellLogSaveHistoryList = JsonConvert.SerializeObject(new
+                    {
+                        Schedule = headCountStart.HeadCountShedule
+                            .ToString("MM/dd/yyyy HH:mm").Replace('-', '/'),
+                        a.Location,
+                        Actual = a.InmateCount
+                    })
+                });
+            });
+            _context.CellLogInmate.AddRange(cellLogInmates); // Add list of cell log inmates at a time.
+            _context.CellLogSaveHistory.AddRange(cellLogSaveHistories);
+            cellLogHeadcount.CellLogLocationSum = checkedOutCounts.Sum(a => a.InmateCount);
+            _context.SaveChanges();
+            await _atimsHubService.StartHeadCount();
+            _interfaceEngineService.Export(new ExportRequestVm
+            {
+                EventName = EventNameConstants.HEADCOUNTCREATE,
+                PersonnelId = _personnelId,
+                Param1 = headCountStart.FacilityId.ToString(),
+                Param2 = cellLogHeadcount.CellLogHeadcountId.ToString()
+            });
+            _context.SaveChanges();
+            await _atimsHubService.GetHeadCount();
+            return cellLogHeadcount.CellLogHeadcountId;
+        }
+
+        // Get housing count for schedules headcount.
+        private List<CellHousingCount> GetHousingCount(int facilityId, TimeSpan schdTime)
+        {
+            _housingUnitScheduleCounts = _context.HousingUnitScheduleCount
+                .Where(a => a.CountTime == schdTime).ToList();
+            _headCountSchedules = GetActiveInmates();
+            List<CellHousingCount> housingCounts = _housingUnitScheduleCounts.Where(a =>
+                    !a.HousingUnitListId.HasValue
+                    && a.FacilityId == facilityId)
+                .Select(a => new CellHousingCount
+                {
+                    FacilityId = a.FacilityId,
+                    HousingUnitLocation = RosterConstants.NOHOUSING1,
+                    HousingUnitListId = a.HousingUnitListId,
+                    AssignedCount =
+                        _headCountSchedules.Count(x => x.FacilityId == a.FacilityId && !x.HousingUnitId.HasValue),
+                    CheckOutCount = _headCountSchedules.Count(x => x.FacilityId == a.FacilityId
+                                                                   && !x.HousingUnitId.HasValue &&
+                                                                   x.InmateCurrentTrackId.HasValue),
+                    ByInmateFlagDefault = a.ByInmateFlagDefault
+                }).ToList();
+            housingCounts.AddRange(_housingUnitScheduleCounts
+                .Where(a => a.HousingUnitListId.HasValue
+                            && a.FacilityId == facilityId)
+                .Select(a => new CellHousingCount
+                {
+                    FacilityId = a.FacilityId,
+                    HousingUnitLocation = a.HousingUnitLocation,
+                    HousingUnitNumber = a.HousingUnitNumber,
+                    HousingUnitListId = a.HousingUnitListId,
+                    ByInmateFlagDefault = a.ByInmateFlagDefault,
+                    AssignedCount = _headCountSchedules.Count(x => x.FacilityId == a.FacilityId
+                                                                   && x.HousingUnitListId == a.HousingUnitListId),
+                    CheckOutCount = _headCountSchedules.Count(x => x.FacilityId == a.FacilityId
+                                                                   && x.HousingUnitListId == a.HousingUnitListId
+                                                                   && x.InmateCurrentTrackId.HasValue)
+                }));
+            return housingCounts.GroupBy(a => a.HousingUnitListId).Select(a => a.First()).ToList();
+        }
+
+        // Get housing count for unscheduled headcount.
+        private List<CellHousingCount> GetHousingCountUnScheduled(int facilityId)
+        {
+            _headCountSchedules = GetActiveInmates();
+            List<CellHousingCount> cellHousingCounts = _headCountSchedules.Where(a => a.FacilityId == facilityId)
+                .GroupBy(a => new
+                {
+                    a.FacilityId,
+                    a.HousingUnitLocation,
+                    a.HousingUnitNumber,
+                    a.HousingUnitListId,
+                    a.FacilityAbbr
+                })
+                .Where(a => !a.Key.HousingUnitListId.HasValue || a.Key.HousingUnitListId == 0)
+                .Select(a => new CellHousingCount
+                {
+                    FacilityId = a.Key.FacilityId,
+                    FacilityAbbr = a.Key.FacilityAbbr,
+                    HousingUnitLocation = RosterConstants.NoHousing,
+                    HousingUnitNumber = string.Empty.PadRight(1),
+                    AssignedCount = a.Count(),
+                    CheckOutCount = a.Count(x => x.InmateCurrentTrackId.HasValue)
+                }).ToList();
+            cellHousingCounts.AddRange(_context.HousingUnit.Where(a => a.FacilityId == facilityId).GroupBy(a => new
+            {
+                a.FacilityId,
+                a.Facility.FacilityAbbr,
+                a.HousingUnitLocation,
+                a.HousingUnitNumber,
+                a.HousingUnitListId,
+                a.HousingUnitInactive,
+                a.HousingUnitClassConflictCheck,
+                a.HousingUnitClassifyRecString
+            }).Select(a => new CellHousingCount
+            {
+                FacilityId = a.Key.FacilityId,
+                FacilityAbbr = a.Key.FacilityAbbr,
+                HousingUnitLocation = a.Key.HousingUnitLocation,
+                HousingUnitNumber = a.Key.HousingUnitNumber,
+                HousingUnitListId = a.Key.HousingUnitListId,
+                AssignedCount = _headCountSchedules.Where(x => x.FacilityId == facilityId)
+                    .SelectMany(x => a.Where(y => y.HousingUnitId == x.HousingUnitId), (x, y) => x).Count(),
+                CheckOutCount = _headCountSchedules.Where(x => x.FacilityId == facilityId)
+                    .SelectMany(x => a.Where(y => y.HousingUnitId == x.HousingUnitId), (x, y) => x)
+                    .Count(x => x.InmateCurrentTrackId.HasValue)
+            }).OrderBy(a => a.FacilityAbbr).ThenBy(a => a.HousingUnitLocation).ThenBy(a => a.HousingUnitNumber));
+            return cellHousingCounts;
+        }
+
+        // Get inmates by housing details.
+        private List<CellLogInmate> GetInmateByHousing(int facilityId, int cellLogId, int? housingUnitListId) =>
+            _context.Inmate.Where(a => a.InmateActive == 1 && a.FacilityId == facilityId &&
+                                       (!housingUnitListId.HasValue && !a.HousingUnitId.HasValue ||
+                                        a.HousingUnitId.HasValue &&
+                                        a.HousingUnit.HousingUnitListId == housingUnitListId))
+                .Select(a => new CellLogInmate
+                {
+                    CellLogId = cellLogId,
+                    InmateId = a.InmateId,
+                    FacilityId = a.FacilityId,
+                    InmateIdCheckout = a.InmateId,
+                    InmateIdCheckoutLocation = a.InmateCurrentTrack,
+                    HousingUnitLocation =
+                        !a.HousingUnitId.HasValue ? RosterConstants.NOHOUSING1 : a.HousingUnit.HousingUnitLocation,
+                    HousingUnitNumber = a.HousingUnitId.HasValue ? a.HousingUnit.HousingUnitNumber : default,
+                    HousingUnitBedNumber = a.HousingUnitId.HasValue ? a.HousingUnit.HousingUnitBedNumber : default,
+                    HousingUnitListId = housingUnitListId
+                }).ToList();
+
+        // Get inmates by locations
+        private List<CellLogInmate> GetInmateByLocation(int facilityId, int cellLogId, string location)
+        {
+            List<CellLogInmate> cellLogInmates = _headCountSchedules.Where(a => a.InmateCurrentTrack == location)
+                .Select(a => new CellLogInmate
+                {
+                    CellLogId = cellLogId,
+                    InmateId = a.InmateId,
+                    FacilityId = a.FacilityId,
+                    HousingUnitLocation = a.HousingUnitLocation,
+                    HousingUnitNumber = a.HousingUnitNumber,
+                    HousingUnitBedNumber = a.HousingUnitBedNumber,
+                    CellLogLocation = a.InmateCurrentTrack
+                }).ToList();
+            cellLogInmates = cellLogInmates
+                .SelectMany(a => _privileges.Where(x => x.PrivilegesDescription == a.CellLogLocation), (a, x) => a)
+                .ToList();
+            cellLogInmates.ForEach(a =>
+            {
+                PrivilegesVm privilege = _privileges.First(x => x.PrivilegesDescription == a.CellLogLocation);
+                a.FacilityId = privilege.FacilityId ?? privilege.HeadCountAssignFacilityid ?? a.FacilityId;
+                a.CellLogLocationId = privilege.PrivilegesId;
+            });
+            return cellLogInmates.Where(a => a.FacilityId == facilityId).ToList();
+        }
+
+        // Get checked out counts.
+        private List<CellHousingCount> GetCheckedOutCount(int facilityId)
+        {
+            _privileges = _context.Privileges.Select(a => new PrivilegesVm
+            {
+                PrivilegesId = a.PrivilegeId,
+                PrivilegesDescription = a.PrivilegeDescription,
+                FacilityId = a.FacilityId,
+                HeadCountAssignFacilityid = a.HeadCountAssignFacilityId,
+                InactiveFlag = a.InactiveFlag,
+                HousingUnitListId = a.HousingUnitListId
+            }).ToList();
+            _headCountSchedules = _headCountSchedules.Where(a => !string.IsNullOrEmpty(a.InmateCurrentTrack))
+                .SelectMany(
+                    a => _privileges.Where(x => x.InactiveFlag == 0 && x.PrivilegesDescription == a.InmateCurrentTrack),
+                    (a, x) => a)
+                .ToList();
+            List<CellHousingCount> checkedOutList = new List<CellHousingCount>();
+            _headCountSchedules.ForEach(a =>
+            {
+                PrivilegesVm privileges = _privileges.Single(x =>
+                    x.InactiveFlag == 0 && x.PrivilegesDescription == a.InmateCurrentTrack);
+                checkedOutList.Add(new CellHousingCount
+                {
+                    Location = a.InmateCurrentTrack,
+                    PrivilegeId = privileges.PrivilegesId,
+                    ByInmateFlagDefault = _housingUnitScheduleCounts is null
+                        ? 0
+                        : _housingUnitScheduleCounts.FirstOrDefault(x =>
+                              a.HousingUnitListId == privileges.HousingUnitListId)?.ByInmateFlagDefault ?? 0,
+                    FacilityId = privileges.FacilityId ?? privileges.HeadCountAssignFacilityid ?? a.FacilityId
+                });
+            });
+            return checkedOutList.GroupBy(a => new
+            {
+                a.Location,
+                a.FacilityId,
+                a.PrivilegeId,
+                a.ByInmateFlagDefault
+            }).Where(a => a.Key.FacilityId == facilityId).Select(a => new CellHousingCount
+            {
+                Location = a.Key.Location,
+                FacilityId = a.Key.FacilityId,
+                PrivilegeId = a.Key.PrivilegeId,
+                InmateCount = a.Count(),
+                ByInmateFlagDefault = a.Key.ByInmateFlagDefault
+            }).OrderBy(a => a.PrivilegeId).ToList();
+        }
+
+        // Get head count histories based filters.
+        public HeadCountHistoryDetails LoadHeadCountHistory(HeadCountHistoryDetails headCountHistoryMaster)
+        {
+            if (headCountHistoryMaster.IsPageInitialize)
+            {
+                headCountHistoryMaster.LocationList = GetlocationList(headCountHistoryMaster.FacilityId);
+
+                headCountHistoryMaster.HousingList = _cellService.GetHousingUnit(headCountHistoryMaster.FacilityId)
+                    .ToList();
+                headCountHistoryMaster.FacilityList = _commonService.GetFacilities()
+                    .Where(a => !string.IsNullOrEmpty(a.FacilityAbbr))
+                    .Select(a => new KeyValuePair<int, string>(a.FacilityId, a.FacilityAbbr)).OrderBy(a => a.Value)
+                    .ToList();
+            }
+
+            IQueryable<CellLog> cellLogHeadCounts = _context.CellLog.Where(a =>
+                (headCountHistoryMaster.FacilityId == 0 ||
+                 a.CellLogHeadcount.FacilityId == headCountHistoryMaster.FacilityId) &&
+                (!headCountHistoryMaster.FromDate.HasValue || !headCountHistoryMaster.ToDate.HasValue
+                                                           || a.CellLogHeadcount.CellLogSchedule.HasValue
+                                                           && a.CellLogHeadcount.CellLogSchedule.Value.Date >=
+                                                           headCountHistoryMaster.FromDate.Value.Date
+                                                           && a.CellLogHeadcount.CellLogSchedule.Value.Date <=
+                                                           headCountHistoryMaster.ToDate.Value.Date)
+                && (!headCountHistoryMaster.ActualCountOnly || a.CellLogActual.HasValue
+                    && a.CellLogCount.HasValue && !a.CellLogActual.Value.Equals(a.CellLogCount.Value) ||
+                    a.CellLogCount != 0 && !a.CellLogActual.HasValue)
+                && (headCountHistoryMaster.PersonnelId == 0 || a.CreateBy == headCountHistoryMaster.PersonnelId));
+            if (headCountHistoryMaster.HousingUnitListId == 0 && headCountHistoryMaster.CellLogLocationId > 0)
+            {
+                cellLogHeadCounts = cellLogHeadCounts.Where(a =>
+                    a.CellLogLocationId == headCountHistoryMaster.CellLogLocationId);
+            }
+            else if (headCountHistoryMaster.HousingUnitListId > 0 && headCountHistoryMaster.CellLogLocationId > 0)
+            {
+                cellLogHeadCounts = cellLogHeadCounts.Where(a =>
+                    a.HousingUnitListId == headCountHistoryMaster.HousingUnitListId
+                    || a.CellLogLocationId == headCountHistoryMaster.CellLogLocationId);
+            }
+            else if (headCountHistoryMaster.HousingUnitListId == 0 && headCountHistoryMaster.CellLogLocationId == 0)
+            {
+                cellLogHeadCounts = cellLogHeadCounts.Where(a => !string.IsNullOrEmpty(a.HousingUnitLocation)
+                                                                 && !a.HousingUnitListId.HasValue);
+            }
+            else if (headCountHistoryMaster.HousingUnitListId > 0 && headCountHistoryMaster.CellLogLocationId == 0)
+            {
+                cellLogHeadCounts =
+                    cellLogHeadCounts.Where(a => a.HousingUnitListId == headCountHistoryMaster.HousingUnitListId);
+            }
+            else if (!headCountHistoryMaster.HousingUnitListId.HasValue && headCountHistoryMaster.CellLogLocationId > 0)
+            {
+                cellLogHeadCounts =
+                    cellLogHeadCounts.Where(a => a.CellLogLocationId == headCountHistoryMaster.CellLogLocationId);
+            }
+
+            headCountHistoryMaster.HeadCountHistoryList = cellLogHeadCounts
+                .OrderByDescending(a => a.CellLogHeadcount.CellLogSchedule)
+                .Take(headCountHistoryMaster.LastHundred ?? cellLogHeadCounts.Count())
+                .Select(a => new HeadCountHistory
+                {
+                    CellLogSchedule = a.CellLogHeadcount.CellLogSchedule,
+                    FacilityAbbr = a.Facility.FacilityAbbr,
+                    HousingUnitLocation = a.HousingUnitLocation,
+                    HousingUnitNumber = a.HousingUnitNumber,
+                    CellLogLocation = a.CellLogLocation,
+                    CellLogComments = a.CellLogComments,
+                    CellLogAssigned = a.CellLogAssigned,
+                    CellLogCheckOut = a.CellLogCheckout,
+                    CellLogActual = a.CellLogActual,
+                    CellLogCount = a.CellLogCount,
+                    Personnel = new KeyValuePair<string, string>
+                        (a.CreateByNavigation.PersonNavigation.PersonLastName, a.CreateByNavigation.OfficerBadgeNum),
+                    CreateDate = a.CreateDate,
+                    UpdateDate = a.UpdateBy.HasValue ? a.UpdateDate : null,
+                    UpdatedBy = new KeyValuePair<string, string>(a.UpdateByNavigation.PersonNavigation.PersonLastName,
+                        a.UpdateByNavigation.OfficerBadgeNum),
+                    CellLogId = a.CellLogId
+                }).ToList();
+            return headCountHistoryMaster;
+        }
+
+        public List<KeyValuePair<int, string>> GetlocationList(int facilityId) => (from p in _context.Privileges
+                    where p.InactiveFlag == 0 && p.RemoveFromTrackingFlag == 0 && p.FacilityId == facilityId
+                    select new KeyValuePair<int, string>(p.PrivilegeId, p.PrivilegeDescription)).OrderBy(a => a.Value).ToList();
+
+        // Check whether admin data is set or not?.
+        public List<CellHousingCount> LoadAdminHousingLocationCount(int facilityId)
+        {
+            _headCountSchedules = GetActiveInmates();
+            List<CellHousingCount> adminHousingLocationCounts = _headCountSchedules.GroupBy(a => new
+            {
+                a.FacilityId,
+                a.HousingUnitLocation,
+                a.HousingUnitNumber,
+                a.FacilityAbbr
+            })
+                .Select(a => new CellHousingCount
+                {
+                    FacilityId = a.Key.FacilityId,
+                    HousingUnitLocation = a.Key.HousingUnitLocation,
+                    HousingUnitNumber = a.Key.HousingUnitNumber
+                }).ToList();
+            List<CellHousingCount> housingNumerAll = _context.HousingUnit
+                .GroupBy(a => new
+                {
+                    a.FacilityId,
+                    a.Facility.FacilityAbbr,
+                    a.HousingUnitLocation,
+                    a.HousingUnitNumber,
+                    a.HousingUnitInactive,
+                    a.HousingUnitClassConflictCheck,
+                    a.HousingUnitClassifyRecString
+                }).Select(a => new CellHousingCount
+                {
+                    FacilityId = a.Key.FacilityId,
+                    HousingUnitLocation = a.Key.HousingUnitLocation,
+                    HousingUnitNumber = a.Key.HousingUnitNumber
+                }).ToList();
+            adminHousingLocationCounts.AddRange(housingNumerAll
+                .Where(a => !a.HousingUnitInactive.HasValue || a.HousingUnitInactive == 0).Select(a =>
+                    new CellHousingCount
+                    {
+                        FacilityId = a.FacilityId,
+                        HousingUnitLocation = a.HousingUnitLocation,
+                        HousingUnitNumber = a.HousingUnitNumber
+                    }));
+            adminHousingLocationCounts = adminHousingLocationCounts.Where(a => a.FacilityId == facilityId).ToList();
+            adminHousingLocationCounts.AddRange(GetCheckedOutCount(facilityId)
+                .Select(a => new CellHousingCount
+                {
+                    Location = a.Location,
+                    FacilityId = a.FacilityId,
+                    InmateCount = a.InmateCount
+                }));
+            return adminHousingLocationCounts;
+        }
+
+        // Get only active inmates.
+        private List<HeadCountSchedule> GetActiveInmates() => _context.Inmate.Where(a => a.InmateActive == 1).Select(
+            a => new HeadCountSchedule
+            {
+                InmateId = a.InmateId,
+                InmateCurrentTrackId = a.InmateCurrentTrackId,
+                InmateCurrentTrack = a.InmateCurrentTrack,
+                FacilityId = a.FacilityId,
+                FacilityAbbr = a.Facility.FacilityAbbr,
+                HousingUnitId = a.HousingUnitId,
+                HousingUnitListId = a.HousingUnitId.HasValue ? a.HousingUnit.HousingUnitListId : default,
+                HousingUnitLocation = a.HousingUnitId.HasValue ? a.HousingUnit.HousingUnitLocation : default,
+                HousingUnitNumber = a.HousingUnitId.HasValue ? a.HousingUnit.HousingUnitNumber : default,
+                HousingUnitBedNumber = a.HousingUnitId.HasValue ? a.HousingUnit.HousingUnitBedNumber : default
+            }).ToList();
+
+        // Get headcount report details.
+        public HeadCountReport LoadHeadCountReport(HeadCountFilter headCountFilter)
+        {
+            List<HeadCountViewDetail> cellLogHeadCounts = LoadHeadCountViewerDetails(headCountFilter);
+
+            cellLogHeadCounts.ForEach(f =>
+            {
+                f.HeadCountHousingDetails = _context.CellLog.Where(a => a.FacilityId == f.FacilityId &&
+                                                                        !a.CellLogLocationId.HasValue &&
+                                                                        a.CellLogHeadcountId == f.CellLogHeadCountId)
+                    .Select(a => new HeadCountDetail
+                    {
+                        CellLogHeadCountId = a.CellLogHeadcountId,
+                        FacilityAbbr = a.Facility.FacilityAbbr,
+                        HousingUnitLocation = a.HousingUnitLocation,
+                        HousingUnitNumber = a.HousingUnitNumber,
+                        Assigned = a.CellLogAssigned,
+                        CheckedOut = a.CellLogCheckout,
+                        Actual = a.CellLogActual,
+                        Count = a.CellLogCount
+                    }).ToList();
+            });
+            IQueryable<Personnel> data = _context.Personnel;
+            HeadCountReport headCountReport = new HeadCountReport
+            {
+                HeaderDetails = new HeaderDetails
+                { 
+                    Officer = data.Where(a => a.PersonnelId == _personnelId).Select(s =>
+                        new PersonnelVm
+                        {
+                            PersonLastName = s.PersonNavigation.PersonLastName,
+                            PersonFirstName = s.PersonNavigation.PersonFirstName,
+                            AgencyName = s.Agency.AgencyName,
+                            PersonnelNumber = s.OfficerBadgeNum
+                        }).Single(),
+                    SearchOfficer = data.Where(a => a.PersonnelId == headCountFilter.PersonnelId).Select(s =>
+                        new PersonnelVm
+                        {
+                            PersonLastName = s.PersonNavigation.PersonLastName,
+                            PersonFirstName = s.PersonNavigation.PersonFirstName,
+                            AgencyName = s.Agency.AgencyName,
+                            PersonnelNumber = s.OfficerBadgeNum
+                        }).SingleOrDefault(),
+                    FacilityAbbr = _context.Facility.Where(w => w.FacilityId == headCountFilter.FacilityId).Select(s => s.FacilityAbbr).FirstOrDefault(),
+                    FromDate = headCountFilter.FromDate,
+                    ThruDate = headCountFilter.ToDate
+                },
+                CellLogHeadCounts = cellLogHeadCounts
+            };
+            return headCountReport;
+        }
+    }
+}
+

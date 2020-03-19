@@ -1,0 +1,569 @@
+﻿using System.Collections.Generic;
+using System.Linq;
+using ServerAPI.ViewModels;
+using GenerateTables.Models;
+using System;
+using ServerAPI.Utilities;
+using System.Data.SqlClient;
+using System.Data;
+using System.Globalization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+
+namespace ServerAPI.Services
+{
+    public class PersonSearchService : IPersonSearchService
+    {
+        private readonly AAtims _context;
+        private readonly int _personnelId;
+        private readonly ICommonService _commonService;
+        private readonly IPhotosService _photos;
+        private readonly string _path;
+        private IConfiguration Configuration { get; }
+
+        public PersonSearchService(AAtims context,
+            ICommonService commonService,
+            IHttpContextAccessor httpContextAccessor,
+            IPhotosService photosService,
+            IConfiguration configuration)
+        {
+            _context = context;
+            _commonService = commonService;
+            _personnelId = Convert.ToInt32(httpContextAccessor.HttpContext.User.FindFirst("personnelId")?.Value);
+            _photos = photosService;
+            Configuration = configuration;
+            _path = Configuration.GetSection("SiteVariables")["AtimsPhotoPath"];
+        }
+
+        public List<PersonPreBookInfo> GetPersons(string lastName, string firstName, string middleName, string suffix,
+            string dob)
+        {
+            List<PersonPreBookInfo> personlist = _context.Person.Where(p =>
+                p.PersonFirstName.StartsWith(firstName) && p.PersonLastName.StartsWith(lastName)
+                && (middleName == string.Empty || middleName == null || (p.PersonMiddleName.Contains(middleName)))
+                && (suffix == string.Empty || suffix == null || (p.PersonSuffix.Contains(suffix)))
+                && (dob == null || (p.PersonDob.Value.Date.Equals(Convert.ToDateTime(dob).Date)))).Select(p =>
+                new PersonPreBookInfo
+                {
+                    // InmateId = 
+                    PersonId = p.PersonId,
+                    PersonAlienNo = p.PersonAlienNo,
+                    PersonCii = p.PersonCii,
+                    PersonDlNumber = p.PersonDlNumber,
+                    PersonDob = p.PersonDob,
+                    PersonFbiNo = p.PersonFbiNo,
+                    PersonFirstName = p.PersonFirstName,
+                    PersonLastName = p.PersonLastName,
+                    PersonMiddleName = p.PersonMiddleName,
+                    PersonSsn = p.PersonSsn,
+                    PersonSuffix = p.PersonSuffix,
+                    PersonPhone = p.PersonPhone,
+                    Photofilepath = _photos.GetPhotoByPerson(p)
+                }).ToList();
+
+
+            personlist.ForEach(p =>
+            {
+                Inmate sInmate = _context.Inmate.SingleOrDefault(i => i.PersonId == p.PersonId);
+                if (sInmate != null)
+                {
+                    p.InmateNumber = sInmate.InmateNumber;
+                    p.ActiveInmate = sInmate.InmateActive == 1;
+                }
+
+                p.InmatePrebookId = _context.InmatePrebook.Single(i => i.PersonId == p.PersonId)
+                    .InmatePrebookId;
+
+            });
+
+            return personlist;
+        }
+
+        public List<PersonWeightedSearchResult> GetPersonsWeightedSearch(string lastName, string firstName,
+            string middleName, string suffix, DateTime? dob)
+        {
+            SqlCommand command = new SqlCommand("[GetPersonWeightedSearchWithLevDistanceAndSoundex]", (SqlConnection)_context.Database.GetDbConnection())
+            {
+                CommandType = CommandType.StoredProcedure
+            };
+            command.Parameters.AddWithValue("@First_Name_par", firstName);
+            command.Parameters.AddWithValue("@Last_Name_par", lastName);
+            command.Parameters.AddWithValue("@Middle_Name_par", middleName);
+            command.Parameters.AddWithValue("@Suffix_par", suffix);
+            command.Parameters.AddWithValue("@DOB_par", dob ?? null);
+            DataTable resultTable = new DataTable();
+            SqlDataAdapter adapter = new SqlDataAdapter(command);
+            adapter.Fill(resultTable);
+            
+            List<PersonWeightedSearchResult> personResultList = (from DataRow r in resultTable.Rows
+                select new PersonWeightedSearchResult(r) 
+                ).ToList();
+            personResultList.Where(a => !string.IsNullOrEmpty(a.Photofilepath)).ToList()
+                .ForEach(a => a.Photofilepath = _path + a.Photofilepath);
+            return personResultList;
+        }
+
+        public List<PersonPreBookInfo> GetPersonsByDln(string dln, string dlState)
+        {
+            List<PersonPreBookInfo> personlist = _context.Person.Where(p => !string.IsNullOrEmpty(p.PersonDlNumber)
+            && p.PersonDlNumber.Contains(dln) && (string.IsNullOrEmpty(dlState) || p.PersonDlState == dlState)).
+                                                   Select(p => new PersonPreBookInfo
+                                                   {
+                                                       PersonAlienNo = p.PersonAlienNo,
+                                                       PersonCii = p.PersonCii,
+                                                       PersonDlNumber = p.PersonDlNumber,
+                                                       PersonDob = p.PersonDob,
+                                                       PersonFbiNo = p.PersonFbiNo,
+                                                       PersonFirstName = p.PersonFirstName,
+                                                       PersonLastName = p.PersonLastName,
+                                                       PersonMiddleName = p.PersonMiddleName,
+                                                       PersonPhone = p.PersonPhone,
+                                                       PersonSsn = p.PersonSsn,
+                                                       PersonSuffix = p.PersonSuffix,
+                                                       PersonId = p.PersonId,
+                                                       PersonDlState = p.PersonDlState,
+                                                       Photofilepath = _photos.GetPhotoByCollectionIdentifier(p.Identifiers)
+                                                   }).ToList();
+            List<PersonPreBookInfo> akaList = _context.Aka.Where(aka => !string.IsNullOrEmpty(aka.AkaDl)
+            && (string.IsNullOrEmpty(dlState) || aka.AkaDlState == dlState)
+            && aka.AkaDl.Contains(dln) && aka.PersonId > 0).
+                                                   Select(aka => new PersonPreBookInfo
+                                                   {
+                                                       PersonAlienNo = aka.Person.PersonAlienNo,
+                                                       PersonCii = aka.Person.PersonCii,
+                                                       PersonDlNumber = aka.Person.PersonDlNumber,
+                                                       AkaDlNumber = aka.AkaDl,
+                                                       PersonDob = aka.Person.PersonDob,
+                                                       PersonFbiNo = aka.Person.PersonFbiNo,
+                                                       PersonFirstName = aka.Person.PersonFirstName,
+                                                       PersonLastName = aka.Person.PersonLastName,
+                                                       PersonMiddleName = aka.Person.PersonMiddleName,
+                                                       PersonPhone = aka.Person.PersonPhone,
+                                                       PersonSsn = aka.Person.PersonSsn,
+                                                       PersonSuffix = aka.Person.PersonSuffix,
+                                                       PersonId = aka.Person.PersonId,
+                                                       PersonDlState = aka.Person.PersonDlState,
+                                                       AkaDlState = aka.AkaDlState,
+                                                       Photofilepath = _photos.GetPhotoByCollectionIdentifier(aka.Person.Identifiers)
+                                                   }).ToList();
+            personlist.AddRange(akaList);
+            int[] personIds = personlist.Select(a => a.PersonId).Distinct().ToArray();
+            List<Inmate> inmates = _context.Inmate.Where(a => personIds.Contains(a.PersonId)).ToList();
+            List<InmatePrebook> inmatePrebooks = _context.InmatePrebook.Where(a => a.PersonId.HasValue
+            && personIds.Contains(a.PersonId.Value)).ToList();
+            List<Personnel> personnels = _context.Personnel.Where(a => personIds.Contains(a.PersonId)).ToList();
+            personlist.ForEach(a =>
+            {
+                Inmate inmate = inmates.FirstOrDefault(x => x.PersonId == a.PersonId);
+                a.InmateNumber = inmate?.InmateNumber;
+                a.ActiveInmate = inmate?.InmateActive == 1;
+                a.InmatePrebookId = inmatePrebooks.FirstOrDefault(x => x.PersonId == a.PersonId)?.InmatePrebookId ?? 0;
+                a.OfficerId = personnels.FirstOrDefault(x => x.PersonId == a.PersonId)?.PersonnelId.ToString();
+            });
+            return personlist;
+        }
+
+        public PersonSearchResult GetPersonByInmateNo(string inmateNo)
+        {
+            PersonSearchResult person = (
+                from p in _context.Person
+                from i in _context.Inmate
+                where p.PersonId == i.PersonId && i.InmateNumber == inmateNo
+                select new PersonSearchResult
+                {
+                    PersonAlienNo = p.PersonAlienNo,
+                    PersonCii = p.PersonCii,
+                    PersonDlNumber = p.PersonDlNumber,
+                    PersonDlState = p.PersonDlState,
+                    PersonDob = p.PersonDob,
+                    PersonEyeColor = p.PersonEyeColorLast,
+                    PersonFbiNo = p.PersonFbiNo,
+                    PersonFirstName = p.PersonFirstName,
+                    PersonHeightLast = p.PersonHeightInchLast,
+                    PersonHeightPrimaryLast = p.PersonHeightPrimaryLast,
+                    PersonHeightSecondaryLast = p.PersonHeightSecondaryLast,
+                    PersonLastName = p.PersonLastName,
+                    PersonMiddleName = p.PersonMiddleName,
+                    PersonPhone = p.PersonPhone,
+                    PersonPlaceOfBirth = p.PersonPlaceOfBirth,
+                    PersonPlaceOfBirthList = p.PersonPlaceOfBirthList,
+                    PersonRaceLast = p.PersonRaceLast,
+                    PersonSexLast = p.PersonSexLast,
+                    PersonSsn = p.PersonSsn,
+                    PersonSuffix = p.PersonSuffix,
+                    InmateNumber = i.InmateNumber,
+                    InmateId = i.InmateId,
+                    PersonId = i.PersonId,
+                    ActiveInmate = i.InmateActive == 1,
+                }).FirstOrDefault();
+            return person;
+        }
+
+        public List<PersonPreBookInfo> GetPersonsByInmateNo(string inmateNo)
+        {
+            List<PersonPreBookInfo> persons = _context.Inmate
+               .Where(w => w.InmateNumber.Contains(inmateNo))
+               .Select(i => new PersonPreBookInfo
+               {
+                   PersonAlienNo = i.Person.PersonAlienNo,
+                   PersonCii = i.Person.PersonCii,
+                   PersonDlNumber = i.Person.PersonDlNumber,
+                   PersonDob = i.Person.PersonDob,
+                   PersonFbiNo = i.Person.PersonFbiNo,
+                   PersonFirstName = i.Person.PersonFirstName,
+                   PersonLastName = i.Person.PersonLastName,
+                   PersonMiddleName = i.Person.PersonMiddleName,
+                   PersonPhone = i.Person.PersonPhone,
+                   PersonSsn = i.Person.PersonSsn,
+                   PersonSuffix = i.Person.PersonSuffix,
+                   InmateNumber = i.InmateNumber,
+                   InmateId = i.InmateId,
+                   PersonId = i.PersonId,
+                   ActiveInmate = i.InmateActive == 1,
+                   Photofilepath = _photos.GetPhotoByCollectionIdentifier(i.Person.Identifiers)
+               }).ToList();
+            List<PersonPreBookInfo> akas = _context.Aka
+               .Where(w => !string.IsNullOrEmpty(w.AkaInmateNumber) && w.AkaInmateNumber.Contains(inmateNo)
+               && w.PersonId > 0)
+               .Select(aka => new PersonPreBookInfo
+               {
+                   PersonAlienNo = aka.Person.PersonAlienNo,
+                   PersonCii = aka.Person.PersonCii,
+                   PersonDlNumber = aka.Person.PersonDlNumber,
+                   PersonDob = aka.Person.PersonDob,
+                   PersonFbiNo = aka.Person.PersonFbiNo,
+                   PersonFirstName = aka.Person.PersonFirstName,
+                   PersonLastName = aka.Person.PersonLastName,
+                   PersonMiddleName = aka.Person.PersonMiddleName,
+                   PersonPhone = aka.Person.PersonPhone,
+                   PersonSsn = aka.Person.PersonSsn,
+                   PersonSuffix = aka.Person.PersonSuffix,
+                   AkaInmateNumber = aka.AkaInmateNumber,
+                   PersonId = aka.Person.PersonId,
+                   Photofilepath = _photos.GetPhotoByCollectionIdentifier(aka.Person.Identifiers)
+               }).ToList();
+            int[] personIds = akas.Select(a => a.PersonId).Distinct().ToArray();
+            List<Inmate> inmates = _context.Inmate.Where(a => personIds.Contains(a.PersonId)).ToList();
+            akas.ForEach(a =>
+            {
+                Inmate inmate = inmates.FirstOrDefault(x => x.PersonId == a.PersonId);
+                a.InmateNumber = inmate?.InmateNumber;
+                a.InmateId = inmate?.InmateId;
+                a.ActiveInmate = inmate?.InmateActive == 1;
+            });
+            persons.AddRange(akas);
+            List<Personnel> personnels = _context.Personnel.Where(a => persons
+            .Select(x => x.PersonId).Distinct().Contains(a.PersonId)).ToList();
+            persons.ForEach(a => { a.OfficerId = personnels.FirstOrDefault(x => x.PersonId == a.PersonId)?.PersonnelId.ToString(); });
+            return persons;
+        }
+
+        public List<PersonSearchResult> GetPersonsAll(PersonSearchVm person)
+        {
+            //TODO: Add logic to use all the optional parameters during the search
+            List<PersonSearchResult> personlist = new List<PersonSearchResult>();
+            List<AkaVm> searchaka = new List<AkaVm>();
+            //checking person table
+            personlist.AddRange((from p in _context.Person
+                where p.PersonFirstName.StartsWith(person.FirstName) && p.PersonLastName.StartsWith(person.LastName)
+                      && (person.MiddleName == null || person.MiddleName == string.Empty || person.MiddleName == "" ||
+                          (p.PersonMiddleName.StartsWith(person.MiddleName)))
+                      && (person.Suffix == null || person.Suffix == string.Empty || person.Suffix == "" ||
+                          (p.PersonSuffix.StartsWith(person.Suffix)))
+                      && (person.Dob == null || person.Dob == string.Empty || person.Dob == "" ||
+                          (p.PersonDob == Convert.ToDateTime(person.Dob)))
+                      && (person.Dln == null || person.Dln == string.Empty || person.Dln == "" ||
+                          (p.PersonDlNumber.StartsWith(person.Dln)))
+                      && (person.Cii == null || person.Cii == string.Empty || person.Cii == "" ||
+                          (p.PersonCii.StartsWith(person.Cii)))
+                      && (person.Fbi == null || person.Fbi == string.Empty || person.Fbi == "" ||
+                          (p.PersonFbiNo.StartsWith(person.Fbi)))
+                      && (person.Ssn == null || person.Ssn == string.Empty || person.Ssn == "" ||
+                          (p.PersonSsn.StartsWith(person.Ssn)))
+                      && (person.AlienNum == null || person.AlienNum == string.Empty || person.AlienNum == "" ||
+                          (p.PersonAlienNo.StartsWith(person.AlienNum)))
+                      && (person.HomePhone == null || person.HomePhone == string.Empty || person.HomePhone == "" ||
+                          (p.PersonPhone.StartsWith(person.HomePhone)))
+                      && (person.BusPhone == null || person.BusPhone == string.Empty || person.BusPhone == "" ||
+                          (p.PersonBusinessPhone.StartsWith(person.BusPhone)))
+                      && (person.HeightPrimary == null || person.HeightPrimary == string.Empty ||
+                          person.HeightPrimary == "" || (p.PersonHeightPrimaryLast.Equals(person.HeightPrimary)))
+                      && (person.HeightSecondary == null || person.HeightSecondary == string.Empty ||
+                          person.HeightSecondary == "" || (p.PersonHeightSecondaryLast.Equals(person.HeightSecondary)))
+                      && (person.Weight == null || person.Weight == string.Empty || person.Weight == "" ||
+                          (p.PersonWeightLast.Equals(person.Weight)))
+                      && (person.HairColor == null || person.HairColor == string.Empty || person.HairColor == "" ||
+                          (p.PersonHairColorLast.Equals(person.HairColor)))
+                      && (person.EyeColor == null || person.EyeColor == string.Empty || person.EyeColor == "" ||
+                          (p.PersonEyeColorLast.Equals(person.EyeColor)))
+                select new PersonSearchResult
+                {
+                    PersonId = p.PersonId,
+                    PersonAlienNo = p.PersonAlienNo,
+                    PersonCii = p.PersonCii,
+                    PersonDlNumber = p.PersonDlNumber,
+                    PersonDob = p.PersonDob,
+                    PersonFbiNo = p.PersonFbiNo,
+                    PersonFirstName = p.PersonFirstName,
+                    PersonLastName = p.PersonLastName,
+                    PersonMiddleName = p.PersonMiddleName,
+                    PersonSsn = p.PersonSsn,
+                    PersonSuffix = p.PersonSuffix,
+                    PersonPhone = p.PersonPhone,
+                    ActiveInmate = p.Inmate.SingleOrDefault(s => s.PersonId == p.PersonId).InmateActive != 0
+                }).ToList());
+            //checking aka table
+            searchaka.AddRange((from p in _context.Aka
+                where p.AkaFirstName.StartsWith(person.FirstName) && p.AkaLastName.StartsWith(person.LastName)
+                      && (person.MiddleName == null || person.MiddleName == string.Empty || person.MiddleName == "" ||
+                          (p.AkaMiddleName.StartsWith(person.MiddleName)))
+                      && (person.Suffix == null || person.Suffix == string.Empty || person.Suffix == "" ||
+                          (p.AkaSuffix.StartsWith(person.Suffix)))
+                      && (person.Dob == null || person.Dob == string.Empty || person.Dob == "" ||
+                          (p.AkaDob == Convert.ToDateTime(person.Dob)))
+                      && (person.Dln == null || person.Dln == string.Empty || person.Dln == "" ||
+                          (p.AkaDl.StartsWith(person.Dln)))
+                      && (person.Cii == null || person.Cii == string.Empty || person.Cii == "" ||
+                          (p.AkaCii.StartsWith(person.Cii)))
+                      && (person.Fbi == null || person.Fbi == string.Empty || person.Fbi == "" ||
+                          (p.AkaFbi.StartsWith(person.Fbi)))
+                      && (person.Ssn == null || person.Ssn == string.Empty || person.Ssn == "" ||
+                          (p.AkaSsn.StartsWith(person.Ssn)))
+                      && (person.AlienNum == null || person.AlienNum == string.Empty || person.AlienNum == "" ||
+                          (p.AkaAlienNo.StartsWith(person.AlienNum)))
+                      && !(from pl in personlist select pl.PersonId).Contains(p.PersonId ?? 0)
+                select new AkaVm
+                {
+                    PersonId = p.PersonId,
+                }).ToList());
+            //adding data from aka table
+            personlist.AddRange((from p in _context.Person
+                where (from sa in searchaka select sa.PersonId).Contains(p.PersonId)
+                select new PersonSearchResult
+                {
+                    PersonId = p.PersonId,
+                    PersonAlienNo = p.PersonAlienNo,
+                    PersonCii = p.PersonCii,
+                    PersonDlNumber = p.PersonDlNumber,
+                    PersonDob = p.PersonDob,
+                    PersonFbiNo = p.PersonFbiNo,
+                    PersonFirstName = p.PersonFirstName,
+                    PersonLastName = p.PersonLastName,
+                    PersonMiddleName = p.PersonMiddleName,
+                    PersonSsn = p.PersonSsn,
+                    PersonSuffix = p.PersonSuffix,
+                    PersonPhone = p.PersonPhone,
+                    ActiveInmate = p.Inmate.SingleOrDefault(s => s.PersonId == p.PersonId).InmateActive != 0
+                }).ToList());
+            //inmate no from inmate table using personid
+            personlist.ForEach(p =>
+            {
+                p.InmateNumber = (
+                    from i in _context.Inmate
+                    where i.PersonId == p.PersonId
+                    select i.InmateNumber).SingleOrDefault();
+
+            });
+            //aka from aka table using personid
+            personlist.ForEach(p =>
+            {
+                p.Aka = (from a in _context.Aka
+                    where a.PersonId.Equals(p.PersonId)
+                    select new AkaVm
+                    {
+                        AkaAlienNo = a.AkaAlienNo,
+                        AkaCii = a.AkaCii,
+                        AkaDl = a.AkaDl,
+                        AkaDlNoExpiration = a.AkaDlNoExpiration,
+                        AkaDlExpiration = a.AkaDlExpiration,
+                        AkaDlState = a.AkaDlState,
+                        AkaDob = a.AkaDob,
+                        AkaDoc = a.AkaDoc,
+                        AkaFbi = a.AkaFbi,
+                        AkaFirstName = a.AkaFirstName,
+                        AkaLastName = a.AkaLastName,
+                        AkaMiddleName = a.AkaMiddleName,
+                        AkaOtherIdNumber = a.AkaOtherIdNumber,
+                        AkaOtherIdType = a.AkaOtherIdType,
+                        AkaSsn = a.AkaSsn,
+                        PersonGangName = a.PersonGangName,
+                        PersonId = a.PersonId
+                    }).ToList();
+            });
+            return personlist;
+        }
+
+        public List<PersonPreBookInfo> GetPersonsByCii(string cii)
+        {
+            List<PersonPreBookInfo> persons = _context.Person.Where(p =>
+                    !string.IsNullOrEmpty(p.PersonCii) && p.PersonCii.Contains(cii))
+                .Select(p => new PersonPreBookInfo
+                {
+                    PersonId = p.PersonId,
+                    PersonLastName = p.PersonLastName,
+                    PersonFirstName = p.PersonFirstName,
+                    PersonMiddleName = p.PersonMiddleName,
+                    PersonSuffix = p.PersonSuffix,
+                    PersonDob = p.PersonDob,
+                    PersonCii = p.PersonCii,
+                    Photofilepath = _photos.GetPhotoByCollectionIdentifier(p.Identifiers)
+                }).ToList();
+            List<PersonPreBookInfo> akas = _context.Aka.Where(a =>
+                    !string.IsNullOrEmpty(a.AkaCii) && a.AkaCii.Contains(cii) && a.PersonId > 0)
+                .Select(a => new PersonPreBookInfo
+                {
+                    PersonId = a.Person.PersonId,
+                    PersonLastName = a.Person.PersonLastName,
+                    PersonFirstName = a.Person.PersonFirstName,
+                    PersonMiddleName = a.Person.PersonMiddleName,
+                    PersonSuffix = a.Person.PersonSuffix,
+                    PersonDob = a.Person.PersonDob,
+                    PersonCii = a.Person.PersonCii,
+                    AkaCii = a.AkaCii,
+                    Photofilepath = _photos.GetPhotoByCollectionIdentifier(a.Person.Identifiers)
+                }).ToList();
+            persons.AddRange(akas);
+            int[] personIds = persons.Select(a => a.PersonId).Distinct().ToArray();
+            List<Inmate> inmates = _context.Inmate.Where(a => personIds.Contains(a.PersonId)).ToList();
+            List<Personnel> personnels = _context.Personnel.Where(a => personIds.Contains(a.PersonId)).ToList();
+            persons.ForEach(a =>
+            {
+                Inmate inmate = inmates.FirstOrDefault(x => x.PersonId == a.PersonId);
+                a.InmateNumber = inmate?.InmateNumber;
+                a.ActiveInmate = inmate?.InmateActive == 1;
+                a.OfficerId = personnels.FirstOrDefault(x => x.PersonId == a.PersonId)?
+                .PersonnelId.ToString();
+            });
+            return persons;
+        }
+
+        public List<PersonPreBookInfo> GetPersonsBySsn(string ssn)
+        {
+            List<PersonPreBookInfo> persons = _context.Person.Where(p =>
+                    !string.IsNullOrEmpty(p.PersonSsn) && p.PersonSsn.Contains(ssn))
+                .Select(p => new PersonPreBookInfo
+                {
+                    PersonId = p.PersonId,
+                    PersonLastName = p.PersonLastName,
+                    PersonFirstName = p.PersonFirstName,
+                    PersonMiddleName = p.PersonMiddleName,
+                    PersonSuffix = p.PersonSuffix,
+                    PersonDob = p.PersonDob,
+                    PersonSsn = p.PersonSsn,
+                    Photofilepath = _photos.GetPhotoByCollectionIdentifier(p.Identifiers)
+                }).ToList();
+            List<PersonPreBookInfo> akas = _context.Aka.Where(a =>
+                    !string.IsNullOrEmpty(a.AkaSsn) && a.AkaSsn.Contains(ssn) && a.PersonId > 0)
+                .Select(a => new PersonPreBookInfo
+                {
+                    PersonId = a.Person.PersonId,
+                    PersonLastName = a.Person.PersonLastName,
+                    PersonFirstName = a.Person.PersonFirstName,
+                    PersonMiddleName = a.Person.PersonMiddleName,
+                    PersonSuffix = a.Person.PersonSuffix,
+                    PersonDob = a.Person.PersonDob,
+                    PersonSsn = a.Person.PersonSsn,
+                    AkaSsn = a.AkaSsn,
+                    Photofilepath = _photos.GetPhotoByCollectionIdentifier(a.Person.Identifiers)
+                }).ToList();
+            persons.AddRange(akas);
+            int[] personIds = persons.Select(a => a.PersonId).Distinct().ToArray();
+            List<Inmate> inmates = _context.Inmate.Where(a => personIds.Contains(a.PersonId)).ToList();
+            List<Personnel> personnels = _context.Personnel.Where(a => personIds.Contains(a.PersonId)).ToList();
+            persons.ForEach(a =>
+            {
+                Inmate inmate = inmates.FirstOrDefault(x => x.PersonId == a.PersonId);
+                a.InmateNumber = inmate?.InmateNumber;
+                a.ActiveInmate = inmate?.InmateActive == 1;
+                a.OfficerId = personnels.FirstOrDefault(x => x.PersonId == a.PersonId)?
+                .PersonnelId.ToString();
+            });
+            return persons;
+        }
+
+        public List<PersonPreBookInfo> GetPersonsByMoniker(string moniker)
+        {
+            List<PersonPreBookInfo> akas = _context.Aka.Where(a =>
+                      !string.IsNullOrEmpty(a.PersonGangName) && a.PersonId > 0
+                      && 1.0 -
+                      (double?)LevenshteinDistance(moniker,
+                          a.PersonGangName.ToLower()) / // Calculate the Levenshtein-distance
+                      Math.Max(a.PersonGangName.Length, moniker.Length) >
+                      0.70) // Length of the longer string and calculating the match
+                 .Select(a => new PersonPreBookInfo
+                 {
+                     PersonId = a.Person.PersonId,
+                     PersonLastName = a.Person.PersonLastName,
+                     PersonFirstName = a.Person.PersonFirstName,
+                     PersonMiddleName = a.Person.PersonMiddleName,
+                     PersonSuffix = a.Person.PersonSuffix,
+                     PersonDob = a.Person.PersonDob,
+                     Photofilepath = _photos.GetPhotoByCollectionIdentifier(a.Person.Identifiers),
+                     Moniker = a.PersonGangName
+                }).ToList();
+            int[] personIds = akas.Select(a => a.PersonId).Distinct().ToArray();
+            List<Inmate> inmates = _context.Inmate.Where(x => personIds.Contains(x.PersonId)).ToList();
+            List<Personnel> personnels = _context.Personnel.Where(x => personIds.Contains(x.PersonId)).ToList();
+            akas.ForEach(a =>
+            {
+                a.InmateNumber = inmates.FirstOrDefault(x => x.PersonId == a.PersonId)?.InmateNumber;
+                a.ActiveInmate = inmates.FirstOrDefault(x => x.PersonId == a.PersonId)?.InmateActive == 1;
+                a.OfficerId = personnels.FirstOrDefault(x => x.PersonId == a.PersonId)?.PersonnelId.ToString();
+            });
+            return akas;
+        } 
+
+        // To return closest string matches
+        private static int LevenshteinDistance(string src, string dest)
+        {
+            int[,] d = new int[src.Length + 1, dest.Length + 1];
+            int i, j;
+            char[] str1 = src.ToCharArray();
+            char[] str2 = dest.ToCharArray();
+
+            for (i = 0; i <= str1.Length; i++)
+            {
+                d[i, 0] = i;
+            }
+            for (j = 0; j <= str2.Length; j++)
+            {
+                d[0, j] = j;
+            }
+            for (i = 1; i <= str1.Length; i++)
+            {
+                for (j = 1; j <= str2.Length; j++)
+                {
+
+                    int cost = str1[i - 1] == str2[j - 1] ? 0 : 1;
+
+                    d[i, j] =
+                        Math.Min(
+                            d[i - 1, j] + 1, // Deletion
+                            Math.Min(
+                                d[i, j - 1] + 1, // Insertion
+                                d[i - 1, j - 1] + cost)); // Substitution
+
+                    if (i > 1 && j > 1 && str1[i - 1] ==
+                        str2[j - 2] && str1[i - 2] == str2[j - 1])
+                    {
+                        d[i, j] = Math.Min(d[i, j], d[i - 2, j - 2] + cost);
+                    }
+                }
+            }
+
+            return d[str1.Length, str2.Length];
+        }
+
+        public List<string> GetPersonStates()
+        {
+            // Getting client state as default selection.
+            string clientState = _context.Personnel.Where(p => p.PersonnelId == _personnelId)
+                .Select(a => a.Agency.AgencyState).Single();
+            List<string> personStates = _commonService.GetLookups(new[] { LookupConstants.STATE })
+                .Select(a => a.LookupName).ToList();
+            personStates.Insert(0, clientState);
+            return personStates.Distinct().ToList();
+        }
+    }
+}

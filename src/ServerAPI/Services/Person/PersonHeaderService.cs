@@ -1,0 +1,494 @@
+﻿using GenerateTables.Models;
+using ServerAPI.ViewModels;
+using System.Linq;
+using ServerAPI.Utilities;
+using System.Collections.Generic;
+using JwtDb.Models;
+using Microsoft.AspNetCore.Identity;
+using System.Threading.Tasks;
+using System.Security.Claims;
+using System;
+
+
+// ReSharper disable once CheckNamespace
+namespace ServerAPI.Services
+{
+    public class PersonHeaderService : IPersonHeaderService
+    {
+        #region Properties
+
+        private readonly AAtims _context;
+        private readonly UserManager<AppUser> _userManager; //Added for permissions
+        private readonly RoleManager<IdentityRole> _roleManager; //Added for permissions
+        private readonly IPersonProfileService _profileService;
+        private readonly IPersonCharService _iPersonCharService;
+        private readonly IPersonPhotoService _iPersonPhotoService;
+        private readonly IAlertService _iAlertService;
+        private readonly IKeepSepAlertService _iKeepSepAlertService;
+        private readonly IBookingService _iBookingService;
+        #endregion
+
+        #region Constructor
+
+        public PersonHeaderService(AAtims context, UserManager<AppUser> userManager,
+            RoleManager<IdentityRole> roleManager, IPersonProfileService profileService,
+            IPersonCharService iPersonCharService,
+            IPersonPhotoService iPersonPhotoService,
+            IAlertService iAlertService,
+            IKeepSepAlertService iKeepSepAlertService,
+            IBookingService iBookingService)
+        {
+            _context = context;
+            _userManager = userManager; //Added for permissions
+            _roleManager = roleManager; //Added for permissions
+            _profileService = profileService;
+            _iPersonCharService = iPersonCharService;
+            _iPersonPhotoService = iPersonPhotoService;
+            _iAlertService = iAlertService;
+            _iKeepSepAlertService = iKeepSepAlertService;
+            _iBookingService = iBookingService;
+        }
+
+        #endregion
+
+        #region Methods
+
+        //Permission Ids used in V1 {8000, 8100, 8110, 8120, 8130, 8140, 8150, 8160, 8170, 8180, 8190, 8200, 8210, 781}
+        public PersonDetail GetPersonDetails(int personId, bool isInmate, int personnelId)
+        {
+            //Person Details 
+            PersonDetail persondtl = GetPersonBasicInfo(personId);
+            if (persondtl == null) return null;
+            //Person Photo
+            persondtl.PersonPhoto = _iPersonPhotoService.GetIdentifier(personId);
+            //Person Charteristics        
+            persondtl.PersonChar = _iPersonCharService.GetCharacteristics(personId);
+            if (personnelId <= 0) {
+                if (isInmate)
+                {
+                    //Person Inmate Id and Inmate Active
+                    persondtl.LoadInmate(_context);
+                    //Housing details
+                    persondtl.HousingDetail = LoadPersonHousing(persondtl);
+                    //Person classification
+                    persondtl.LstAssociation = _iKeepSepAlertService.GetAssociation(personId);
+                    //Person Privilege Alerts
+                    persondtl.LstPrivilegesAlerts = _iAlertService.GetPrivilegesAlert(persondtl.InmateId ?? 0);
+                }
+                else
+                {
+                    //Person Business & Residential Address
+                    LoadPersonAddress(persondtl);
+                }
+                //Person AKA details
+                LoadAkaDetails(persondtl);
+                ////Person Incarceration 
+                if (persondtl.InmateId > 0)
+                {
+                    LoadPersonIncarceration(persondtl);
+                }
+                //Person Alerts
+                persondtl.PersonAlert = _iAlertService.GetAlerts(personId, persondtl.InmateId ?? 0);
+                //Person ObservationLog
+                persondtl.LstObservationLog = _iAlertService.GetObservationLog(persondtl.InmateId ?? 0);
+                persondtl.AkaHeader = _profileService.DisplayString(personId);
+                //Medical Alerts
+                persondtl.PersonAlert.AddRange(_iAlertService.GetMedicalAlerts(personId));
+                //Inmate KeepSep
+                if (persondtl.InmateActive)
+                    persondtl.LstKeepSep = _iKeepSepAlertService.GetInmateKeepSep(persondtl.InmateId ?? 0);
+                //Inmate All Incarcerations and Bookings
+                persondtl.PersonIncarcerationAndBooking =
+                    _iBookingService.GetIncarcerationAndBookings(persondtl.InmateId ?? 0, false);
+            }
+            else
+            {
+                Personnel personnel = _context.Personnel.Single(a => a.PersonnelId == personnelId);
+                persondtl.PersonnelNumber = personnel.PersonnelNumber;
+                persondtl.PersonnelTerminationFlag = personnel.PersonnelTerminationFlag;
+                persondtl.AgencyName = _context.Agency.Single(a => a.AgencyId == personnel.AgencyId)
+                    .AgencyName;
+                persondtl.Department = personnel.PersonnelDepartment;
+                persondtl.Position = personnel.PersonnelPosition;
+                persondtl.HireDate = personnel.PersonnelHireDate;
+                AppUser user = _userManager
+                    .GetUsersForClaimAsync(new Claim("personnel_Id", personnelId.ToString()))
+                    .Result.FirstOrDefault();
+                persondtl.UserName = user?.UserName;
+                if (!(user is null))
+                    persondtl.GroupsAssigned = _userManager.GetRolesAsync(user).Result.ToArray();
+            }
+            return persondtl;
+        }
+
+        private HousingDetail LoadPersonHousing(PersonDetail persondtl)
+        {
+            return persondtl.HousingDetail = _context.Inmate
+                .Where(i => i.Person.PersonId == persondtl.PersonId && i.InmateActive == 1)
+                .Select(i => new HousingDetail
+                {
+                    HousingUnitId = i.HousingUnitId ?? 0,
+                    HousingUnitLocation = i.HousingUnit.HousingUnitLocation,
+                    HousingUnitNumber = i.HousingUnit.HousingUnitNumber,
+                    FacilityAbbr = i.Facility.FacilityAbbr,
+                    HousingUnitBedLocation = i.HousingUnit.HousingUnitBedLocation,
+                    HousingUnitBedNumber = i.HousingUnit.HousingUnitBedNumber
+                }).SingleOrDefault();
+        }
+
+        #endregion
+
+
+        #region Permissions 
+
+        //Permission Ids used in V1 {8000, 8100, 8110, 8120, 8130, 8140, 8150, 8160, 8170, 8180, 8190, 8200, 8210, 781}
+        public async Task<PersonDetail> GetPersonHeader(int personId, ClaimsPrincipal userPrincipal)
+        {
+            Dictionary<string, bool> permissions = await GetPermissions(userPrincipal);
+            PersonDetail personBasicInfo = GetPersonBasicInfo(personId);
+
+            if (personBasicInfo == null) return null;
+
+            PersonDetail persondtl = new PersonDetail
+            {
+                PersonId = personBasicInfo.PersonId,
+                PersonFirstName = personBasicInfo.PersonFirstName,
+                PersonLastName = personBasicInfo.PersonLastName,
+                PersonMiddleName = personBasicInfo.PersonMiddleName,
+                PersonSuffix = personBasicInfo.PersonSuffix,
+                InmateNumber = _context.Inmate.Where(x => x.PersonId == personId).Select(s => s.InmateNumber)
+                    .SingleOrDefault()
+            };
+
+            #region permissions example...
+
+            //8000 - Allows User To See Inmate Header.  Only Name, DOB And Number Will Appear Without This Right.
+            if (!permissions.ContainsKey("InmateHeaderPermission8000"))
+            {
+                return persondtl;
+            }
+
+            //8100 - Allows User To See The Active Incarceration Name
+            if (permissions.ContainsKey("InmateHeaderPermission8100"))
+            {
+            }
+
+            //8110 - Allows User To See The First Known Name
+            if (permissions.ContainsKey("InmateHeaderPermission8110"))
+            {
+                persondtl.FknFirstName = personBasicInfo.FknFirstName;
+                persondtl.FknLastName = personBasicInfo.FknLastName;
+                persondtl.FknMiddleName = personBasicInfo.FknMiddleName;
+                persondtl.FknSuffixName = personBasicInfo.FknSuffixName;
+            }
+
+            //8120 - Allows User To See The Inmates Characteristics: Gender/Race/Height/Weight/Hair Color/Eye Color
+            if (permissions.ContainsKey("InmateHeaderPermission8120"))
+            {
+                persondtl.PersonChar = _iPersonCharService.GetCharacteristics(personId);
+            }
+
+            //8130 - Allows User To See Status Overall And Status Booking
+            if (permissions.ContainsKey("InmateHeaderPermission8130"))
+            {
+            }
+
+            //8140 - Allows User To See Inmates Current Housing Assignment
+            if (permissions.ContainsKey("InmateHeaderPermission8140"))
+            {
+                persondtl.HousingDetail = LoadPersonHousing(persondtl);
+            }
+
+            //8150 - Allows User To See Inmates Current Tracking Location
+            if (permissions.ContainsKey("InmateHeaderPermission8150"))
+            {
+            }
+
+            //8160 - Allows User To See Inmates Current Classification Level
+            if (permissions.ContainsKey("InmateHeaderPermission8160"))
+            {
+            }
+
+            //8170 - Allows User To See Inmates Current Balance
+            if (permissions.ContainsKey("InmateHeaderPermission8170"))
+            {
+            }
+
+            //8180 - Allows User To See Inmates Current Property
+            if (permissions.ContainsKey("InmateHeaderPermission8180"))
+            {
+            }
+
+            //8190 - Allows User To See Inmates Current Visitation Schedule
+            if (permissions.ContainsKey("InmateHeaderPermission8190"))
+            {
+            }
+
+            //8200 - Allows User To See Inmates Front View Photo(s)
+            if (permissions.ContainsKey("InmateHeaderPermission8200"))
+            {
+            }
+
+            //8210 - Allows User To See Inmates Other Photo(s)
+            if (permissions.ContainsKey("InmateHeaderPermission8210"))
+            {
+            }
+
+            //781 - Appointment Viewer Tab
+            if (permissions.ContainsKey("InmateHeaderPermission781"))
+            {
+            }
+
+            #endregion
+
+            return persondtl;
+        }
+
+        private async Task<Dictionary<string, bool>> GetPermissions(ClaimsPrincipal userPrincipal)
+        {
+            Claim nameIdentifierClaim = userPrincipal.Claims.FirstOrDefault(s => s.Type == ClaimTypes.NameIdentifier);
+            if (nameIdentifierClaim == null)
+            {
+                return new Dictionary<string, bool>();
+            }
+
+            string userName = nameIdentifierClaim.Value;
+            AppUser userToVerify = await _userManager.FindByNameAsync(userName);
+            IList<string> roles = await _userManager.GetRolesAsync(userToVerify);
+            IList<IdentityRole> rolesList = roles.Select(async s => await _roleManager.FindByNameAsync(s))
+                .Select(t => t.Result).ToList();
+
+            Dictionary<string, bool> permissionDictionary = new Dictionary<string, bool>();
+
+            foreach (var identityRole in rolesList)
+            {
+                IList<Claim> forEachClaimList = await _roleManager.GetClaimsAsync(identityRole);
+
+                foreach (var claim in forEachClaimList.Where(x => x.Type.Contains("InmateHeaderPermission")))
+                {
+                    if (!permissionDictionary.ContainsKey(claim.Type))
+                    {
+                        permissionDictionary.Add(claim.Type, true);
+                    }
+                }
+            }
+
+            return permissionDictionary;
+        }
+
+        #endregion
+
+
+        #region Person Info
+
+        private PersonDetail GetPersonBasicInfo(int personId)
+        {
+            PersonDetail persondtl = (from p in _context.Person
+                    where p.PersonId == personId
+                    select new PersonDetail
+                    {
+                        PersonId = p.PersonId,
+                        FknFirstName = p.FknFirstName,
+                        FknLastName = p.FknLastName,
+                        FknMiddleName = p.FknMiddleName,
+                        FknSuffixName = p.FknSuffixName,
+                        PersonFirstName = p.PersonFirstName,
+                        PersonLastName = p.PersonLastName,
+                        PersonMiddleName = p.PersonMiddleName,
+                        PersonSuffix = p.PersonSuffix,
+                        PersonCii = p.PersonCii,
+                        PersonCellPhone = p.PersonCellPhone,
+                        PersonDeceased = p.PersonDeceased,
+                        PersonDeceasedDate = p.PersonDeceasedDate,
+                        PersonBusinessFax = p.PersonBusinessFax,
+                        PersonBusinessPhone = p.PersonBusinessPhone,
+                        PersonDlExpiration = p.PersonDlExpiration,
+                        PersonDlNoExpiration = p.PersonDlNoExpiration,
+                        PersonDlNumber = p.PersonDlNumber,
+                        PersonDlState = p.PersonDlState,
+                        PersonFbiNo = p.PersonFbiNo,
+                        PersonIllegalAlien = p.IllegalAlienFlag,
+                        PersonDob = p.PersonDob,
+                        PersonMaidenName = p.PersonMaidenName,
+                        PersonMissing = p.PersonMissing,
+                        PersonMissingDate = p.PersonMissingDate,
+                        PersonOtherIdExpiration = p.PersonOtherIdExpiration,
+                        PersonOtherIdNumber = p.PersonOtherIdNumber,
+                        PersonOtherIdState = p.PersonOtherIdState,
+                        PersonOtherIdType = p.PersonOtherIdType,
+                        PersonPhone = p.PersonPhone,
+                        PersonEmail = p.PersonEmail,
+                        PersonPhone2 = p.PersonPhone2,
+                        PersonPlaceOfBirth = p.PersonPlaceOfBirth,
+                        PersonPlaceOfBirthList = p.PersonPlaceOfBirthList,
+                        PersonUsCitizen = p.UsCitizenFlag,
+                        PersonSsn = p.PersonSsn,
+                        PersonDlClass = p.PersonDlClass,
+                        PersonNumber = p.PersonNumber,
+                        MilitaryId = p.PersonMilitary.Where(pm => !string.IsNullOrEmpty(pm.MilitaryId))
+                            .Select(pm => pm.MilitaryId)
+                            .FirstOrDefault(),
+                        PersonSiteNumber = p.PersonSiteBnum,
+                        PersonDoc = p.PersonDoc,
+                        AfisNumber = p.PersonAlienNo
+                    }
+                ).SingleOrDefault();
+
+            if (persondtl != null)
+            {
+                persondtl.DlClass = (from l in _context.Lookup
+                    where l.LookupType == LookupConstants.DLCLASS &&
+                          l.LookupIndex.ToString() == persondtl.PersonDlClass
+                    select l.LookupName).SingleOrDefault();
+            }
+
+            return persondtl;
+        }
+
+        #endregion
+
+        #region AKA
+
+        private void LoadAkaDetails(PersonDetail persondtl)
+        {
+            persondtl.Aka = (from a in _context.Aka
+                where a.PersonId == persondtl.PersonId
+                select new AkaVm
+                {
+                    AkaId = a.AkaId,
+                    AkaAlienNo = a.AkaAlienNo,
+                    PersonId = a.PersonId,
+                    AkaCii = a.AkaCii,
+                    AkaDl = a.AkaDl,
+                    AkaDlNoExpiration = a.AkaDlNoExpiration,
+                    AkaDlExpiration = a.AkaDlExpiration,
+                    AkaDlState = a.AkaDlState,
+                    AkaDob = a.AkaDob,
+                    AkaDoc = a.AkaDoc,
+                    AkaFbi = a.AkaFbi,
+                    AkaFirstName = a.AkaFirstName,
+                    AkaLastName = a.AkaLastName,
+                    PersonGangName = a.PersonGangName,
+                    AkaMiddleName = a.AkaMiddleName,
+                    AkaSsn = a.AkaSsn,
+                    AkaInmateNumber = a.AkaInmateNumber,
+                    AkaSiteInmateNumber = a.AkaSiteInmateNumber,
+                    AkaAfisNumber = a.AkaAfisNumber,
+                    AkaOtherIdType = a.AkaOtherIdType,
+                    AkaOtherIdNumber = a.AkaOtherIdNumber,
+                    AkaOtherIdState = a.AkaOtherIdState,
+                    AkaOtherIdDescription = a.AkaOtherIdDescription,
+                    AkaOtherPhoneType = a.AkaOtherPhoneType,
+                    AkaOtherPhoneNumber = a.AkaOtherPhoneNumber,
+                    AkaOtherPhoneDescription = a.AkaOtherPhoneDescription
+                }).ToList();
+        }
+
+        #endregion
+
+
+        #region Person Incarceration
+
+        //Output: Description="Incarceration"
+        private void LoadPersonIncarceration(PersonDetail persondtl)
+        {
+            persondtl.PersonIncarceration = (from i in _context.Incarceration
+                where i.InmateId == persondtl.InmateId
+                select new PersonIncarceration
+                {
+                    DateIn = i.DateIn,
+                    IncarcerationId = i.IncarcerationId,
+                    ReleaseDate = i.ReleaseOut,
+                    IncarcerationDescType = IncarcerationDescType.Incarceration
+                }).ToList();
+        }
+
+        #endregion
+
+        #region Person Business & Residential Address
+
+        private void LoadPersonAddress(PersonDetail persondtl)
+        {
+            //Person Business Address
+            persondtl.BusAddress = (from b in _context.Address
+                where b.AddressType == AddressTypeConstants.BUS && b.PersonId == persondtl.PersonId
+                select new PersonAddressVm
+                {
+                    AddressId = b.AddressId,
+                    City = b.AddressCity,
+                    Direction = b.AddressDirection,
+                    DirectionSuffix = b.AddressDirectionSuffix,
+                    Line2 = b.AddressLine2,
+                    Number = b.AddressNumber,
+                    State = b.AddressState,
+                    Street = b.AddressStreet,
+                    Suffix = b.AddressSuffix,
+                    UnitNo = b.AddressUnitNumber,
+                    UnitType = b.AddressUnitType,
+                    Zip = b.AddressZip
+                }).OrderByDescending(r => r.AddressId).FirstOrDefault();
+
+            //Person Residential Address
+            persondtl.ResAddress = (from b in _context.Address
+                where b.AddressType == AddressTypeConstants.RES && b.PersonId == persondtl.PersonId
+                select new PersonAddressVm
+                {
+                    AddressId = b.AddressId,
+                    City = b.AddressCity,
+                    Direction = b.AddressDirection,
+                    DirectionSuffix = b.AddressDirectionSuffix,
+                    Line2 = b.AddressLine2,
+                    Number = b.AddressNumber,
+                    State = b.AddressState,
+                    Street = b.AddressStreet,
+                    Suffix = b.AddressSuffix,
+                    UnitNo = b.AddressUnitNumber,
+                    UnitType = b.AddressUnitType,
+                    Zip = b.AddressZip
+                }).OrderByDescending(r => r.AddressId).FirstOrDefault();
+        }
+
+        #endregion
+
+        #region Inmate Info Panel
+
+        public InmateHeaderInfoVm GetPersonInfo(int inmateId)
+        {
+            InmateHeaderInfoVm inmateHeaderInfoVm = new InmateHeaderInfoVm();
+            // bind balance details
+            InmateHeaderInfoVm inmateHeaderInfo = _context.AccountAoInmate.Where(a => a.InmateId == inmateId)
+                .Select(d => new InmateHeaderInfoVm{
+                    BalanceInmate = d.BalanceInmate,
+                    BalanceInmateFee = d.BalanceInmateFee,
+                    BalanceInmatePending = d.BalanceInmatePending
+                }).SingleOrDefault();
+
+            inmateHeaderInfoVm.InmateId = inmateId;
+            if(inmateHeaderInfo != null)
+            {
+                inmateHeaderInfoVm.BalanceInmate = inmateHeaderInfo.BalanceInmate;
+                inmateHeaderInfoVm.BalanceInmateFee = inmateHeaderInfo.BalanceInmateFee;
+                inmateHeaderInfoVm.BalanceInmatePending = inmateHeaderInfo.BalanceInmatePending;
+            }
+            
+            // bind inventory bin details
+            inmateHeaderInfoVm.InventoryBins = 
+                _context.PersonalInventory.Where(p => p.InmateId == inmateId)
+                    .Select(a => a.PersonalInventoryBin.BinName)
+                    .Distinct().OrderBy(d => d).ToArray();
+            
+            // bind visit schedule details
+            inmateHeaderInfoVm.VisitDates = 
+                _context.Visit.Where(a => a.InmateId == inmateId 
+                    && a.StartDate.Date >= DateTime.Now.Date)
+                    .OrderBy(b => b.StartDate)
+                    .Select(d => new KeyValuePair<DateTime, DateTime>(
+                        d.StartDate, d.EndDate ?? DateTime.Now
+                    )).ToList();
+
+            return inmateHeaderInfoVm;
+        }
+
+        #endregion
+    }
+}

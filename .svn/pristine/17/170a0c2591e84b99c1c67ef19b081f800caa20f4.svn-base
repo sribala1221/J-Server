@@ -1,0 +1,84 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using GenerateTables.Models;
+using ServerAPI.ViewModels;
+using ServerAPI.Interfaces;
+using ServerAPI.Utilities;
+using Microsoft.AspNetCore.Http;
+using Newtonsoft.Json;
+
+namespace ServerAPI.Services
+{
+    public class PersonService : IPersonService
+    {
+        private readonly AAtims _context;
+
+        public PersonService(AAtims context)
+        {
+            _context = context;
+        }
+
+
+        public List<PersonnelVm> GetPersonNameList(List<int> personnelIds)
+        {
+            return _context.Personnel.Where(w => personnelIds.Any(a => a == w.PersonnelId)).Select(p => new PersonnelVm
+            {
+                PersonnelId = p.PersonnelId,
+                PersonId = p.PersonId,
+                PersonFirstName = p.PersonNavigation.PersonFirstName,
+                PersonLastName = p.PersonNavigation.PersonLastName,
+                PersonMiddleName = p.PersonNavigation.PersonMiddleName,
+                OfficerBadgeNumber = p.OfficerBadgeNum,
+                PersonnelNumber = p.PersonnelNumber
+            }).ToList();
+        }
+
+        
+
+        public PersonVm GetInmateDetails(int inmateId) => _context.Inmate
+            .Where(x => x.InmateId == inmateId)
+            .Select(a => new PersonVm
+            {
+                PersonId = a.PersonId,
+                InmateId = a.InmateId !=0 ? a.InmateId : default(int?),
+                PersonFirstName = a.Person.PersonFirstName,
+                PersonMiddleName = a.Person.PersonMiddleName,
+                PersonLastName = a.Person.PersonLastName,
+                PersonSuffix = a.Person.PersonSuffix,
+                InmateNumber = a.InmateNumber,
+                FacilityId = a.FacilityId,
+                HousingUnitId = a.HousingUnitId,
+                LastReviewDate = a.LastReviewDate,
+                InmateCurrentTrackId = a.InmateCurrentTrackId,
+                InmateCurrentTrack = a.InmateCurrentTrack,
+                PersonDob = a.Person.PersonDob,
+                PersonSexLast = a.Person.PersonSexLast,
+                InmateActive = a.InmateActive > 0,
+                InmateClassificationId = a.InmateClassificationId ?? 0
+            }).SingleOrDefault();
+
+        //Get Person FirstName,LastName and Inmate Number for the given Person Id
+        public PersonVm GetPersonDetails(int personId) =>
+            _context.Person.Where(x => x.PersonId == personId)
+                .Select(a => new PersonVm
+                {
+                    PersonId = a.PersonId,
+                    PersonFirstName = a.PersonFirstName,
+                    PersonLastName = a.PersonLastName,
+                    PersonMiddleName = a.PersonMiddleName,
+                    PersonSuffix = a.PersonSuffix,
+                    PersonDob = a.PersonDob,
+                    InmateNumber = _context.Inmate.SingleOrDefault(w => w.PersonId == a.PersonId).InmateNumber,
+                    FknFirstName = a.FknFirstName,
+                    FknLastName = a.FknLastName,
+                    FknMiddleName = a.FknMiddleName,
+                    FknSuffixName = a.PersonSuffix
+                }).SingleOrDefault();
+
+
+        //Check whether the given person Id is Sealed or Not
+        public bool IsPersonSealed(int personId) => _context.PersonSeal.Any(x => x.PersonId == personId);
+    }
+}

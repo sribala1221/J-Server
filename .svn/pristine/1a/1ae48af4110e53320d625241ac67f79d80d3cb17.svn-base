@@ -1,0 +1,150 @@
+﻿using Microsoft.AspNetCore.Http;
+using ServerAPI.Services;
+using ServerAPI.Tests;
+using ServerAPI.ViewModels;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using GenerateTables.Models;
+using JwtDb.Models;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Configuration;
+using Moq;
+using ServerAPI.JMS.Tests.Helper;
+using Xunit;
+
+// ReSharper disable once CheckNamespace
+namespace ServerAPI.JMS.Tests
+{
+    [Collection("Database collection")]
+    public class PersonMilitaryServiceTest
+    {
+        private readonly PersonMilitaryService _personMilitaryService;
+        private readonly DbInitialize _fixture;
+        private readonly IConfigurationRoot _configuration = MockHelpers.GetIConfigurationRoot();
+        private readonly Mock<IMemoryCache> _memory = new Mock<IMemoryCache>();
+
+        public PersonMilitaryServiceTest(DbInitialize fixture)
+        {
+            _fixture = fixture;
+            HttpContextAccessor httpContext = new HttpContextAccessor { HttpContext = fixture.Context.HttpContext };
+            Mock<UserManager<AppUser>> userMgr = MockHelpers.MockUserManager<AppUser>();
+
+            PhotosService photosService = new PhotosService(_fixture.Db, _configuration);
+            PersonService personService = new PersonService(_fixture.Db);
+            AppletsSavedService appletsSavedService = new AppletsSavedService(fixture.Db, _configuration);
+            InterfaceEngineService interfaceEngineService = new InterfaceEngineService(fixture.Db,
+                _configuration, _memory.Object);
+            CommonService commonService = new CommonService(
+                _fixture.Db, _configuration, httpContext, personService, 
+                appletsSavedService, interfaceEngineService);
+            _personMilitaryService = new PersonMilitaryService(_fixture.Db, httpContext, commonService);
+        }
+
+        [Fact]
+        public void GetPersonMilitaryDetails()
+        {
+            //Act
+            List<PersonMilitaryVm> lsPersonMilitary = _personMilitaryService.GetPersonMilitaryDetails(60);
+
+            //Assert
+            Assert.True(lsPersonMilitary.Count > 0);
+            PersonMilitaryVm personMilitary = lsPersonMilitary.Single(p => p.PersonMilitaryId == 12);
+            Assert.Equal("ACTIVE", personMilitary.MilitaryStatus);
+            Assert.Equal("AIR FORCE", personMilitary.Branch);
+
+            //Update Details
+            Assert.Equal("SUGIR", personMilitary.UpdateByFirstName);
+            Assert.Equal(12, personMilitary.UpdateById);
+
+            //Create Details
+            Assert.Equal("1728", personMilitary.CreateByOfficerBadgeNo);
+            Assert.Equal("SANGEETHA", personMilitary.CreateByFirstName);
+            Assert.Equal("VIJAYA", personMilitary.CreateByLastName);
+        }
+
+        [Fact]
+        public async Task InsertUpdatePersonMilitary()
+        {
+            //Insert function
+            //Arrange
+            PersonMilitaryVm personMilitary = new PersonMilitaryVm
+            {
+                BranchId = 2,
+                PersonId = 70,
+                CreateDate = DateTime.Now.AddDays(-14),
+                UpdateDate = DateTime.Now,
+                MilitaryId = "MIL_1200",
+                MilitaryRank = "CAPTAIN",
+                MilitaryStatus = "INACTIVE",
+                Notes = "SERVICE FOR ARMY"
+            };
+
+            //Before Insert
+            PersonMilitary military = _fixture.Db.PersonMilitary.SingleOrDefault(p => p.PersonId == 70);
+            Assert.Null(military);
+
+            //Act
+            await _personMilitaryService.InsertUpdatePersonMilitary(personMilitary);
+
+            //Assert
+            //After  Insert
+            military = _fixture.Db.PersonMilitary.Single(p => p.PersonId == 70);
+            Assert.NotNull(military);
+
+
+            //Update Function
+            //Arrange
+            personMilitary = new PersonMilitaryVm
+            {
+                PersonMilitaryId = 13,
+                PersonId = 75,
+                CreateDate = DateTime.Now.AddDays(-14),
+                UpdateDate = DateTime.Now,
+                MilitaryId = "MIL_1201",
+                MilitaryRank = "OTHER",
+                MilitaryStatus = "ACTIVE"
+            };
+            //Before Update
+            military = _fixture.Db.PersonMilitary.Single(p => p.PersonMilitaryId == 13);
+            Assert.Equal(60, military.PersonId);
+
+            //Before insert history table
+            PersonMilitaryHistory militaryHistory = _fixture.Db.PersonMilitaryHistory.SingleOrDefault(p =>
+                p.PersonMilitaryId == 13);
+            Assert.Null(militaryHistory);
+
+            //Act
+            await _personMilitaryService.InsertUpdatePersonMilitary(personMilitary);
+
+            //Assert
+            //After Update
+            military = _fixture.Db.PersonMilitary.Single(p => p.PersonMilitaryId == 13);
+            Assert.Equal(75, military.PersonId);
+
+            //After insert history table
+            militaryHistory = _fixture.Db.PersonMilitaryHistory.SingleOrDefault(p =>
+                p.PersonMilitaryId == 13);
+            Assert.NotNull(militaryHistory);
+        }
+
+        [Fact]
+        public void GetMilitaryHistoryDetails()
+        {
+            //Act
+            List<HistoryVm> lstHistory = _personMilitaryService.GetMilitaryHistoryDetails(12);
+
+            //Assert
+            Assert.True(lstHistory.Count>0);
+            HistoryVm history = lstHistory.Single(h => h.HistoryId == 500);
+            Assert.Equal(50,history.PersonId);
+            Assert.Equal("1728",history.OfficerBadgeNumber);
+            Assert.Equal("true",history.Header[1].Detail);
+            Assert.Equal("Active Military", history.Header[1].Header);
+        }
+
+
+    }
+}

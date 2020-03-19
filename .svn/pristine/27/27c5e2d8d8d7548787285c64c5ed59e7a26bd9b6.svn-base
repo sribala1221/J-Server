@@ -1,0 +1,209 @@
+using System;
+using System.Collections.Generic;
+using GenerateTables.Models;
+
+namespace ServerAPI.ViewModels
+{
+    public class MoneyAccountTransactionVm
+    {
+
+        public int AccountAoReceiveId { get; set; }
+        public DateTime? TransactionDate { get; set; }
+        public decimal TransactionAmount { get; set; }
+        public string TransactionDescription { get; set; }
+        public string TransactionReceipt { get; set; }
+        public int InmateId { get; set; }
+        public string InmateNumber { get; set; }
+        public string FundName { get; set; }
+        public decimal? BalanceFund { get; set; }
+        public bool TransactionReceiveCashFlag { get; set; }
+        public string TransactionCheckNumber { get; set; }
+        public int AccountAoFeeId { get; set; }
+        public int AccountAoTransactionId { get; set; }
+        public int BankId { get; set; }
+        public int FundId { get; set; }
+        public string DepositoryName { get; set; }
+        public bool VoidFlag { get; set; }
+        public decimal BalanceAccount { get; set; }
+        public bool ReceiveCashFlag { get; set; }
+        public string TransactionType { get; set; }
+        public string BankAccountAbbr { get; set; }
+        public string ReceiveFrom { get; set; }
+        public DateTime? ClearDate { get; set; }
+        public decimal BalInmate { get; set; }
+        public decimal BalFund { get; set; }
+        public DateTime? VoidDate { get; set; }
+        public string TransactionNotes { get; set; }
+        public PersonnelVm ClearBy { get; set; }
+        public bool ClearedFlag { get; set; }
+        public int TransId { get; set; }
+        public bool ReturnCashFlag { get; set; }
+        public string DMemo { get; set; }
+        public string ReceiveNo { get; set; }
+        public string TransactionPayToTheOrderOf { get; set; }
+        public int TransFromId { get; set; }
+        public int TransToId { get; set; }
+        public MoneyAccountTransactionFlagType Flag { get; set; }
+        public bool TransactionVerified { get; set; }
+        public int AccountAoDepositoryId { get; set; }
+        public PersonnelVm VoidBy { get; set; }
+        public PersonnelVm PersonnelBy { get; internal set; }
+        public int TransactionVoidId { get; set; }
+        public PersonnelVm Officer { get; set; }
+        public int? AdjustmentAccountAoFeeId { get; set; }  
+        public DateTime? TransactionClearedDate { get; set; }        
+        public decimal TransactionFee { get; set; }    
+        public decimal VerifiedAmount { get; set; }
+        public int AdjustmentAccountAoReceiveId { get; set; }
+        public PersonVm Person { get; set; }
+        public HousingDetail HousingUnit { get; set; }
+        public string FacilityAbbr { get; set; }
+        public int VaultId { get; set; }
+        public bool AdjustFlag { get; set; }
+        public bool VerifyFlag { get; set; }
+        public string FromFundName { get; set; }
+        public string ToFundName { get; set; }
+         public string TransactionClearedCollection { get; set; }
+
+        public int AccountAoInmateId{get;set;}
+        public int AccountAoBankId{get;set;}
+    }
+
+    public class MoneyAccountTransactionDetailVm
+    {
+        public List<MoneyAccountTransactionVm> PendingDetails { get; set; }
+        public List<MoneyAccountTransactionVm> UnpaidDetails { get; set; }
+        public List<MoneyAccountTransactionVm> AccountLedgerDetails { get; set; }
+        public List<MoneyAccountTransactionVm> DepositDetails { get; set; }
+        public decimal? PendingBalanceAmount { get; set; }
+        public decimal? UnpaidFeeBalanceAmount { get; set; }
+        public decimal? AccountLedgerBalanceAmount { get; set; }
+        public decimal? DepositBalanceAmount { get; set; }
+    }
+    public class MoneyAccountFilterVm
+    {
+        public int BankId { get; set; }
+        public DateTime? FromDate { get; set; }
+
+        public DateTime? ToDate { get; set; }
+
+
+    }
+
+    public class MoneyInmateReference
+    {
+        public List<MoneyAccountTransactionVm> lstMoneyInmateReference1 { get; set; }
+        public List<MoneyAccountTransactionVm> lstMoneyInmateReference2 { get; set; }
+        public List<MoneyAccountTransactionVm> lstMoneyInmateReferenceTrans { get; set; }
+    }
+
+    public class MoneyAccountTransactionInfoVm
+    {
+        public List<MoneyAccountTransactionVm> MoneyAccountRelatedTranscations { get; set; }
+        public List<MoneyAccountTransactionVm> SubReceiveTransactions { get; set; }
+        public List<MoneyAccountTransactionVm> SubFeeTransactions { get; set; }
+        public List<MoneyAccountTransactionVm> CashDrawerTransactions { get; set; }
+    }
+
+
+
+    public enum MoneyAccountTransactionFlagType
+    {
+        PENDING = 0,
+        UNPAID = 1,
+        ACCOUNTTRANSACTION = 2,
+        INOUTTRANS = 3,
+        MOVETRANS = 4,
+        RETURNCASHSUMMARY = 5,
+        RETURNCASHVOID = 6,
+        APPLYFEE = 7,
+        CASHDRAWER = 8,
+        VAULT = 9
+    }
+    public class MoneyAccountVoidDetailsVm
+    {
+        public List<MoneyAccountTransactionVm> ChildTransactionList { get; set; }
+        public List<MoneyAccountTransactionVm> VoidChildTransactionList { get; set; }
+        public List<MoneyAccountTransactionVm> CashDrawerList { get; set; }
+        public List<MoneyAccountTransactionVm> ApplyFeeList { get; set; }
+        public List<MoneyAccountTransactionVm> ReturnCashList { get; set; }
+        public List<MoneyAccountTransactionVm> NewFeeAppliedList { get; set; }
+        public List<MoneyAccountTransactionVm> MoveToCashList { get; set; }
+        public List<MoneyAccountTransactionVm> ChildMoveTransactionList { get; set; }
+        public List<MoneyAccountTransactionVm> VoidMoveChildTransactionList { get; set; }
+        public MoneyAccountTransactionFlagType Flag { get; set; }
+        public MoneyAccountVoidDetailsVm()
+        {
+            ChildTransactionList = new List<MoneyAccountTransactionVm>();
+            VoidChildTransactionList = new List<MoneyAccountTransactionVm>();
+            CashDrawerList = new List<MoneyAccountTransactionVm>();
+            ApplyFeeList = new List<MoneyAccountTransactionVm>();
+            ReturnCashList = new List<MoneyAccountTransactionVm>();
+            NewFeeAppliedList = new List<MoneyAccountTransactionVm>();
+            MoveToCashList = new List<MoneyAccountTransactionVm>();
+            ChildMoveTransactionList = new List<MoneyAccountTransactionVm>();
+            VoidMoveChildTransactionList = new List<MoneyAccountTransactionVm>();
+        }
+    }
+
+    public class TransactionVoidVm
+    {
+        public int FundId { get; set; }
+        public int? InmateId { get; set; }
+        public int TransId { get; set; }
+        public int? AccountAoFeeId { get; set; }
+        public int? AccountAoReceiveId { get; set; }
+        public string TransactionReceiveFrom { get; set; }
+        public string TransactionPayToTheOrderOf { get; set; }
+        public string TransactionCheckNumber { get; set; }
+        public string DMemo { get; set; }
+        public int? TransFromId { get; set; }
+        public int? TransToId { get; set; }
+        public bool ReturnCashFlag { get; set; }
+        public string TransactionReceiveNumber { get; set; }
+        public int? AccountAoDepositoryId { get; set; }
+    }
+    public class SetVoidVm
+    {
+        public decimal ReturnAmount { get; set; }
+        public string ReturnTransactionType { get; set; }
+        public string ReturnTransactionDescription { get; set; }
+        public decimal MoveToCashAmount { get; set; }
+        public string MoveToCashTransactionType { get; set; }
+        public string MoveToCashTransactionDescription { get; set; }
+        public decimal CashDrawerAmount { get; set; }
+        public string CashDrawerTransactionType { get; set; }
+        public string CashDrawerTransactionDescription { get; set; }
+        public MoneyVoidTransactionFee TransactionDetail { get; set; }
+        public MoneyAccountTransactionFlagType Flag { get; set; }
+        public int TransId { get; set; }
+        public int ReturnTransactionId { get; set; }
+
+        public int MoveTransactionId { get; set; }
+        public int CashDrawerTransactionId { get; set; }
+        public string ReceiptNo { get; set; }
+    }
+
+    public class MoneyInmateFeeDetails
+    {
+        public int AccountFeeId { get; set; }
+        public DateTime? TransactionDate { get; set; }
+        public decimal? TransactionAmount { get; set; }
+        public string TransactionDesc { get; set; }
+        public int? TransactionCleared { get; set; }
+        public string FundName { get; set; }
+        public PersonnelVm VoidBy { get; set; }
+        public DateTime? TransactionVoidDate { get; set; }
+        public bool TransactionVoidFlag { get; set; }
+        public int FundId { get; set; }
+    }
+    public class MoneyInmateFeeVm
+    {
+        public string FeeHistoryStatus { get; set; }
+        public string FeeUnPaidStatus { get; set; }
+        public decimal? BalanceInmateFee { get; set; }
+        public List<MoneyInmateFeeDetails> MoneyInmateFeeHistoryDetails { get; set; }
+        public List<MoneyInmateFeeDetails> MoneyInmateFeeUnPaidDetails { get; set; }
+    }
+
+}

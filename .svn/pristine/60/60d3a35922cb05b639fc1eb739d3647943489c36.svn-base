@@ -1,0 +1,213 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using GenerateTables.Models;
+using ServerAPI.Utilities;
+using ServerAPI.ViewModels;
+
+namespace ServerAPI.Services {
+    public class MoneyFundService : IMoneyFundService {
+        private readonly AAtims _context;
+
+        public MoneyFundService (AAtims context, IMoneyService moneyService) {
+            _context = context;
+        }
+
+        public MoneyFundVm GetMoneyFundTransactionDetails (MoneyFund searchValue) {
+            MoneyFundVm moneyFundLedger = new MoneyFundVm {
+                PendingDetails = _context.AccountAoReceive
+                .Where(x => (x.AccountAoFund.AccountAoBankId == searchValue.BankId) &&
+               (x.AccountAoFundId == searchValue.FundId) &&
+               (x.TransactionDate.Value.Date >= searchValue.FromDate.Value.Date &&
+               x.TransactionDate.Value.Date <= searchValue.ToDate.Value.Date) &&
+               (x.TransactionVerified == 0 || !x.TransactionVerified.HasValue)).Select(s =>
+                new MoneyAccountTransactionVm {
+                  TransId = s.AccountAoReceiveId,
+                  AccountAoReceiveId = s.AccountAoReceiveId,
+                  TransactionDate = s.TransactionDate,
+                  TransactionAmount = s.TransactionAmount ?? 0,
+                  TransactionDescription = s.TransactionDescription,
+                  TransactionReceipt = s.TransactionReceipt,
+                  InmateId = s.Inmate.InmateId,
+                  InmateNumber = s.Inmate.InmateNumber,
+                  PersonFirstName = s.Inmate.Person.PersonFirstName,
+                  PersonLastName = s.Inmate.Person.PersonLastName,
+                  PersonMiddleName = s.Inmate.Person.PersonMiddleName,
+                  HousingUnitNumber = s.Inmate.HousingUnit.HousingUnitNumber,
+                  HousingUnitLocation = s.Inmate.HousingUnit.HousingUnitLocation,
+                  HousingUnitBedNumber = s.Inmate.HousingUnit.HousingUnitBedNumber,
+                  HousingUnitBedLocation = s.Inmate.HousingUnit.HousingUnitBedLocation,
+                  FacilityAbbr = s.Inmate.HousingUnit.Facility.FacilityAbbr,
+                  FundName = s.AccountAoFund.FundName,
+                  FundId = s.AccountAoFund.AccountAoFundId,
+                  BankId = s.AccountAoFund.AccountAoBankId,
+                  TransactionType = s.TransactionType,
+                  BankAccountAbbr = s.AccountAoFund.AccountAoBank.BankAccountAbbr,
+                  DepositoryName = s.AccountAoDepository.DepositoryName,
+                  // PersonnelBy = s.CreatedByNavigation.PersonNavigation,
+                PersonnelBy = new PersonnelVm {
+                      PersonFirstName = s.CreatedByNavigation.PersonNavigation.PersonFirstName,
+                      PersonLastName = s.CreatedByNavigation.PersonNavigation.PersonLastName,
+                      OfficerBadgeNumber = s.CreatedByNavigation.OfficerBadgeNum
+                  },
+                  VoidFlag = s.TransactionVoidFlag == 1,
+                  ReceiveFrom = s.TransactionReceiveFrom,
+                  BalInmate = s.BalanceInmatePending,
+                  AccountAoDepositoryId = s.AccountAoDepositoryId,
+                  ClearBy = new PersonnelVm
+                  {
+                      PersonFirstName = s.TransactionVerifiedByNavigation.PersonNavigation.PersonFirstName,
+                      PersonLastName = s.TransactionVerifiedByNavigation.PersonNavigation.PersonLastName,
+                      OfficerBadgeNumber = s.TransactionVerifiedByNavigation.OfficerBadgeNum
+                  },
+                  VoidBy = new PersonnelVm
+                  {
+                      PersonFirstName = s.TransactionVoidByNavigation.PersonNavigation.PersonFirstName,
+                      PersonLastName = s.TransactionVoidByNavigation.PersonNavigation.PersonLastName,
+                      OfficerBadgeNumber = s.TransactionVoidByNavigation.OfficerBadgeNum
+                  }
+              }).OrderByDescending(o => o.AccountAoReceiveId).ToList(),
+
+                UnpaidDetails = _context.AccountAoFee.Where(x =>
+               (x.AccountAoFund.AccountAoBankId == searchValue.BankId) &&
+               (x.AccountAoFundId == searchValue.FundId) &&
+               (x.TransactionDate.Value.Date >= searchValue.FromDate.Value.Date &&
+               x.TransactionDate.Value.Date <= searchValue.ToDate.Value.Date) &&
+               (x.TransactionCleared == 0 || !x.TransactionCleared.HasValue))
+                .Select (s => new MoneyAccountTransactionVm {
+                    TransId = s.AccountAoFeeId,
+                    AccountAoFeeId = s.AccountAoFeeId,
+                    TransactionDate = s.TransactionDate,
+                    TransactionAmount = s.TransactionFee ?? 0,
+                    TransactionDescription = s.TransactionDescription,
+                    InmateId = s.Inmate.InmateId,
+                    InmateNumber = s.Inmate.InmateNumber,
+                    PersonFirstName = s.Inmate.Person.PersonFirstName,
+                    PersonLastName = s.Inmate.Person.PersonLastName,
+                    PersonMiddleName = s.Inmate.Person.PersonMiddleName,
+                    HousingUnitNumber = s.Inmate.HousingUnit.HousingUnitNumber,
+                    HousingUnitLocation = s.Inmate.HousingUnit.HousingUnitLocation,
+                    HousingUnitBedNumber = s.Inmate.HousingUnit.HousingUnitBedNumber,
+                    HousingUnitBedLocation = s.Inmate.HousingUnit.HousingUnitBedLocation,
+                    FacilityAbbr = s.Inmate.HousingUnit.Facility.FacilityAbbr,
+                    FundName = s.AccountAoFund.FundName,
+                    FundId = s.AccountAoFund.AccountAoFundId,
+                    BankId = s.AccountAoFund.AccountAoBankId,
+                PersonnelBy = new PersonnelVm {
+                        PersonFirstName = s.CreatedByNavigation.PersonNavigation.PersonFirstName,
+                        PersonLastName = s.CreatedByNavigation.PersonNavigation.PersonLastName,
+                        OfficerBadgeNumber = s.CreatedByNavigation.OfficerBadgeNum
+                    },
+                    ClearBy = new PersonnelVm
+                    {
+                        PersonFirstName = s.TransactionClearedByNavigation.PersonNavigation.PersonFirstName,
+                        PersonLastName = s.TransactionClearedByNavigation.PersonNavigation.PersonLastName,
+                        OfficerBadgeNumber = s.TransactionClearedByNavigation.OfficerBadgeNum
+                    },
+                    VoidBy = new PersonnelVm
+                    {
+                        PersonFirstName = s.TransactionVoidByNavigation.PersonNavigation.PersonFirstName,
+                        PersonLastName = s.TransactionVoidByNavigation.PersonNavigation.PersonLastName,
+                        OfficerBadgeNumber = s.TransactionVoidByNavigation.OfficerBadgeNum
+                    },
+                    // PersonnelBy = s.CreatedByNavigation.PersonNavigation,
+                    VoidFlag = s.TransactionVoidFlag == 1
+                }).OrderByDescending(o => o.AccountAoFeeId).ToList(),
+
+                FundLedgerDetails = _context.AccountAoTransaction.Where(x =>
+               (x.AccountAoFund.AccountAoBankId == searchValue.BankId) &&
+               (x.AccountAoFund.AccountAoFundId == searchValue.FundId) &&
+               (x.TransactionDate.Value.Date >= searchValue.FromDate.Value.Date &&
+               x.TransactionDate.Value.Date <= searchValue.ToDate.Value.Date) &&
+                (x.TransactionCleared == 0 || !x.TransactionCleared.HasValue)).Select (s => new MoneyAccountTransactionVm {
+                   TransId = s.AccountAoTransactionId,
+                   AccountAoReceiveId = s.AccountAoReceiveId,
+                   BalanceFund = s.BalanceFund,
+                   TransactionCheckNumber = s.TransactionCheckNumber,
+                   TransactionReceiveCashFlag = s.TransactionReceiveCashFlag,
+                   TransactionDate = s.TransactionDate,
+                   TransactionAmount = s.TransactionAmount,
+                   TransactionDescription = s.TransactionDescription,
+                   TransactionReceipt = s.TransactionReceipt,
+                   InmateId = s.Inmate.InmateId,
+                   InmateNumber = s.Inmate.InmateNumber,
+                   PersonFirstName = s.Inmate.Person.PersonFirstName,
+                   PersonLastName = s.Inmate.Person.PersonLastName,
+                   PersonMiddleName = s.Inmate.Person.PersonMiddleName,
+                   HousingUnitNumber = s.Inmate.HousingUnit.HousingUnitNumber,
+                   HousingUnitLocation = s.Inmate.HousingUnit.HousingUnitLocation,
+                   HousingUnitBedNumber = s.Inmate.HousingUnit.HousingUnitBedNumber,
+                   HousingUnitBedLocation = s.Inmate.HousingUnit.HousingUnitBedLocation,
+                   FacilityAbbr = s.Inmate.HousingUnit.Facility.FacilityAbbr,
+                   FundName = s.AccountAoFund.FundName,
+                   FundId = s.AccountAoFund.AccountAoFundId,
+                   BankId = s.AccountAoFund.AccountAoBankId,
+                   AccountAoTransactionId = s.AccountAoTransactionId,
+                   ReceiveNo = s.TransactionReceiveNumber,
+                   DMemo = s.TransactionDebitMemo,
+                   DepositoryName = s.AccountAoReceive.AccountAoDepository.DepositoryName,
+                   TransFromId = s.AccountAoTransactionFromId,
+                   TransToId = s.AccountAoTransactionToId,
+                PersonnelBy = new PersonnelVm {
+                       PersonFirstName = s.CreatedByNavigation.PersonNavigation.PersonFirstName,
+                       PersonLastName = s.CreatedByNavigation.PersonNavigation.PersonLastName,
+                       OfficerBadgeNumber = s.CreatedByNavigation.OfficerBadgeNum
+                   },
+                   ClearBy = new PersonnelVm
+                   {
+                       PersonFirstName = s.TransactionClearedByNavigation.PersonNavigation.PersonFirstName,
+                       PersonLastName = s.TransactionClearedByNavigation.PersonNavigation.PersonLastName,
+                       OfficerBadgeNumber = s.TransactionClearedByNavigation.OfficerBadgeNum
+                   },
+                   VoidBy = new PersonnelVm
+                   {
+                       PersonFirstName = s.TransactionVoidByNavigation.PersonNavigation.PersonFirstName,
+                       PersonLastName = s.TransactionVoidByNavigation.PersonNavigation.PersonLastName,
+                       OfficerBadgeNumber = s.TransactionVoidByNavigation.OfficerBadgeNum
+
+                   },
+                   //  PersonnelBy = s.CreatedByNavigation.PersonNavigation,
+                   VoidFlag = s.TransactionVoidFlag == 1,
+                   ReceiveFrom = s.TransactionReceiveFrom
+               }).OrderByDescending(o => o.AccountAoTransactionId).ToList(),
+
+                MoneyFundDetails = GetMoneyFundDetails(searchValue),
+            };
+            return moneyFundLedger;
+        }
+
+        private List<KeyValuePair<string, decimal>> GetMoneyFundDetails (MoneyFund searchValue) {
+            List<KeyValuePair<string, decimal>> fundDetails = new List<KeyValuePair<string, decimal>>();
+            decimal? pendingDetails = _context.AccountAoReceive.Where(w =>
+               w.AccountAoFundId == searchValue.FundId &&
+               (!w.TransactionVoidFlag.HasValue || w.TransactionVoidFlag == 0) &&
+               w.AccountAoFund.AccountAoBankId == searchValue.BankId &&
+               ((searchValue.FromDate.HasValue && searchValue.ToDate.HasValue) &&
+                   (searchValue.FromDate.Value.Date <= w.TransactionDate.Value.Date &&
+                       searchValue.ToDate.Value.Date >= w.TransactionDate.Value.Date)
+               )
+            ).Select(s => s.AccountAoFund.BalanceFundPending).FirstOrDefault();
+            fundDetails.Add(new KeyValuePair<string, decimal>((MoneyAccountTransactionFlagType.PENDING.ToString()), pendingDetails ?? 0));
+            decimal? unpaidDetails = _context.AccountAoFee.Where(w =>
+               w.AccountAoFundId == searchValue.FundId &&
+               (!w.TransactionVoidFlag.HasValue || w.TransactionVoidFlag == 0) &&
+               w.AccountAoFund.AccountAoBankId == searchValue.BankId &&
+               ((searchValue.FromDate.HasValue && searchValue.ToDate.HasValue) &&
+                   (searchValue.FromDate.Value.Date <= w.TransactionDate.Value.Date &&
+                       searchValue.ToDate.Value.Date >= w.TransactionDate.Value.Date)
+               )
+            ).Select(s => s.AccountAoFund.BalanceFundFee).FirstOrDefault();
+            fundDetails.Add(new KeyValuePair<string, decimal>(MoneyConstants.UNPAIDFEE, unpaidDetails ?? 0));
+            decimal? fundLedgerDetails = _context.AccountAoTransaction.Where(w =>
+               w.AccountAoFundId == searchValue.FundId &&
+               w.AccountAoFund.AccountAoBankId == searchValue.BankId &&
+               ((searchValue.FromDate.HasValue && searchValue.ToDate.HasValue) &&
+                   (searchValue.FromDate.Value.Date <= w.TransactionDate.Value.Date &&
+                       searchValue.ToDate.Value.Date >= w.TransactionDate.Value.Date)
+               )
+            ).Select(s => s.AccountAoFund.BalanceFund).FirstOrDefault();
+            fundDetails.Add(new KeyValuePair<string, decimal>(MoneyConstants.FUNDLEDGER, fundLedgerDetails ?? 0));
+            return fundDetails.ToList();
+        }
+    }
+}

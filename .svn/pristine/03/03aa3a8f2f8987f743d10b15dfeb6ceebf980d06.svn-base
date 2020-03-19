@@ -1,0 +1,93 @@
+﻿using System.Threading.Tasks;
+using System.Collections.Generic;
+using Microsoft.AspNetCore.Mvc;
+using ServerAPI.Services;
+using ServerAPI.ViewModels;
+using System;
+using ServerAPI.Authorization;
+
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    public class OperationsController : Controller
+    {
+        private readonly IBatchHousingService _batchHousingService;
+        private readonly ILockdownService _lockdownService;
+
+        public OperationsController(IBatchHousingService batchHousingService, ILockdownService lockdownService)
+        {
+            _batchHousingService = batchHousingService;
+            _lockdownService = lockdownService;
+        }
+
+        [HttpGet("GetBatchHousingDetails")]
+        public IActionResult GetBatchHousingDetails(bool externalOnly, int facilityId)
+        {
+            return Ok(_batchHousingService.GetBatchHousingDetails(externalOnly, facilityId));
+        }
+
+        [HttpGet("GetBatchHousingInmateDetails")]
+        public IActionResult GetBatchHousingInmateDetails(int facilityId,int? locationId, int? housingUnitListId)
+        {
+            return Ok(_batchHousingService.GetBatchHousingInmateDetails(facilityId, locationId, housingUnitListId));
+        }
+
+        [HttpGet("GetHousingBedDetails")]
+        public IActionResult GetHousingBedDetails(int housingUnitListId)
+        {
+            return Ok(_batchHousingService.GetHousingBedDetails(housingUnitListId));
+        }
+
+        [HttpPost("GetHousingConflict")]
+        public IActionResult GetHousingConflict([FromBody] List<HousingInputVm> objHousingInput)
+        {
+            return Ok(_batchHousingService.GetHousingConflict(objHousingInput));
+        }
+
+        [HttpPost("CreateHousingUnitMoveHistory")]
+        public async Task<IActionResult> CreateHousingUnitMoveHistory([FromBody] List<HousingMoveParameter> objHousingMoveParameter)
+        {
+            return Ok(await _batchHousingService.CreateHousingUnitMoveHistory(objHousingMoveParameter));
+        }
+
+        [HttpGet("GetActiveLockdownDetails")]
+        public IActionResult GetActiveLockdownDetails(int facilityId)
+        {
+            return Ok(_lockdownService.GetActiveLockdownDetails(facilityId));
+        }
+        [HttpGet("GetLockdownEntryDetails")]
+        public IActionResult GetLockdownEntryDetails(int housingLockdownId)
+        {
+            return Ok(_lockdownService.GetLockdownEntryDetails(housingLockdownId));
+        }
+
+        [HttpPost("InsertUpdateLockdown")]
+        public async Task<IActionResult> InsertUpdateLockdown([FromBody] LockdownVm value)
+        {
+            return Ok(await _lockdownService.InsertUpdateLockdown(value));
+        }
+
+        [HttpPost("DeleteUndoLockdown")]
+        public async Task<IActionResult> DeleteUndoLockdown([FromBody] LockdownVm obj)
+        {
+            return Ok(await _lockdownService.DeleteUndoLockdown(obj));
+        }
+        [HttpGet("GetLockdownHistoryDetails")]
+        public IActionResult GetLockdownHistoryDetails(DateTime? fromDate, DateTime? toDate,int facilityId)
+        {
+            return Ok(_lockdownService.GetLockdownHistoryDetails(fromDate,toDate,facilityId));
+        }
+
+        [HttpGet("GetLockdownDetails")]
+        public IActionResult GetLockdownDetails(int regionId, LockDownType region, string housingInfo)
+        {
+            return Ok(_lockdownService.GetLockdownDetails(regionId, region, housingInfo));
+        }
+        [FuncPermission(771,FuncPermissionType.Edit)]
+        [HttpGet("EditDoReAssign")]
+        public IActionResult EditDoReAssign()
+        {
+            return Ok();
+        }
+    }
+}

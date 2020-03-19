@@ -1,0 +1,206 @@
+﻿using Microsoft.AspNetCore.Mvc;
+using ServerAPI.Authorization;
+using ServerAPI.Interfaces;
+using ServerAPI.Services;
+using ServerAPI.ViewModels;
+using System.Collections.Generic;
+using System.Net;
+using System.Threading.Tasks;
+// For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
+
+namespace ServerAPI.Controllers
+{
+    [Route("[controller]")]
+    public class ConsoleController : Controller
+    {
+        private readonly IConsoleService _consoleService;
+        private readonly IObservationLogService _observationLogService;
+        private readonly ISafetyCheckService _safetyCheckService;
+        private readonly IHeadCountService _headCountService;
+
+        public ConsoleController(IConsoleService con, IObservationLogService observationLogService,
+            ISafetyCheckService safetyCheckService, IHeadCountService headCountService)
+        {
+            _consoleService = con;
+            _observationLogService = observationLogService;
+            _safetyCheckService = safetyCheckService;
+            _headCountService = headCountService;
+        }
+
+        [FuncPermission(1090, FuncPermissionType.Access)]
+        [HttpPost("GetConsoleDetails")]
+        public IActionResult GetConsoleDetails([FromBody] ConsoleInputVm value)
+        {
+            string ipaddress = Request.HttpContext.Connection.RemoteIpAddress.ToString();
+            string hostName = ipaddress == "::1" ? Dns.GetHostEntry("::1").HostName.Split('.')[0] : ipaddress;
+            return Ok(_consoleService.GetConsoleDetails(value, hostName));
+        }
+        [FuncPermission(1090, FuncPermissionType.Access)]
+        [HttpPost("GetCellConsoleDetails")]
+        public IActionResult GetCellConsoleDetails([FromBody] ConsoleInputVm value)
+        {
+            string ipaddress = Request.HttpContext.Connection.RemoteIpAddress.ToString();
+            string hostName = ipaddress == "::1" ? Dns.GetHostEntry("::1").HostName.Split('.')[0] : ipaddress;
+            return Ok(_consoleService.GetConsoleDetails(value, hostName));
+        }
+        [FuncPermission(457, FuncPermissionType.Access)]
+        [HttpPut("CheckObervationLogEntry")]
+        public IActionResult CheckObervationLogEntry()
+        {
+            return Ok();
+        }
+
+        [HttpPost("GetApptConsoleDetails")]
+        public IActionResult GetApptConsoleDetails([FromBody] ConsoleInputVm value)
+        {
+            string ipaddress = Request.HttpContext.Connection.RemoteIpAddress.ToString();
+            string hostName = ipaddress == "::1" ? Dns.GetHostEntry("::1").HostName.Split('.')[0] : ipaddress;
+            return Ok(_consoleService.GetConsoleDetails(value, hostName));
+        }
+
+        [FuncPermission(1180, FuncPermissionType.Access)]
+        [HttpPost("GetWorkCrewConsoleDetails")]
+        public IActionResult GetWorkCrewConsoleDetails([FromBody] ConsoleInputVm value)
+        {
+            return Ok();
+        }
+
+        [FuncPermission(1184, FuncPermissionType.Access)]
+        [HttpPost("GetWorkFurloughConsoleDetails")]
+        public IActionResult GetWorkFurloughConsoleDetails([FromBody] ConsoleInputVm value)
+        {
+            return Ok();
+        }
+
+        [HttpGet("GetMyLocationList")]
+        public IActionResult GetMyLocationList(int facilityId)
+        {
+            return Ok(_consoleService.GetMyLocationList(facilityId));
+        }
+
+        [HttpPost("InsertMyLocationList")]
+        public async Task<IActionResult> InsertMyLocationList([FromBody] List<ConsoleLocationVm> locationList)
+        {
+            return Ok(await _consoleService.InsertMyLocationList(locationList));
+        }
+
+        [HttpPost("InsertBatchSafetyCheck")]
+        public async Task<IActionResult> InsertBatchSafetyCheck([FromBody] List<SafetyCheckVm> value)
+        {
+            return Ok(await _consoleService.InsertBatchSafetyCheck(value));
+        }
+
+        [HttpPost("GetSafetyCheckList")]
+        public IActionResult GetSafetyCheckList([FromBody] ConsoleInputVm value)
+        {
+            return Ok(_safetyCheckService.GetSafetyCheckList(value));
+        }
+
+        [HttpPost("InsertSafetyCheck")]
+        public async Task<IActionResult> InsertSafetyCheck([FromBody] SafetyCheckVm obj)
+        {
+            return Ok(await _safetyCheckService.InsertSafetyCheck(obj));
+        }
+
+        [HttpGet("LoadSafetyCheckHistoryList")]
+        public IActionResult LoadSafetyCheckHistoryList(HeadCountHistoryDetails value)
+        {
+            return Ok(_safetyCheckService.LoadSafetyCheckHistoryList(value));
+        }
+
+        [HttpPost("LoadBatchSafetyCheckList")]
+        public IActionResult LoadBatchSafetyCheckList([FromBody] ConsoleInputVm value)
+        {
+            return Ok(_consoleService.LoadBatchSafetyCheckList(value));
+        }
+
+        [HttpGet("LoadInmateList")]
+        public IActionResult LoadInmateList(int facilityId, int housingUnitListId, int locationId)
+        {
+            return Ok(_consoleService.LoadInmateList(facilityId, housingUnitListId, locationId));
+        }
+
+        [FuncPermission(457,FuncPermissionType.Add)]
+        [HttpPost("InsertObservationLog")]
+        public async Task<IActionResult> InsertObservationLog([FromBody] ObservationLogItemDetails obj)
+        {
+            return Ok(await _observationLogService.InsertObservationLog(obj));
+        }
+
+        [HttpGet("LoadObservationHistoryList")]
+        public IActionResult LoadObservationHistoryList(int observationActionId, int inmateId)
+        {
+            return Ok(_observationLogService.LoadObservationHistoryList(observationActionId, inmateId));
+        }
+
+        [HttpPost("GetHeadCountList")]
+        public IActionResult GetHeadCountList([FromBody] ConsoleInputVm value)
+        {
+            return Ok(_headCountService.GetHeadCountList(value));
+        }
+
+        [HttpPost("GetObservationLogList")]
+        public IActionResult GetObservationLogList([FromBody] ConsoleInputVm value)
+        {
+            return Ok(_observationLogService.GetObservationLogList(value));
+        }
+
+        [HttpGet("GetReleaseQueueDetails")]
+        public IActionResult GetReleaseQueueDetails(int facilityId, string releaseDescription,List<int> housingUnitListId,bool operationFlag)
+        {
+            return Ok(_consoleService.GetReleaseQueueDetails(facilityId, releaseDescription, housingUnitListId, operationFlag));
+        }
+
+        [HttpGet("LoadObservationScheduleEntry")]
+        public IActionResult LoadObservationScheduleEntry(int observationScheduleId)
+        {
+            return Ok(_observationLogService.LoadObservationScheduleEntry(observationScheduleId));
+        }
+
+        [FuncPermission(457, FuncPermissionType.Access)]
+        [HttpGet("LoadObservationActionEntry")]
+        public IActionResult LoadObservationActionEntry(int observationScheduleActionId)
+        {
+            return Ok(_observationLogService.LoadObservationActionEntry(observationScheduleActionId));
+        }
+
+        [HttpPost("LoadIncarcerationFormDetails")]
+        public IActionResult LoadIncarcerationFormDetails([FromBody] ConsoleInputVm value)
+        {
+            return Ok(_consoleService.LoadIncarcerationFormDetails(value));
+        }
+
+        [HttpPost("ClearFormRecord")]
+        public async Task<IActionResult> ClearFormRecord([FromBody] IncarcerationForms incarcerationForms)
+        {
+            return Ok(await _consoleService.ClearFormRecord(incarcerationForms));
+        }
+        [FuncPermission(1020, FuncPermissionType.Add)]
+        [HttpGet("LoadSafetyCheckHousingDetails")]
+        public IActionResult LoadSafetyCheckHousingDetails(int facilityId, int housingUnitListId)
+        {
+            return Ok(_safetyCheckService.LoadSafetyCheckHousingDetails(facilityId, housingUnitListId));
+        }
+        [FuncPermission(1020, FuncPermissionType.Add)]
+        [HttpGet("LoadSafetyCheckLocationDetails")]
+        public IActionResult LoadSafetyCheckLocationDetails(int locationId)
+        {
+            return Ok(_safetyCheckService.LoadSafetyCheckLocationDetails(locationId));
+        }
+        [HttpGet("GetLocationId")]
+        public IActionResult GetLocationId(int facilityId, int housingUnitListId, int housingGroupId)
+        {
+            string ipaddress = Request.HttpContext.Connection.RemoteIpAddress.ToString();
+            string hostName = ipaddress == "::1" ? Dns.GetHostEntry("::1").HostName.Split('.')[0] : ipaddress;
+            return Ok(_consoleService.GetLocationId(facilityId,housingUnitListId,housingGroupId, hostName));
+        }
+
+        //Added for Functionality Permission
+        [FuncPermission(456,FuncPermissionType.Access)]
+        [HttpGet("AccessObservationLog")]
+        public IActionResult AccessObservationLog()
+        {
+            return Ok();
+        }
+    }
+}

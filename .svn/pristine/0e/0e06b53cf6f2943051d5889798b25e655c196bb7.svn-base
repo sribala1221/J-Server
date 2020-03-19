@@ -1,0 +1,520 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Data.SqlClient;
+using System.Linq;
+using System.Security.Claims;
+using System.Threading.Tasks;
+using GenerateTables.Models;
+using jsreport.Client;
+using jsreport.Types;
+using JwtDb.Models;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using ServerAPI.Services;
+using ServerAPI.Utilities;
+using ServerAPI.ViewModels;
+
+namespace ServerAPI.Controllers{
+    [Route("[controller]")]
+    public class AtimsReportsController : ControllerBase{
+        private readonly AAtims _context;
+        private readonly ICommonService _commonService;
+        private readonly Uri _jsReportUrl;
+        private readonly RoleManager<IdentityRole> _roleManager;
+        private readonly int _personnelId;
+        private readonly IPhotosService _photoService;
+        private readonly UserManager<AppUser> _userManager;
+
+        public AtimsReportsController(ICommonService commonService, AAtims context, IHttpContextAccessor httpContextAccessor,
+            IConfiguration configuration,
+            RoleManager<IdentityRole> roleManager, IPhotosService photosService, UserManager<AppUser> userManager)
+        {
+            _commonService = commonService;
+            _context = context;
+            _roleManager = roleManager;
+            _personnelId = Convert.ToInt32(httpContextAccessor.HttpContext.User
+                .FindFirst(AuthDetailConstants.PERSONNELID)?.Value);
+            _photoService = photosService;
+            _jsReportUrl = new Uri(configuration.GetSection("SiteVariables")["ReportUrl"]);
+            _userManager = userManager;
+        }
+
+        [HttpPost("GetReportStaticData")]
+        public IActionResult GetReportStaticData([FromBody] AtimsReportsCommonStaticDataRequest data)
+        {
+            AtimsReportsStaticData result = _context.Personnel.Where(w => w.PersonnelId == data.PersonnelId).Select(s => new AtimsReportsStaticData
+            {
+                PersonnelId = s.PersonnelId,
+                PersonnelNumber = s.OfficerBadgeNum,
+                PhotoPath = _photoService.GetPath(),
+                AgencyId = s.AgencyId,
+                PersonId = s.PersonId,
+                JmsPath = _photoService.GetJmsPath(),
+                PersonName = _context.Person.Where(w => w.PersonId == s.PersonId).Select(p => p.PersonLastName).FirstOrDefault(),
+                Email = _context.Person.Where(w=>w.PersonId == s.PersonId).Select(p =>p.PersonEmail).FirstOrDefault()
+            }).FirstOrDefault();
+
+            if (result != null)
+            {
+                result.AgencyName = _context.Agency.FirstOrDefault(w => w.AgencyJailFlag)?.AgencyName;
+            }
+
+            return Ok(result);
+        }
+
+        [HttpPost("getReportParametersData")]
+        [AllowAnonymous]
+        public IActionResult GetReportParametersData([FromBody] AtimsReportsParametersRequest data)
+        {
+            AtimsReportsParametersData parametersData = new AtimsReportsParametersData();
+
+            if (data.Building)
+            {
+                parametersData.Building = _context.HousingUnit.GroupBy(g =>
+                   new { g.FacilityId, g.HousingUnitLocation }).OrderBy(o => o.Key.HousingUnitLocation).Select(s => new HousingUnit
+                   {
+                       FacilityId = s.Key.FacilityId,
+                       HousingUnitLocation = s.Key.HousingUnitLocation
+                   }).ToList();
+            }
+
+            if (data.Cell)
+            {
+                parametersData.Cell = _context.HousingUnit.Select(s => new HousingUnit
+                {
+                    HousingUnitId = s.HousingUnitId,
+                    HousingUnitBedNumber = s.HousingUnitBedNumber,
+                    HousingUnitListId = s.HousingUnitListId,
+                    HousingUnitLocation = s.HousingUnitLocation,
+                    HousingUnitNumber = s.HousingUnitNumber
+                }).OrderBy(o => o.HousingUnitBedNumber).ToList();
+            }
+
+            if (data.Facility)
+            {
+                parametersData.Facility = _context.Facility.Select(s => new FacilityVm
+                {
+                    FacilityId = s.FacilityId,
+                    FacilityName = s.FacilityName
+                }).OrderBy(o => o.FacilityName).ToList();
+            }
+
+            if (data.HousingGroup)
+            {
+                parametersData.HousingGroup = _context.HousingGroup.Select(s => new HousingGroup
+                {
+                    HousingGroupId = s.HousingGroupId,
+                    GroupName = s.GroupName
+                }).ToList();
+            }
+
+            if (data.Location)
+            {
+                parametersData.Location = _context.Privileges.Select(s => new Privileges
+                {
+                    PrivilegeId = s.PrivilegeId,
+                    PrivilegeDescription = s.PrivilegeDescription
+                }).ToList();
+            }
+
+            if (data.Number)
+            {
+                parametersData.Number = _context.HousingUnit
+                    .GroupBy(g => new { g.FacilityId, g.HousingUnitLocation, g.HousingUnitNumber })
+                    .OrderBy(o => o.Key.HousingUnitNumber).Select(s => new HousingUnit
+                    {
+                        FacilityId = s.Key.FacilityId,
+                        HousingUnitLocation = s.Key.HousingUnitLocation,
+                        HousingUnitNumber = s.Key.HousingUnitNumber
+                    }).ToList();
+            }
+
+            return Ok(parametersData);
+        }
+
+        [HttpPost("getReportData")]
+        public async Task<IActionResult> GetReportData([FromBody] AtimsReportsGetData data)
+        {
+            //Check for report permission here based on data.reportId
+            AtimsReportsTemplate templateData = _context.AtimsReport.Where(w => w.AtimsReportActive && w.AtimsReportId == data.ReportId)
+                .Select(s => new AtimsReportsTemplate
+                {
+                    ShortId = s.AtimsReportShortId,
+                    ProcedureName = s.StoredProcedure
+                }).First();
+
+            if (string.IsNullOrEmpty(templateData.ShortId) || string.IsNullOrEmpty(templateData.ProcedureName)) return null;
+
+            SqlConnection connection = new SqlConnection(Startup.ConnectionString);
+            connection.Open();
+            SqlCommand command = new SqlCommand(templateData.ProcedureName, connection)
+            {
+                CommandType = CommandType.StoredProcedure
+            };
+            command.Parameters.AddWithValue("@JSON", data.Parameters);
+            command.CommandTimeout = 120;
+            DataTable resultTable = new DataTable();
+            SqlDataAdapter adapter = new SqlDataAdapter(command);
+            adapter.Fill(resultTable);
+            connection.Close();
+
+            //JObject Data;
+            string jsonDataString = resultTable.Rows[0]["JsonData"].ToString();
+
+            JObject data1 = (jsonDataString == "") ? JObject.FromObject(new { Data = new JObject[0] }) : JObject.Parse(jsonDataString);
+            JObject data2 = JObject.Parse(data.StaticData);
+
+            //Concatenate report data with static data into a single object
+            data1.Merge(data2, new JsonMergeSettings
+            {
+                MergeArrayHandling = MergeArrayHandling.Concat
+            });
+
+            //Concatenate report data with custom mapping values
+            JObject customLabel = _commonService.GetCustomMapping();
+
+            data1.Merge(customLabel, new JsonMergeSettings
+            {
+                MergeArrayHandling = MergeArrayHandling.Concat
+            });
+
+            string jsReportUrlString = _jsReportUrl.ToString();
+            ReportingService rs = new ReportingService(jsReportUrlString)
+            {
+                HttpClientTimeout = TimeSpan.FromMinutes(20)
+            };
+            string reportData = JsonConvert.SerializeObject(data1);
+            //try catch used for to handle 2 exceptions (10061 & 404) from jsreport.
+            try
+            {
+                _commonService.atimsReportsContentLog(templateData.ShortId, reportData);
+                  Report report = await rs.RenderAsync(templateData.ShortId, reportData);
+                FileContentResult result = new FileContentResult(_commonService.ConvertStreamToByte(report.Content),
+                    "application/pdf");
+                return result;
+            }
+            catch (Exception ex)
+            {
+                //10061 is status code for no connection could be made because the target machine actively refused it
+                //404 for file not found in jsreport
+                return ex.InnerException != null ? Ok(10061) : Ok(404);
+            }
+        }
+
+        [HttpGet("GetAllActiveReports")]
+        public IActionResult GetAllActiveReports()
+        {
+            Claim claim = new Claim("personnel_id", _personnelId.ToString());
+            AppUser appUser = _userManager.GetUsersForClaimAsync(claim).Result.FirstOrDefault();
+            List<string> roleNames = _userManager.GetRolesAsync(appUser).Result.ToList();
+            List<IdentityRole> roles = _roleManager.Roles.Where(w => roleNames.Contains(w.Name)).ToList();
+            List<string> claimsLst = new List<string>();
+            roles.ForEach(f =>
+            {
+                claimsLst.AddRange(_roleManager.GetClaimsAsync(f).Result.Select(s => s.Type).ToList());
+            });
+
+            List<AtimsReportsCategoriesList> organizedReports = new List<AtimsReportsCategoriesList>();
+            List<string> categories = _context.AtimsReport.Where(w => claimsLst.Any(c => c == PermissionTypes.Admin) ||
+                   claimsLst.Contains(PermissionTypes.SystemReport + PermissionTypes.Permission + w.AtimsReportId))
+                .OrderBy(o => o.AtimsReportCategory)
+                .ThenBy(r => r.AtimsReportCategory).GroupBy(g => g.AtimsReportCategory).Select(s => s.Key).ToList();
+            foreach (string c in categories)
+            {
+                organizedReports.Add(new AtimsReportsCategoriesList
+                {
+                    CategoryName = c,
+                    Reports = _context.AtimsReport.Where(w => w.AtimsReportCategory == c && w.AtimsReportActive &&
+                       (claimsLst.Any(cl => cl == PermissionTypes.Admin) ||
+                           claimsLst.Contains(PermissionTypes.SystemReport + PermissionTypes.Permission + w.AtimsReportId)))
+                        .Select(s => new AtimsReport
+                        {
+                            AtimsReportCategory = s.AtimsReportCategory,
+                            AtimsReportId = s.AtimsReportId,
+                            AtimsReportName = s.AtimsReportName,
+                            AtimsReportDescription = s.AtimsReportDescription
+                        }).OrderBy(o => o.AtimsReportName).ThenBy(r => r.AtimsReportCategory).ToList()
+                });
+            }
+            return Ok(organizedReports);
+        }
+
+        #region Request Fields Data
+        [HttpPost("GetFacilityFull")]
+        public IActionResult GetFacilityFull()
+        {
+            AtimsReportsParametersData parametersData = new AtimsReportsParametersData
+            {
+                Building = _context.HousingUnit.Where(h => h.HousingUnitLocation != null)
+                .GroupBy(g => new { g.FacilityId, g.HousingUnitLocation })
+                .OrderBy(o => o.Key.HousingUnitLocation)
+                .Select(s => new HousingUnit
+                {
+                    FacilityId = s.Key.FacilityId,
+                    HousingUnitLocation = s.Key.HousingUnitLocation
+                }).ToList(),
+                Facility = _context.Facility.Select(s => new FacilityVm
+                {
+                    FacilityId = s.FacilityId,
+                    FacilityName = s.FacilityName,
+                    FacilityAbbr = s.FacilityAbbr
+                }).OrderBy(o => o.FacilityName).ToList(),
+                Number = _context.HousingUnit.Where(h => h.HousingUnitNumber != null)
+                .GroupBy(g => new { g.FacilityId, g.HousingUnitLocation, g.HousingUnitNumber, g.HousingUnitListId })
+                .OrderBy(o => o.Key.HousingUnitNumber)
+                .Select(s => new HousingUnit
+                {
+                    FacilityId = s.Key.FacilityId,
+                    HousingUnitLocation = s.Key.HousingUnitLocation,
+                    HousingUnitNumber = s.Key.HousingUnitNumber,
+                    HousingUnitListId = s.Key.HousingUnitListId
+                }).ToList(),
+                Cell = _context.HousingUnit.Where(h => h.HousingUnitBedNumber != null).Select(s => new HousingUnit
+                {
+                    HousingUnitBedNumber = s.HousingUnitBedNumber,
+                    HousingUnitListId = s.HousingUnitListId,
+                    HousingUnitLocation = s.HousingUnitLocation,
+                    HousingUnitNumber = s.HousingUnitNumber,
+                    FacilityId = s.FacilityId
+                }).OrderBy(o => o.HousingUnitBedNumber).Distinct().ToList()
+            };
+            return Ok(parametersData);
+        }
+
+        [HttpPost("GetLocation")]
+        public IActionResult GetLocation()
+        {
+            List<Privileges> location = _context.Privileges.Select(s => new Privileges
+            {
+                PrivilegeId = s.PrivilegeId,
+                PrivilegeDescription = s.PrivilegeDescription,
+                InactiveFlag = s.InactiveFlag,
+                FacilityId = s.FacilityId,
+                RemoveFromTrackingFlag = s.RemoveFromTrackingFlag
+            }).OrderBy(s => s.PrivilegeDescription).ToList();
+            return Ok(location);
+        }
+
+        [HttpPost("GetHousingGroup")]
+        public IActionResult GetHousingGroup()
+        {
+            AtimsReportsParametersData parametersData = new AtimsReportsParametersData
+            {
+                HousingGroup = _context.HousingGroup.Select(s => new HousingGroup
+                {
+                    HousingGroupId = s.HousingGroupId,
+                    GroupName = s.GroupName
+                }).ToList()
+            };
+            return Ok(parametersData);
+        }
+
+        [HttpGet("GetChargeFlag")]
+        public IActionResult GetChargeFlag()
+        {
+            AtimsReportsParametersData parametersData = new AtimsReportsParametersData
+            {
+                ChargeFlag = _context.CrimeLookupFlag.Where(w => w.InactiveFlag != 1).Select(s => new CrimeLookupFlag
+                {
+                    FlagName = s.FlagName,
+                    CrimeLookupFlagId = s.CrimeLookupFlagId
+                }).OrderBy(o => o.FlagName).ToList()
+            };
+            return Ok(parametersData);
+        }
+
+        [HttpGet("GetSentencingMethod")]
+        public IActionResult GetSentencingMethod()
+        {
+            AtimsReportsParametersData parametersData = new AtimsReportsParametersData
+            {
+                SentencingMethod = _context.ArrestSentenceMethod.Select(s => new ArrestSentenceMethod
+                {
+                    MethodName = s.MethodName,
+                    ArrestSentenceMethodId = s.ArrestSentenceMethodId
+                }).OrderBy(o => o.MethodName).ToList()
+            };
+            return Ok(parametersData);
+        }
+
+        [HttpGet("GetReleaseReason")]
+        public IActionResult GetReleaseReason()
+        {
+            List<IncarcerationReleaseReasonVm> lstIncarcerationReleaseReason = _context.IncarcerationArrestXref
+                .Where(w => w.ReleaseReason != null).Select(s => new IncarcerationReleaseReasonVm
+                {
+                    ReleaseReason = s.ReleaseReason
+
+                }).Distinct().ToList();
+            return Ok(lstIncarcerationReleaseReason);
+        }
+
+        [HttpGet("GetPersonDescriptor")]
+        public IActionResult GetPersonDescriptor()
+        {
+            PersonDescriptorDetailsVm personDetailslst = new PersonDescriptorDetailsVm
+            {
+                Category = _context.PersonDescriptor.Where(w => w.Category != null).Select(s => s.Category).Distinct().ToList(),
+                CategoryMap = _context.PersonDescriptor.Where(w => w.CategoryMap != null).Select(s => s.CategoryMap).Distinct().OrderBy(o => o).ToList(),
+                ItemLocation = _context.PersonDescriptor.Where(w => w.ItemLocation != null).Select(s => s.ItemLocation).Distinct().ToList()
+            };
+            return Ok(personDetailslst);
+        }
+
+        #endregion
+
+        [HttpGet("GetRegistrant")]
+        public IActionResult GetRegistrant()
+        {
+            List<RegistrantVm> registrant = _context.RegistrantLookup.Select(s => new RegistrantVm
+            {
+                RegistrantName = s.RegistrantName,
+                RegistrantLookupId = s.RegistrantLookupId
+
+            }).Distinct().ToList();
+            return Ok(registrant);
+        }
+
+        [HttpGet("GetUserGroup")]
+        public IActionResult GetUserGroup()
+        {
+
+            List<UserGroupsVm> roleList = new List<UserGroupsVm>();
+
+            List<IdentityRole> identityRoles = _roleManager.Roles.ToList();
+
+            identityRoles.ForEach(i =>
+            {
+                roleList.Add(new UserGroupsVm
+                {
+                    GroupId = i.Id,
+                    GroupName = i.Name
+                });
+            });
+            return Ok(roleList);
+
+        }
+
+        [HttpGet("GetIssuedProperty")]
+        public IActionResult GetIssuedProperty()
+        {
+            List<IssuedPropertyVm> issuedProp = _context.IssuedPropertyLookup
+                .Select(s => new IssuedPropertyVm
+                {
+                    PropertyName = s.PropertyName,
+                    PropertyLookupId = s.IssuedPropertyLookupId
+                }).OrderBy(o => o.PropertyName).ToList();
+            return Ok(issuedProp);
+        }
+
+        [HttpGet("GetCourtDepartment")]
+
+        public IActionResult GetCourtDepartment()
+        {
+            AtimsReportsParametersData parametersData = new AtimsReportsParametersData
+            {
+                CourtDepartment = _context.AgencyCourtDept.Select(s => new AgencyCourtDept
+                {
+                    DepartmentName = s.DepartmentName,
+                    AgencyCourtDeptId = s.AgencyCourtDeptId,
+                    AgencyId = s.AgencyId
+                }).OrderBy(o => o.AgencyId).ToList()
+            };
+            return Ok(parametersData);
+        }
+
+        [HttpGet("GetDietAlertFlag")]
+        public IActionResult GetDietAlertFlag()
+        {
+            LookupInterface data = _context.LookupInterface.First(s => s.LookupType == LookupConstants.DIET);
+            LookupInterface dietAlertFlag = new LookupInterface
+            {
+                FlagName1 = data.FlagName1 ?? LookupConstants.NOTALLOWED,
+                FlagName2 = data.FlagName2 ?? LookupConstants.NOTALLOWED,
+                FlagName3 = data.FlagName3 ?? LookupConstants.NOTALLOWED,
+                FlagName4 = data.FlagName4 ?? LookupConstants.NOTALLOWED,
+                FlagName5 = data.FlagName5 ?? LookupConstants.NOTALLOWED
+            };
+            return Ok(dietAlertFlag);
+        }
+
+        [HttpGet("GetObservationAction")]
+        public IActionResult GetObservationAction()
+        {
+            List<KeyValuePair<int, string>> actionLst = _context.ObservationAction.
+            Select(s => new KeyValuePair<int, string>
+               (s.ObservationActionId,
+                   s.ActionName)).ToList();
+            return Ok(actionLst);
+        }
+
+        [HttpGet("GetAltSentPgmSiteslst")]
+        public ProgramAndSite GetAltSentPgmSiteslst()
+        {
+            ProgramAndSite programAndSite = new ProgramAndSite
+            {
+                ProgramLst = _context.AltSentProgram
+                .Select(s => new PrimaryProgram
+                {
+                    AltsentProgramId = s.AltSentProgramId,
+                    FacilityAbbr = s.Facility.FacilityAbbr,
+                    AltsentProgramabbr = s.AltSentProgramAbbr
+                }).OrderBy(o => o.AltsentProgramabbr).ToList(),
+
+                SitesLst = _context.AltSentSite
+                .Select(s => new AltSentSites
+                {
+                    SiteId = s.AltSentSiteId,
+                    SiteName = s.AltSentSiteName
+                }).ToList()
+            };
+            return programAndSite;
+        }
+
+        [HttpGet("GetSupplyClosetLst")]
+        public List<SupplyItemsVm> GetSupplyClosetLst()
+        {
+            List<SupplyItemsVm> supplyItemsLst = _context.HousingSupplyItem.Select(s => new SupplyItemsVm
+            {
+                ClosetName = s.HousingSupplyModule.ClosetName,
+                FacilityId = s.HousingSupplyModule.FacilityId,
+                HousingSupplyItemLookupId = s.HousingSupplyItemLookupId,
+                HousingSupplyModuleId = s.HousingSupplyModuleId,
+                ItemName = s.HousingSupplyItemLookup.ItemName
+            }).Distinct().ToList();
+            return supplyItemsLst;
+        }
+
+        [HttpGet("GetPropertyBinlst")]
+        public IActionResult GetPropertyBinlst()
+        {
+            List<BinViewerDetails> binList = _context.PersonalInventoryBin.Select(s => new BinViewerDetails
+            {
+                BinName = s.BinName,
+                FacilityAbbr = s.Facility.FacilityAbbr,
+                PersonalInventoryBinId = s.PersonalInventoryBinId
+            }).ToList();
+            return Ok(binList);
+        }
+
+        [HttpGet("GetIncViolationList")]
+        public IActionResult GetIncViolationList()
+        {
+            List<IncidentViolationVm> incViolationList = _context.DisciplinaryControlLookup
+                                                         .Where(w => (!w.InactiveFlag.HasValue || w.InactiveFlag == 0)
+                                                          && (w.DisciplinaryControlLookupType == (int?)DisciplinaryLookup.DISCVIOL))
+                                                         .Select(s => new IncidentViolationVm
+                                                         {
+                                                             DisciplinaryControlLookupDescription = s.DisciplinaryControlLookupDescription,
+                                                             DisciplinaryControlLookupId = s.DisciplinaryControlLookupId
+                                                         }).ToList();
+            return Ok(incViolationList);
+        }
+    }
+}

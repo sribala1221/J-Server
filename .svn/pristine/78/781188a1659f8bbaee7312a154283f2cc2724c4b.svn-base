@@ -1,0 +1,251 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using GenerateTables.Models;
+using ServerAPI.ViewModels;
+using ServerAPI.Utilities;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
+
+namespace ServerAPI.Services
+{
+    public class PersonAddressService : IPersonAddressService
+    {
+        private readonly AAtims _context;
+        private readonly ICommonService _commonService;
+        private readonly int _personnelId;
+        private readonly IPersonService _personService;
+        private readonly IInterfaceEngineService _interfaceEngineService;
+
+        public PersonAddressService(AAtims context, ICommonService commonService, IHttpContextAccessor httpContextAccessor,
+            IPersonService personService, IInterfaceEngineService interfaceEngineService)
+        {
+            _context = context;
+            _commonService = commonService;
+            _personnelId = Convert.ToInt32(httpContextAccessor.HttpContext.User
+                .FindFirst(AuthDetailConstants.PERSONNELID)?.Value);
+            _personService = personService;
+            _interfaceEngineService = interfaceEngineService;
+        }
+
+        public PersonAddressDetails GetPersonAddressDetails(int personId)
+        {
+            //get all address details by person id
+            List<PersonAddressVm> lstPersonAddress = (from pa in _context.Address
+                                                      where pa.PersonId == personId
+                                                      orderby pa.AddressId descending
+                                                      select new PersonAddressVm
+                                                      {
+                                                          PersonId = personId,
+                                                          AddressId = pa.AddressId,
+                                                          Number = pa.AddressNumber,
+                                                          Direction = pa.AddressDirection,
+                                                          DirectionSuffix = pa.AddressDirectionSuffix,
+                                                          Street = pa.AddressStreet,
+                                                          Suffix = pa.AddressSuffix,
+                                                          UnitType = pa.AddressUnitType,
+                                                          UnitNo = pa.AddressUnitNumber,
+                                                          Line2 = pa.AddressLine2,
+                                                          City = pa.AddressCity,
+                                                          State = pa.AddressState,
+                                                          Zip = pa.AddressZip,
+                                                          AddressType = pa.AddressType,
+                                                          CreateDate = pa.CreateDate,
+                                                          UpdateDate = pa.UpdateDate,
+                                                          CreateBy = pa.CreatedBy,
+                                                          UpdateBy = pa.UpdateBy,
+                                                          Employer = pa.PersonEmployer,
+                                                          AddressOtherNote = pa.AddressOtherNote,
+                                                          Occupation = pa.PersonOccupation,
+                                                          BusinessPhone = pa.PersonBusinessPhone,
+                                                          BusinessFax = pa.PersonBusinessFax,
+                                                          IsHomeless = pa.AddressHomeless,
+                                                          IsTransient = pa.AddressTransient,
+                                                          IsRefused = pa.AddressRefused,
+                                                          AddressZone = pa.AddressZone,
+                                                          AddressGridLocation = pa.AddressGridLocation,
+                                                          AddressBeat = pa.AddressBeat,
+                                                          AddressLookupId = pa.AddressLookupId,
+                                                          PersonBusinessFax = pa.Person.PersonBusinessFax,  //For business address history details
+                                                          PersonBusinessPhone = pa.Person.PersonBusinessPhone,
+                                                          PersonEmployer=pa.PersonEmployer,
+                                                          PersonOccupation=pa.PersonOccupation
+                                                      }).ToList();
+
+            PersonAddressDetails personAddressDetails = new PersonAddressDetails();
+
+            //get created and updated history details 
+            PersonAddressVm personAddressVm =
+                lstPersonAddress.Where(i => i.AddressType == PersonConstants.RESIDENCE)
+                    .OrderByDescending(i => i.UpdateDate)
+                    .FirstOrDefault();
+
+            if (personAddressVm != null)
+            {
+                personAddressDetails.CreateDate = personAddressVm.CreateDate;
+                personAddressDetails.UpdateDate = personAddressVm.UpdateDate;
+
+                //assign createby and updateby into a list of int     
+                List<int> personnelId =
+                    new[] { personAddressVm.CreateBy, personAddressVm.UpdateBy }.Where(x => x.HasValue)
+                        .Select(x => x.Value)
+                        .ToList();
+                // get the personnel details 
+                List<PersonnelVm> lstPersonDet = _personService.GetPersonNameList(personnelId);
+                personAddressDetails.PersonHistoryVm = new PersonHistoryVm();
+
+                PersonnelVm personInfo = lstPersonDet.Single(p => p.PersonnelId == personAddressVm.CreateBy);
+                personAddressDetails.PersonHistoryVm.CreateByPersonLastName = personInfo.PersonLastName;
+                personAddressDetails.PersonHistoryVm.CreateByOfficerBadgeNumber = personInfo.OfficerBadgeNumber;
+
+                if (personAddressVm.UpdateBy > 0)
+                {
+                    personInfo = lstPersonDet.Single(p => p.PersonnelId == personAddressVm.UpdateBy);
+                    personAddressDetails.PersonHistoryVm.UpdateByPersonLastName = personInfo.PersonLastName;
+                    personAddressDetails.PersonHistoryVm.UpdateByOfficerBadgeNumber = personInfo.OfficerBadgeNumber;
+                }
+            }
+            //Assign current details of each address details
+            personAddressDetails.ResAddress =
+                lstPersonAddress.FirstOrDefault(i => i.AddressType == PersonConstants.RESIDENCE);
+            personAddressDetails.BusAddress =
+                lstPersonAddress.FirstOrDefault(i => i.AddressType == PersonConstants.BUSINESS);
+            personAddressDetails.MailAddress =
+                lstPersonAddress.FirstOrDefault(i => i.AddressType == PersonConstants.MAIL);
+            personAddressDetails.OtherAddress =
+                lstPersonAddress.FirstOrDefault(i => i.AddressType == PersonConstants.OTHER);
+            
+            personAddressDetails.LstPersonAddress = lstPersonAddress;
+            personAddressDetails.PersonId = personId;
+
+            List<SiteOptions> dbSiteOption = _context.SiteOptions.Where(w => w.SiteOptionsVariable == SiteOptionsConstants.ADDRESSMAILINGVISIBLE
+            || w.SiteOptionsVariable == SiteOptionsConstants.ADDRESSOTHERVISIBLE)
+                .Select(s => s).ToList();
+            if (dbSiteOption.Count > 0)
+            {
+                personAddressDetails.MailSiteOption = dbSiteOption.
+                SingleOrDefault(w => w.SiteOptionsVariable == SiteOptionsConstants.ADDRESSMAILINGVISIBLE)?.SiteOptionsValue;
+                personAddressDetails.OtherSiteOption = dbSiteOption.
+                    SingleOrDefault(w => w.SiteOptionsVariable == SiteOptionsConstants.ADDRESSOTHERVISIBLE)?.SiteOptionsValue;
+            }
+            return personAddressDetails;
+        }
+
+        public async Task<PersonAddressDetails> InsertUpdateAddressDetails(PersonAddressDetails personAddressDetails)
+        {
+            //Insert and Update for all address 
+            if (personAddressDetails.ResAddress?.AddressType != null)
+            {
+                await InsertUpdateAddress(personAddressDetails.ResAddress, personAddressDetails.PersonAddressSave);
+            }
+            if (personAddressDetails.BusAddress?.AddressType != null)
+            {
+                await InsertUpdateAddress(personAddressDetails.BusAddress, personAddressDetails.PersonAddressSave);
+            }
+            if (personAddressDetails.MailAddress?.AddressType != null)
+            {
+                await InsertUpdateAddress(personAddressDetails.MailAddress, personAddressDetails.PersonAddressSave);
+            }
+            if (personAddressDetails.OtherAddress?.AddressType != null)
+            {
+                await InsertUpdateAddress(personAddressDetails.OtherAddress, personAddressDetails.PersonAddressSave);
+            }
+            return GetPersonAddressDetails(personAddressDetails.PersonId);
+        }
+
+        public async Task<int> InsertUpdateAddress(PersonAddressVm personAddress, bool personAddressSave)
+        {
+            Address dbAddress = _context.Address.SingleOrDefault(i => i.AddressId == personAddress.AddressId);
+            if (dbAddress == null || !personAddressSave)
+            {
+                //Insert new address details
+                dbAddress = new Address
+                {
+                    PersonId = personAddress.PersonId,
+                    AddressZone = personAddress.AddressZone,
+                    AddressGridLocation = personAddress.AddressGridLocation,
+                    AddressBeat = personAddress.AddressBeat,
+                    AddressLookupId = personAddress.AddressLookupId,
+                    CreatedBy = _personnelId,
+                    AddressHomeless = personAddress.IsHomeless,
+                    AddressTransient = personAddress.IsTransient,
+                    AddressRefused = personAddress.IsRefused
+                };
+            }
+            else
+            {
+                //Update address details
+                dbAddress.UpdateDate = DateTime.Now;
+                dbAddress.UpdateBy = _personnelId;
+            }
+            //Common fields for insert and update
+            dbAddress.AddressNumber = personAddress.Number;
+            dbAddress.AddressStreet = personAddress.Street;
+            dbAddress.AddressSuffix = personAddress.Suffix;
+            dbAddress.AddressUnitType = personAddress.UnitType;
+            dbAddress.AddressUnitNumber = personAddress.UnitNo;
+            dbAddress.AddressType = personAddress.AddressType;
+            dbAddress.AddressCity = personAddress.City;
+            dbAddress.AddressState = personAddress.State;
+            dbAddress.AddressZip = personAddress.Zip;
+            dbAddress.AddressDirection = personAddress.Direction;
+            dbAddress.AddressLine2 = personAddress.Line2;
+            dbAddress.AddressDirectionSuffix = personAddress.DirectionSuffix;
+            dbAddress.PersonOccupation = personAddress.Occupation;
+            dbAddress.PersonEmployer = personAddress.Employer;
+            dbAddress.PersonBusinessPhone = personAddress.BusinessPhone;
+            dbAddress.PersonBusinessFax = personAddress.BusinessFax;
+            dbAddress.AddressOtherNote = personAddress.AddressOtherNote;
+
+            if (dbAddress.AddressId <= 0)
+            {
+                _context.Address.Add(dbAddress);
+                //Hit event handle when inserting a new address, PersonAddressSave is a flag for differenciate from set current functionality
+                if (personAddressSave)
+                {
+                    //EventVm eventHandle = new EventVm
+                    //{
+                    //    PersonId = personAddress.PersonId,
+                    //    CorresId = dbAddress.AddressId,
+                    //    EventName = PersonConstants.PERSONADDRESSSAVE
+                    //};
+                    //_commonService.EventHandle(eventHandle);
+                    _interfaceEngineService.Export(new ExportRequestVm
+                    {
+                        EventName = PersonConstants.PERSONADDRESSSAVE,
+                        PersonnelId = _personnelId,
+                        Param1 = personAddress.PersonId.ToString(),
+                        Param2 = dbAddress.AddressId.ToString()
+                    });
+                }
+            }
+            //Update Person and Person Description when address type as BUSINESS
+            if (personAddress.AddressType == PersonConstants.BUSINESS)
+            {
+                InsertPersonDescription(personAddress);
+            }
+            await _context.SaveChangesAsync();
+            return dbAddress.AddressId;
+        }
+
+        public void InsertPersonDescription(PersonAddressVm personAddress)
+        {
+            //Update Person and Person description details
+            Person dbPerson = _context.Person.SingleOrDefault(i => i.PersonId == personAddress.PersonId);
+            if (dbPerson != null)
+            {
+                dbPerson.PersonBusinessPhone = personAddress.BusinessPhone;
+                dbPerson.PersonBusinessFax = personAddress.BusinessFax;
+            }
+
+            PersonDescription dbPersonDesc =
+                _context.PersonDescription.OrderByDescending(i => i.PersonDescriptionId)
+                    .FirstOrDefault(i => i.PersonId == personAddress.PersonId);
+            if (dbPersonDesc != null)
+            {
+                dbPersonDesc.PersonOccupation = personAddress.Occupation;
+                dbPersonDesc.PersonEmployer = personAddress.Employer;
+            }
+        }
+    }
+}
